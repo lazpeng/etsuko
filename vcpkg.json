@@ -1,0 +1,15 @@
+{
+  "name": "etsuko",
+  "version": "2.0.0",
+  "dependencies": [
+    "sdl2",
+    "sdl2-ttf",
+    "sdl2-mixer",
+    {
+      "name": "sdl2-mixer",
+      "features": [ "mpg123" ]
+    },
+    "sdl2-image",
+    "openal-soft"
+  ]
+}

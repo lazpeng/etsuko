@@ -1,0 +1,14 @@
+out/
+build/
+cmake-build-debug/
+vcpkg_installed/
+.idea/
+.vs/
+.vscode/
+.DS_Store
+*.user
+*.dll
+*.dylib
+*.a
+*.out
+*.pdb
