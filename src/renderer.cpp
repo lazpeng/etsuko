@@ -306,7 +306,6 @@ void etsuko::Renderer::render_baked(const BakedDrawable &baked, const ContainerL
         throw std::runtime_error("Attempted to draw uninitialized baked drawable");
     }
 
-    SDL_SetRenderDrawColor(m_renderer, 255, 255, 255, 255);
     const BoundingBox &pivot = container.get_bounds();
     const SDL_Rect rect = {.x = pivot.x + baked.m_bounds.x, .y = pivot.y + baked.m_bounds.y, .w = baked.m_bounds.w, .h = baked.m_bounds.h};
     SDL_RenderCopy(m_renderer, baked.m_texture, nullptr, &rect);
