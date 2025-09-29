@@ -105,8 +105,6 @@ void etsuko::Karaoke::async_initialize_loop() {
     case repository::LoadJob::DONE:
         m_song = Parser::parse(m_load_song.result_path);
         m_load_song.status = repository::LoadJob::NONE;
-
-        initialize_lyrics_container();
         break;
     default:
         break;
@@ -126,6 +124,10 @@ void etsuko::Karaoke::async_initialize_loop() {
 
         if ( m_load_other.status == repository::LoadJob::NONE ) {
             m_initialized = m_load_font.status == repository::LoadJob::NONE;
+
+            if ( m_initialized && !m_lyrics_container.has_value() ) {
+                initialize_lyrics_container();
+            }
         }
     }
 }
