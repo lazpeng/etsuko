@@ -11,11 +11,13 @@ template void BakedDrawableScrollingContainer<etsuko::parser::TimedLyric>::draw(
 
 template <typename T>
 void BakedDrawableScrollingContainer<T>::draw(const Renderer &renderer) {
-    // TODO: Padding?
     CoordinateType y = m_opts.margin_top - m_viewport.y;
     for ( auto &drawable : m_drawables ) {
-        if ( !drawable->is_enabled() || y + drawable->bounds().h >= m_bounds.y + m_bounds.h )
+        if ( !drawable->is_enabled() )
             continue;
+
+        if ( y + drawable->bounds().h >= m_bounds.y + m_bounds.h )
+            break;
 
         CoordinateType x;
         if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_LEFT ) {
@@ -28,9 +30,12 @@ void BakedDrawableScrollingContainer<T>::draw(const Renderer &renderer) {
             throw std::runtime_error("Invalid alignment option");
 
         drawable->set_bounds({.x = x, .y = y, .w = drawable->bounds().w, .h = drawable->bounds().h});
-        y += drawable->bounds().h + m_opts.vertical_padding;
 
-        renderer.render_baked(*drawable, *this);
+        if ( y + drawable->bounds().h >= 0 ) {
+            renderer.render_baked(*drawable, *this);
+        }
+
+        y += drawable->bounds().h + m_opts.vertical_padding;
     }
 }
 
@@ -420,7 +425,7 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_button_baked(const ButtonO
     // Label inside
     rect.x = opts.horizontal_padding;
     rect.y = opts.vertical_padding;
-    if ( baked_text != nullptr) {
+    if ( baked_text != nullptr ) {
         SDL_RenderCopy(m_renderer, baked_text->m_texture, nullptr, &rect);
         rect.w += baked_text->bounds().w + opts.horizontal_padding;
     }

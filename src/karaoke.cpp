@@ -2,7 +2,6 @@
 
 #include <SDL2/SDL.h>
 #include <format>
-#include <print>
 
 etsuko::config::Config etsuko::config::Config::get_default() {
     return {

@@ -268,7 +268,7 @@ namespace etsuko {
             }
 
             void set_item_enabled(const size_t index, const bool enabled) const {
-                if ( index < m_drawables.size() ) {
+                if ( index >= m_drawables.size() ) {
                     throw std::runtime_error("Invalid index passed to set_item_enabled");
                 }
 
@@ -285,7 +285,10 @@ namespace etsuko {
                     throw std::runtime_error("Invalid index passed to notify_item_changed");
                 }
 
-                m_build_fn(m_source_list->at(index));
+                const auto &elem = m_source_list->at(index);
+                const auto baked = m_build_fn(elem);
+                baked->set_enabled(m_is_enabled_fn(elem));
+                m_drawables[index] = baked;;
             }
 
             void notify_item_list_changed() {
@@ -322,13 +325,9 @@ namespace etsuko {
                     return;
 
                 m_viewport.y += scrolled * 10;
-                if ( m_viewport.y < 0 )
-                    m_viewport.y = 0;
 
-                const auto max_height = total_height();
-                if ( m_viewport.y > max_height ) {
-                    m_viewport.y = max_height;
-                }
+                m_viewport.y = std::max(0, m_viewport.y);
+                m_viewport.y = std::min(m_viewport.y, total_height());
             }
 
             [[nodiscard]] const BoundingBox &get_bounds() const override {
