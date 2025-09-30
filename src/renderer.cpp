@@ -249,15 +249,21 @@ SDL_Texture *etsuko::Renderer::draw_text(const std::string_view &text, int32_t p
 
 std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_image_baked(const ImageOpts &opts, const ContainerLike &container) {
     SDL_Surface *loaded = IMG_Load(opts.resource_path.c_str());
+    if ( loaded == nullptr ) {
+        throw std::runtime_error("Failed to load image");
+    }
     SDL_Surface *converted = SDL_ConvertSurfaceFormat(
         loaded,
         SDL_PIXELFORMAT_ABGR8888,
         0
         );
+    if ( converted == nullptr ) {
+        throw std::runtime_error("Failed to convert image surface to appropriate pixel format");
+    }
     SDL_FreeSurface(loaded);
     SDL_Texture *texture = SDL_CreateTextureFromSurface(m_renderer, converted);
     if ( texture == nullptr ) {
-        throw std::runtime_error("Failed to load image");
+        throw std::runtime_error("Failed to render texture from image surface");
     }
 
     int32_t src_w, src_h;

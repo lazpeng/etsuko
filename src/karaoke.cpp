@@ -30,7 +30,7 @@ int etsuko::Karaoke::initialize() {
 void etsuko::Karaoke::initialize_lyrics_container() {
     constexpr auto active_pts = 26;
     const auto build_fn = [&](const parser::TimedLyric &line) {
-        const auto time = m_audio.elapsed_time() + 0.5;
+        const auto time = m_audio.elapsed_time();
         const auto active = time >= line.base_start_time && time <= line.base_start_time + line.base_duration;
         constexpr renderer::Color inactive_color = {.r = 100, .g = 100, .b = 100, .a = 255};
         const auto active_color = renderer::Color::white();
@@ -62,7 +62,7 @@ void etsuko::Karaoke::initialize_lyrics_container() {
         return m_renderer.draw_text_baked(opts, m_lyrics_container.value());
     };
     const auto is_enabled_fn = [&](const parser::TimedLyric &line) {
-        const auto time = m_audio.elapsed_time() + 0.5;
+        const auto time = m_audio.elapsed_time();
         const auto active = time >= line.base_start_time;
         return time <= line.base_start_time + line.base_duration && (!line.full_line.empty() || active);
     };
@@ -179,7 +179,7 @@ void etsuko::Karaoke::draw_song_info() {
         const BoundingBox box = {.x = m_album_art->bounds().x, .y = m_play_button->bounds().y + m_play_button->bounds().h + 10, .w = m_album_art->bounds().w, .h = 1000};
         const auto container = renderer::VirtualContainer(*m_left_container, box);
 
-        auto y= 10;
+        auto y = 10;
         const renderer::TextOpts name_opt = {
             .text = m_song.name,
             .position = {.x = 0, .y = y, .flags = renderer::Point::CENTERED_X},
@@ -207,7 +207,7 @@ void etsuko::Karaoke::draw_song_info() {
 
 void etsuko::Karaoke::draw_lyrics() {
     if ( m_lyrics_container.has_value() ) {
-        const auto time = m_audio.elapsed_time() + 0.5;
+        const auto time = m_audio.elapsed_time();
         size_t idx = 0;
         for ( const auto &line : m_song.lyrics ) {
             if ( time >= line.base_start_time && time < line.base_start_time + line.base_duration ) {
