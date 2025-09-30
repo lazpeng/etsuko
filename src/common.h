@@ -10,5 +10,5 @@ namespace etsuko {
         int32_t x, y, w, h;
     };
 
-    constexpr auto VERSION_STRING = "0.1.0";
+    constexpr auto VERSION_STRING = "0.2.0";
 }
