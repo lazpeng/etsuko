@@ -5,6 +5,11 @@
 
 #include <SDL2/SDL_image.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 using namespace etsuko::renderer;
 
 constexpr auto TILING_PARTS = 20;
@@ -75,17 +80,36 @@ int etsuko::Renderer::initialize() {
         return -2;
     }
 
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
     SDL_SetHint(SDL_HINT_RENDER_OPENGL_SHADERS, "1");
+    SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
 
     constexpr auto renderer_flags = SDL_RENDERER_ACCELERATED;
     m_renderer = SDL_CreateRenderer(m_window, -1, renderer_flags);
     if ( m_renderer == nullptr ) {
         return -3;
     }
+
+    // TODO: Revise this later because I might be doing this hidpi thing in reverse
+    // as of now the WindowSize is smaller (close to real size) and the logical size is larger (relative to dpi)
+    // if done in the opposite way, things look smaller but also crispier
+    // TODO: Investigate!!!
+#ifdef __EMSCRIPTEN__
+    //double devicePixelRatio = emscripten_get_device_pixel_ratio();
+    double cssWidth, cssHeight;
+    emscripten_get_element_css_size("#canvas", &cssWidth, &cssHeight);
+
+    const auto width = static_cast<int32_t>(cssWidth);
+    const auto height = static_cast<int32_t>(cssHeight);
+    SDL_SetWindowSize(m_window, width, height);
+
+    //SDL_RenderSetLogicalSize(m_renderer, cssWidth, cssHeight);
+#endif
+
     int outW, outH;
     SDL_GetRendererOutputSize(m_renderer, &outW, &outH);
     SDL_RenderSetLogicalSize(m_renderer, outW, outH);
+    std::puts(std::format("Renderer output size: {}x{}", outW, outH).c_str());
 
     m_viewport = {.x = 0, .y = 0, .w = outW, .h = outH};
 
