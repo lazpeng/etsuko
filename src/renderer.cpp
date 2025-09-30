@@ -3,6 +3,8 @@
 
 #include <iostream>
 
+#include <SDL2/SDL_image.h>
+
 using namespace etsuko::renderer;
 
 constexpr auto TILING_PARTS = 20;
@@ -51,10 +53,18 @@ void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, 
 
 int etsuko::Renderer::initialize() {
     if ( SDL_Init(SDL_INIT_VIDEO) != 0 ) {
+        std::puts(SDL_GetError());
         return -1;
     }
 
     if ( TTF_Init() != 0 ) {
+        std::puts(TTF_GetError());
+        return -1;
+    }
+
+    constexpr auto image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
+    if ( IMG_Init(image_formats) != image_formats ) {
+        std::puts(IMG_GetError());
         return -1;
     }
 
@@ -66,6 +76,8 @@ int etsuko::Renderer::initialize() {
     }
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    SDL_SetHint(SDL_HINT_RENDER_OPENGL_SHADERS, "1");
+
     constexpr auto renderer_flags = SDL_RENDERER_ACCELERATED;
     m_renderer = SDL_CreateRenderer(m_window, -1, renderer_flags);
     if ( m_renderer == nullptr ) {
@@ -178,8 +190,11 @@ void etsuko::Renderer::measure_layout(const BoundingBox &box, const Point &posit
 
     if ( position.flags & Point::CENTERED_X ) {
         x = static_cast<CoordinateType>(current_width / 2.0 - w / 2.0 - calc_w) + x;
-    } else if ( x < 0 ) {
-        x = current_width + x - calc_w;
+    } else {
+        if ( x < 0 ) {
+            x = current_width + x;
+        }
+        x -= calc_w;
     }
 
     // Calculate y
@@ -189,8 +204,11 @@ void etsuko::Renderer::measure_layout(const BoundingBox &box, const Point &posit
 
     if ( position.flags & Point::CENTERED_Y ) {
         y = static_cast<CoordinateType>(current_height / 2.0 - h / 2.0 - calc_h) + y;
-    } else if ( y < 0 ) {
-        y = current_height + y - calc_h;
+    } else {
+        if ( y < 0 ) {
+            y = current_height + y;
+        }
+        y -= calc_h;
     }
 
     out_box.x = x;
@@ -236,6 +254,53 @@ SDL_Texture *etsuko::Renderer::draw_text(const std::string_view &text, int32_t p
     }
 
     return texture;
+}
+
+std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_image_baked(const ImageOpts &opts, const ContainerLike &container) {
+    SDL_Surface *loaded = IMG_Load(opts.resource_path.c_str());
+    SDL_Surface *converted = SDL_ConvertSurfaceFormat(
+        loaded,
+        SDL_PIXELFORMAT_ABGR8888,
+        0
+        );
+    SDL_FreeSurface(loaded);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(m_renderer, converted);
+    if ( texture == nullptr ) {
+        throw std::runtime_error("Failed to load image");
+    }
+
+    int32_t src_w, src_h;
+    SDL_QueryTexture(texture, nullptr, nullptr, &src_w, &src_h);
+    const double aspect_ratio = static_cast<double>(src_w) / static_cast<double>(src_h);
+
+    int32_t w = opts.w, h = opts.h;
+    if ( w <= 0 && h <= 0 ) {
+        w = src_w;
+        h = src_h;
+    } else if ( w <= 0 ) {
+        w = static_cast<int32_t>(h * aspect_ratio);
+    } else if ( h <= 0 ) {
+        h = static_cast<int32_t>(opts.w / aspect_ratio);
+    }
+
+    BoundingBox box = {};
+
+    SDL_Texture *final_texture = make_new_texture_target(w, h);
+
+    const SDL_Rect destination_rect = {.x = 0, .y = 0, .w = w, .h = h};
+    SDL_RenderCopy(m_renderer, texture, nullptr, &destination_rect);
+    SDL_DestroyTexture(texture);
+
+    measure_layout_texture(final_texture, opts.position, container, box);
+
+    restore_texture_target();
+
+    auto baked = std::make_shared<BakedDrawable>();
+    baked->set_texture(final_texture);
+    baked->set_valid(true);
+    baked->set_bounds(box);
+
+    return baked;
 }
 
 std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts &opts, const ContainerLike &container) {

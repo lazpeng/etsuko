@@ -7,7 +7,7 @@ etsuko::config::Config etsuko::config::Config::get_default() {
     return {
         .font_path = DEFAULT_FONT,
         .font_index = 0,
-        .song_path = "inori.txt"
+        .song_path = "Sayonara invader.txt"
     };
 }
 
@@ -113,16 +113,21 @@ void etsuko::Karaoke::async_initialize_loop() {
     // Load other parts of the song
     if ( m_load_song.status == repository::LoadJob::NONE ) {
         // Load the actual song file
-        // TODO: Load additional resources as needed
-
-        if ( m_load_other.status == repository::LoadJob::NOT_STARTED ) {
-            Repository::get_resource(m_song.file_path, &m_load_other);
-        } else if ( m_load_other.status == repository::LoadJob::DONE ) {
-            m_audio.load_song(m_load_other.result_path);
-            m_load_other.status = repository::LoadJob::NONE;
+        if ( m_load_audio.status == repository::LoadJob::NOT_STARTED ) {
+            Repository::get_resource(m_song.file_path, &m_load_audio);
+        } else if ( m_load_audio.status == repository::LoadJob::DONE ) {
+            m_audio.load_song(m_load_audio.result_path);
+            m_load_audio.status = repository::LoadJob::NONE;
         }
 
-        if ( m_load_other.status == repository::LoadJob::NONE ) {
+        // Load the album art
+        if ( m_load_art.status == repository::LoadJob::NOT_STARTED ) {
+            Repository::get_resource(m_song.album_art_path, &m_load_art);
+        } else if ( m_load_art.status == repository::LoadJob::DONE ) {
+            m_song.album_art_path = m_load_art.result_path;
+        }
+
+        if ( m_load_audio.status == repository::LoadJob::NONE ) {
             m_initialized = m_load_font.status == repository::LoadJob::NONE;
 
             if ( m_initialized && !m_lyrics_container.has_value() ) {
@@ -151,15 +156,53 @@ void etsuko::Karaoke::draw_version() {
     m_renderer.render_baked(*m_text_version);
 }
 
+void etsuko::Karaoke::draw_song_album_art() {
+    if ( !m_left_container.has_value() ) {
+        m_left_container = renderer::VerticalSplitContainer(true, m_renderer.root_container());
+    }
+
+    if ( m_album_art == nullptr || !m_album_art->is_valid() ) {
+        const renderer::ImageOpts opts = {
+            .position = {.x = 0, .y = -50, .flags = renderer::Point::CENTERED},
+            .w = 800,
+            .resource_path = m_song.album_art_path,
+        };
+
+        m_album_art = m_renderer.draw_image_baked(opts, *m_left_container);
+    }
+
+    m_renderer.render_baked(*m_album_art, *m_left_container);
+}
+
 void etsuko::Karaoke::draw_song_info() {
-    const renderer::TextOpts opt = {
-        .text = m_song.name,
-        .position = {.x = 10, .y = 0},
-        .pt_size = 12,
-        .bold = true
-    };
-    const auto baked_name = m_renderer.draw_text_baked(opt, m_renderer.root_container());
-    m_renderer.render_baked(*baked_name);
+    if ( m_album_art != nullptr && m_album_art->is_valid() ) {
+        const BoundingBox box = {.x = m_album_art->bounds().x, .y = m_play_button->bounds().y + m_play_button->bounds().h + 10, .w = m_album_art->bounds().w, .h = 1000};
+        const auto container = renderer::VirtualContainer(*m_left_container, box);
+
+        auto y= 10;
+        const renderer::TextOpts name_opt = {
+            .text = m_song.name,
+            .position = {.x = 0, .y = y, .flags = renderer::Point::CENTERED_X},
+            .pt_size = 11,
+            .bold = true,
+            .color = renderer::Color::white().darken()
+        };
+        m_song_name = m_renderer.draw_text_baked(name_opt, container);
+        m_renderer.render_baked(*m_song_name, container);
+
+        constexpr renderer::Color grey = {.r = 150, .g = 150, .b = 150, .a = 255};
+        y += m_song_name->bounds().h + 10;
+        const auto artist_album_text = std::format("{} - {}", m_song.artist, m_song.album);
+        const renderer::TextOpts artist_opt = {
+            .text = artist_album_text,
+            .position = {.x = 0, .y = y, .flags = renderer::Point::CENTERED_X},
+            .pt_size = 10,
+            .bold = false,
+            .color = grey
+        };
+        m_artist_name = m_renderer.draw_text_baked(artist_opt, container);
+        m_renderer.render_baked(*m_artist_name, container);
+    }
 }
 
 void etsuko::Karaoke::draw_lyrics() {
@@ -183,13 +226,64 @@ void etsuko::Karaoke::draw_lyrics() {
 }
 
 void etsuko::Karaoke::draw_song_controls() {
+    if ( m_album_art != nullptr && m_album_art->is_valid() ) {
+        // Time texts
+        const auto elapsed = m_audio.elapsed_time();
+        const auto remaining = m_audio.total_time() - elapsed;
+        int32_t minutes = static_cast<int32_t>(remaining) / 60;
+        int32_t seconds = static_cast<int32_t>(remaining) % 60;
+        const auto remaining_time_text = std::format("-{:02d}:{:02d}", minutes, seconds);
+        minutes = static_cast<int32_t>(elapsed) / 60;
+        seconds = static_cast<int32_t>(elapsed) % 60;
+        const auto elapsed_time_text = std::format("{:02d}:{:02d}", minutes, seconds);
+
+        int32_t x = m_album_art->bounds().x + 10, y = m_album_art->bounds().y + m_album_art->bounds().h + 10;
+
+        if ( m_play_button != nullptr && m_play_button->is_valid() ) {
+            x += m_play_button->bounds().w;
+        }
+
+        const renderer::TextOpts elapsed_text_opt = {
+            .text = elapsed_time_text,
+            .position = {
+                .x = x,
+                .y = y
+            },
+            .pt_size = 10,
+            .bold = false
+        };
+        m_elapsed_time = m_renderer.draw_text_baked(elapsed_text_opt, m_renderer.root_container());
+        m_renderer.render_baked(*m_elapsed_time);
+
+        x = m_album_art->bounds().x + m_album_art->bounds().w;
+        const renderer::TextOpts remaining_text_opt = {
+            .text = remaining_time_text,
+            .position = {
+                .x = x,
+                .y = y,
+                .flags = renderer::Point::ANCHOR_RIGHT_X
+            },
+            .pt_size = 10,
+            .bold = false
+        };
+        m_elapsed_time = m_renderer.draw_text_baked(remaining_text_opt, m_renderer.root_container());
+        m_renderer.render_baked(*m_elapsed_time);
+    }
+
+    // Play button
     if ( m_play_button == nullptr || !m_play_button->is_valid() ) {
+        if ( m_album_art == nullptr || !m_album_art->is_valid() ) {
+            return;
+        }
+
+        const auto x = m_album_art->bounds().x, y = m_elapsed_time->bounds().y + m_elapsed_time->bounds().h + 10;
+
         const auto button = renderer::ButtonOpts{
             .label_icon = m_audio.is_paused() ? renderer::ButtonOpts::LABEL_ICON_PLAY : renderer::ButtonOpts::LABEL_ICON_PAUSE,
-            .position = {.x = 10, .y = -55},
+            .position = {.x = x, .y = y},
             .draw_border = true,
-            .vertical_padding = 15,
-            .horizontal_padding = 15,
+            .vertical_padding = 10,
+            .horizontal_padding = 10,
             .border_color = std::optional<renderer::Color>({.r = 200, .g = 200, .b = 200, .a = 255}),
         };
         m_play_button = m_renderer.draw_button_baked(button, m_renderer.root_container());
@@ -204,41 +298,31 @@ void etsuko::Karaoke::draw_song_controls() {
         m_play_button->invalidate();
     }
 
-    const auto remaining = m_audio.total_time() - m_audio.elapsed_time();
-    const int32_t minutes = static_cast<int32_t>(remaining) / 60;
-    const int32_t seconds = static_cast<int32_t>(remaining) % 60;
-    const auto time_text = std::format("{:02d}:{:02d}", minutes, seconds);
+    // Progress bar
+    if ( m_album_art != nullptr && m_album_art->is_valid() ) {
+        constexpr auto thickness = 30;
+        constexpr auto horizontal_padding = 10;
+        const auto progress_x = m_play_button->bounds().x + m_play_button->bounds().w + horizontal_padding;
+        const auto progress_y = m_play_button->bounds().y + m_play_button->bounds().h / 2 - thickness / 2;
+        const auto end_x = m_album_art->bounds().x + m_album_art->bounds().w;
 
-    const renderer::TextOpts time_text_opt = {
-        .text = time_text,
-        .position = {
-            .x = -10,
-            .y = m_play_button->bounds().y,
-            .flags = renderer::Point::ANCHOR_RIGHT_X
-        },
-        .pt_size = 12,
-        .bold = true
-    };
-    const auto time_text_drawable = m_renderer.draw_text_baked(time_text_opt, m_renderer.root_container());
-    m_renderer.render_baked(*time_text_drawable);
+        const auto progress_bar = renderer::ProgressBarOpts{
+            .position = {.x = progress_x, .y = progress_y},
+            .end_x = end_x,
+            .color = {.r = 200, .g = 200, .b = 200, .a = 255},
+            .bg_color = std::optional<renderer::Color>({.r = 100, .g = 100, .b = 100, .a = 255}),
+            .thickness = thickness,
+            .progress = m_audio.elapsed_time() / m_audio.total_time()
+        };
+        BoundingBox progress_box = {};
+        m_renderer.draw_horiz_progress_simple(progress_bar, &progress_box);
 
-    constexpr auto thickness = 30;
-    const auto progress_bar = renderer::ProgressBarOpts{
-        .position = {.x = m_play_button->bounds().x + m_play_button->bounds().w + 10, .y = m_play_button->bounds().y + m_play_button->bounds().h / 2 - thickness / 2},
-        .end_x = time_text_drawable->bounds().x - 10,
-        .color = {.r = 200, .g = 200, .b = 200, .a = 255},
-        .bg_color = std::optional<renderer::Color>({.r = 100, .g = 100, .b = 100, .a = 255}),
-        .thickness = thickness,
-        .progress = m_audio.elapsed_time() / m_audio.total_time()
-    };
-    BoundingBox progress_box = {};
-    m_renderer.draw_horiz_progress_simple(progress_bar, &progress_box);
-
-    int32_t progress_click_x;
-    if ( m_events.area_was_clicked(progress_box, &progress_click_x, nullptr) ) {
-        const auto distance_clicked = progress_click_x - progress_box.x;
-        const auto progress_percentage = distance_clicked / static_cast<double>(progress_box.w);
-        m_audio.seek(progress_percentage * m_audio.total_time());
+        int32_t progress_click_x;
+        if ( m_events.area_was_clicked(progress_box, &progress_click_x, nullptr) ) {
+            const auto distance_clicked = progress_click_x - progress_box.x;
+            const auto progress_percentage = distance_clicked / static_cast<double>(progress_box.w);
+            m_audio.seek(progress_percentage * m_audio.total_time());
+        }
     }
 }
 
@@ -257,8 +341,9 @@ bool etsuko::Karaoke::loop() {
     if ( !m_initialized ) {
         async_initialize_loop();
     } else {
-        draw_song_info();
+        draw_song_album_art();
         draw_song_controls();
+        draw_song_info();
         draw_lyrics();
         draw_version();
     }

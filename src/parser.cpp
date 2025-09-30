@@ -49,6 +49,8 @@ static void read_header(const std::string_view &line, Song &song) {
         song.karaoke_v2_variant = value;
     } else if ( property == "language" ) {
         song.language = value;
+    } else if ( property == "albumArt" ) {
+        song.album_art_path = value;
     }
 }
 

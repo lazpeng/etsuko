@@ -31,6 +31,7 @@ namespace etsuko {
             std::string karaoke_type;
             std::string karaoke_v2_variant;
             std::string file_path;
+            std::string album_art_path;
             std::vector<std::string> raw_lyrics;
             std::vector<std::string> raw_original;
             std::vector<TimedLyric> lyrics;

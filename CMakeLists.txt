@@ -53,8 +53,13 @@ if(EMSCRIPTEN)
             "SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
             "SHELL:-sFULL_ES3=1"
+            "SHELL:-sUSE_WEBGL2=1"
             "SHELL:-sNO_DISABLE_EXCEPTION_CATCHING=1"
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
+            "SHELL:-fexceptions"
+            "SHELL:-sASSERTIONS=1"
+            "SHELL:--profiling-funcs"
+            "SHELL:--use-preload-plugins"
             # Preload assets directory into virtual FS
             #"SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
     )

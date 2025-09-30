@@ -209,6 +209,20 @@ namespace etsuko {
             [[nodiscard]] virtual auto get_bounds() const -> const BoundingBox & = 0;
         };
 
+        class VirtualContainer final : public ContainerLike {
+            BoundingBox m_bounds = {};
+
+        public:
+            explicit VirtualContainer(const ContainerLike &parent, BoundingBox bounds) {
+                const auto parent_bounds = parent.get_bounds();
+                m_bounds = {.x = parent_bounds.x + bounds.x, .y = parent_bounds.y + bounds.y, .w = bounds.w, .h = bounds.h};
+            }
+
+            [[nodiscard]] const BoundingBox &get_bounds() const override {
+                return m_bounds;
+            }
+        };
+
         class VerticalSplitContainer : public ContainerLike {
         protected:
             BoundingBox m_bounds = {};
@@ -217,6 +231,10 @@ namespace etsuko {
             explicit VerticalSplitContainer(const bool left, const ContainerLike &parent) {
                 const auto x = left ? 0 : parent.get_bounds().w / 2;
                 m_bounds = {.x = x, .y = 0, .w = parent.get_bounds().w / 2, .h = parent.get_bounds().h};
+            }
+
+            [[nodiscard]] const BoundingBox &get_bounds() const override {
+                return m_bounds;
             }
         };
 
@@ -334,6 +352,12 @@ namespace etsuko {
                 return m_bounds;
             }
         };
+
+        struct ImageOpts {
+            Point position;
+            CoordinateType w, h;
+            std::string resource_path;
+        };
     } // namespace renderer
 
     class Renderer final : public renderer::ContainerLike {
@@ -385,6 +409,8 @@ namespace etsuko {
          * @param container Container to align and position the button relative to
          */
         std::shared_ptr<renderer::BakedDrawable> draw_button_baked(const renderer::ButtonOpts &opts, const ContainerLike &container);
+
+        std::shared_ptr<renderer::BakedDrawable> draw_image_baked(const renderer::ImageOpts &opts, const ContainerLike &container);
 
         /**
          * Renders a baked drawable to the screen
