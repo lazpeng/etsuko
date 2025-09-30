@@ -14,38 +14,6 @@ using namespace etsuko::renderer;
 
 constexpr auto TILING_PARTS = 20;
 
-template void BakedDrawableScrollingContainer<etsuko::parser::TimedLyric>::draw(const Renderer &renderer);
-
-template <typename T>
-void BakedDrawableScrollingContainer<T>::draw(const Renderer &renderer) {
-    CoordinateType y = m_opts.margin_top - m_viewport.y;
-    for ( auto &drawable : m_drawables ) {
-        if ( !drawable->is_enabled() )
-            continue;
-
-        if ( y + drawable->bounds().h >= m_bounds.y + m_bounds.h )
-            break;
-
-        CoordinateType x;
-        if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_LEFT ) {
-            x = 0;
-        } else if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_CENTER ) {
-            x = m_bounds.w / 2 - drawable->bounds().w / 2;
-        } else if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_RIGHT ) {
-            x = m_bounds.w - drawable->bounds().w;
-        } else
-            throw std::runtime_error("Invalid alignment option");
-
-        drawable->set_bounds({.x = x, .y = y, .w = drawable->bounds().w, .h = drawable->bounds().h});
-
-        if ( y + drawable->bounds().h >= 0 ) {
-            renderer.render_baked(*drawable, *this);
-        }
-
-        y += drawable->bounds().h + m_opts.vertical_padding;
-    }
-}
-
 void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, int32_t *w, int32_t *h) const {
     if ( TTF_SetFontSizeDPI(m_font, pt, m_h_dpi, m_v_dpi) != 0 ) {
         throw std::runtime_error("Failed to set font size/DPI");

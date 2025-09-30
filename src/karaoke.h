@@ -10,6 +10,7 @@
 #include "events.h"
 #include "parser.h"
 #include "renderer.h"
+#include "renderer_ex.h"
 #include "repository.h"
 
 namespace etsuko {
