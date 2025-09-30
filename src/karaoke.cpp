@@ -7,7 +7,7 @@ etsuko::config::Config etsuko::config::Config::get_default() {
     return {
         .font_path = DEFAULT_FONT,
         .font_index = 0,
-        .song_path = "Sayonara invader.txt"
+        .song_path = "sidewalks.txt"
     };
 }
 
@@ -66,8 +66,8 @@ void etsuko::Karaoke::initialize_lyrics_container() {
         const auto active = time >= line.base_start_time;
         return time <= line.base_start_time + line.base_duration && (!line.full_line.empty() || active);
     };
-    constexpr renderer::ScrollingContainerOpts scroll_opts = {
-        .margin_top = 500,
+    const renderer::ScrollingContainerOpts scroll_opts = {
+        .margin_top = m_renderer.get_bounds().h / 2 - 100,
         .vertical_padding = 40,
         .alignment = renderer::ScrollingContainerOpts::ALIGN_CENTER
     };

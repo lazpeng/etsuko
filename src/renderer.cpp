@@ -109,7 +109,6 @@ int etsuko::Renderer::initialize() {
     int outW, outH;
     SDL_GetRendererOutputSize(m_renderer, &outW, &outH);
     SDL_RenderSetLogicalSize(m_renderer, outW, outH);
-    std::puts(std::format("Renderer output size: {}x{}", outW, outH).c_str());
 
     m_viewport = {.x = 0, .y = 0, .w = outW, .h = outH};
 
