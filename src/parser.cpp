@@ -66,7 +66,7 @@ static void read_timings(const std::string_view &line, Song &song) {
     const auto minutes = std::strtod(line.substr(0, colon).data(), nullptr);
     const auto seconds = std::strtod(line.substr(colon + 1).data(), nullptr);
 
-    const auto start = minutes * 60 + seconds + 0.5; // TODO: Remove padding
+    const auto start = minutes * 60 + seconds;
     if ( !song.lyrics.empty() ) {
         auto &last = song.lyrics.back();
         last.base_duration = std::max(0.0, start - last.base_start_time);

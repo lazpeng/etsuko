@@ -40,6 +40,7 @@ namespace etsuko {
         Audio m_audio;
         EventManager m_events;
         uint64_t m_current_ticks = 0;
+        double m_delta_time = 0.0;
         config::Config m_config = config::Config::get_default();
         size_t m_current_active_index = 0;
         bool m_initialized = false;
@@ -59,6 +60,9 @@ namespace etsuko {
         std::shared_ptr<renderer::BakedDrawable> m_artist_name;
         std::shared_ptr<renderer::BakedDrawable> m_album_name;
         std::shared_ptr<renderer::BakedDrawable> m_song_year;
+
+        // Animations
+        std::optional<renderer::TranslateYAnimation> m_active_animation;
 
         /** Tasks */
         repository::LoadJob m_load_font = {}, m_load_song = {}, m_load_audio = {}, m_load_art = {};

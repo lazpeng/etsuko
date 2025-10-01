@@ -4,10 +4,13 @@
 
 #pragma once
 
+#include <format>
+
 #include "common.h"
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 #include <functional>
 
@@ -150,6 +153,7 @@ namespace etsuko {
         class BakedDrawable {
             SDL_Texture *m_texture = nullptr;
             BoundingBox m_bounds = {};
+            BoundingBox m_viewport = {};
             bool m_valid = false;
             bool m_enabled = true;
 
@@ -183,6 +187,10 @@ namespace etsuko {
                 return m_bounds;
             }
 
+            [[nodiscard]] BoundingBox &viewport() {
+                return m_viewport;
+            }
+
             void set_enabled(const bool enabled) {
                 m_enabled = enabled;
             }
@@ -200,6 +208,50 @@ namespace etsuko {
                     SDL_DestroyTexture(m_texture);
                     m_texture = nullptr;
                 }
+            }
+        };
+
+        class AnimationLike {
+        protected:
+            double m_duration = 0;
+            double m_elapsed_time = 0;
+
+        public:
+            virtual ~AnimationLike() = default;
+
+            explicit AnimationLike(const double duration) :
+                m_duration(duration) {
+            }
+
+            virtual void loop(const double delta_time) {
+                m_elapsed_time += delta_time;
+            }
+
+            [[nodiscard]] bool is_done() const {
+                return m_elapsed_time >= m_duration;
+            }
+
+            void reset() {
+                m_elapsed_time = 0;
+            }
+        };
+
+        class TranslateYAnimation final : public AnimationLike {
+            CoordinateType m_target_y_offset = 0;
+            double m_distance_per_second;
+
+        public:
+            TranslateYAnimation(const double duration, const CoordinateType target_y_offset) :
+                AnimationLike(duration), m_target_y_offset(target_y_offset), m_distance_per_second(target_y_offset / duration) {
+            }
+
+            void loop(const double delta_time, BakedDrawable *target) {
+                if ( target == nullptr ) {
+                    throw std::runtime_error("Target cannot be null");
+                }
+                AnimationLike::loop(delta_time);
+
+                target->viewport().y += static_cast<CoordinateType>(m_distance_per_second * delta_time);
             }
         };
 

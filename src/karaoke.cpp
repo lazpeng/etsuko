@@ -7,7 +7,7 @@ etsuko::config::Config etsuko::config::Config::get_default() {
     return {
         .font_path = DEFAULT_FONT,
         .font_index = 0,
-        .song_path = "sidewalks.txt"
+        .song_path = "inori.txt"
     };
 }
 
@@ -61,7 +61,7 @@ void etsuko::Karaoke::initialize_lyrics_container() {
         };
         return m_renderer.draw_text_baked(opts, m_lyrics_container.value());
     };
-    const auto is_enabled_fn = [&](const parser::TimedLyric &line) {
+    const auto is_enabled_fn = [&](const parser::TimedLyric &line, const size_t index) {
         const auto time = m_audio.elapsed_time();
         const auto active = time >= line.base_start_time;
         return time <= line.base_start_time + line.base_duration && (!line.full_line.empty() || active);
@@ -164,7 +164,7 @@ void etsuko::Karaoke::draw_song_album_art() {
     if ( m_album_art == nullptr || !m_album_art->is_valid() ) {
         const renderer::ImageOpts opts = {
             .position = {.x = 0, .y = -50, .flags = renderer::Point::CENTERED},
-            .w = 800,
+            .w = static_cast<int32_t>(m_left_container->get_bounds().w * 0.75),
             .resource_path = m_song.album_art_path,
         };
 
@@ -209,15 +209,30 @@ void etsuko::Karaoke::draw_lyrics() {
     if ( m_lyrics_container.has_value() ) {
         const auto time = m_audio.elapsed_time();
         size_t idx = 0;
-        for ( const auto &line : m_song.lyrics ) {
+        for ( auto i = 0; i < m_song.lyrics.size(); i++ ) {
+            const auto &line = m_song.lyrics.at(i);
             if ( time >= line.base_start_time && time < line.base_start_time + line.base_duration ) {
+                idx = i;
                 break;
             }
-            idx += 1;
         }
         if ( m_current_active_index != idx ) {
-            m_lyrics_container->notify_item_list_changed();
+            const auto &current = m_lyrics_container->drawables().at(m_current_active_index);
+            const auto &next = m_lyrics_container->drawables().at(idx);
+            if ( current != nullptr && next != nullptr ) {
+                constexpr auto distance = -50;
+                m_active_animation = renderer::TranslateYAnimation{0.3, distance};
+            }
+
             m_current_active_index = idx;
+            m_lyrics_container->notify_item_list_changed();
+        } else {
+            const auto &current = m_lyrics_container->drawables().at(m_current_active_index);
+            if ( !m_audio.is_paused() && current != nullptr ) {
+                if ( m_active_animation.has_value() && !m_active_animation->is_done() ) {
+                    m_active_animation->loop(m_delta_time, current.get());
+                }
+            }
         }
 
         m_lyrics_container->loop(m_events);
@@ -332,7 +347,9 @@ void etsuko::Karaoke::finalize() {
 }
 
 bool etsuko::Karaoke::loop() {
-    m_current_ticks = SDL_GetTicks64();
+    const auto current_ticks = SDL_GetTicks64();
+    m_delta_time = static_cast<double>(current_ticks - m_current_ticks) / 1000.0;
+    m_current_ticks = current_ticks;
 
     m_events.loop();
 
