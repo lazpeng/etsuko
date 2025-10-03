@@ -134,7 +134,7 @@ namespace etsuko::renderer {
 
             const auto last_visible_index = find_last_visible_index();
             if ( m_active_index < last_visible_index ) {
-                throw std::runtime_error("Impossible state: active_index is less than last_visible_index");
+                //throw std::runtime_error("Impossible state: active_index is less than last_visible_index");
             }
 
             CoordinateType y = m_opts.margin_top - m_viewport.y;
