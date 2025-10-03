@@ -94,7 +94,8 @@ int etsuko::Renderer::initialize() {
 }
 
 void etsuko::Renderer::begin_loop() const {
-    Color color = {.r = 17, .g = 24, .b = 39, .a = 255};
+    //Color color = {.r = 17, .g = 24, .b = 39, .a = 255};
+    Color color = {.r = 24, .g = 40, .b = 60, .a = 255};
     auto [r,g,b,a] = color;
     SDL_SetRenderDrawColor(m_renderer, r, g, b, a);
     SDL_RenderClear(m_renderer);
