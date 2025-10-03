@@ -170,7 +170,7 @@ namespace etsuko::renderer {
                 auto animated_y = y;
 
                 const auto frame_delta = m_active_y_offset_delta * m_delta_time;
-                const auto frame_target = drawable->bounds().y + frame_delta;
+                const auto frame_target = drawable->bounds().y + frame_delta - m_viewport.y;
                 if ( !m_first_draw && animate && y < frame_target ) {
                     if ( frame_target - y > 100 ) {
                         // TODO: Fix fucking error that makes the lyric jump to the bottom of the screen on seek
