@@ -311,7 +311,7 @@ void etsuko::Karaoke::draw_song_controls() {
 
     // Progress bar
     if ( m_album_art != nullptr && m_album_art->is_valid() ) {
-        constexpr auto thickness = 30;
+        constexpr auto thickness = 10;
         constexpr auto horizontal_padding = 10;
         const auto progress_x = m_play_button->bounds().x + m_play_button->bounds().w + horizontal_padding;
         const auto progress_y = m_play_button->bounds().y + m_play_button->bounds().h / 2 - thickness / 2;
@@ -327,6 +327,10 @@ void etsuko::Karaoke::draw_song_controls() {
         };
         BoundingBox progress_box = {};
         m_renderer.draw_horiz_progress_simple(progress_bar, &progress_box);
+
+        // "fatten" the box so we can more easily seek on the bar by clicking
+        progress_box.y -= 5;
+        progress_box.h += 10;
 
         int32_t progress_click_x;
         if ( m_events.area_was_clicked(progress_box, &progress_click_x, nullptr) ) {
