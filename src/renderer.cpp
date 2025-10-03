@@ -364,18 +364,26 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts 
     return baked;
 }
 
-void etsuko::Renderer::render_baked(const BakedDrawable &baked, const ContainerLike &container) const {
+void etsuko::Renderer::render_baked(const BakedDrawable &baked, const ContainerLike &container, const std::optional<uint8_t> alpha) const {
     if ( !baked.is_valid() ) {
         throw std::runtime_error("Attempted to draw uninitialized baked drawable");
     }
 
     const BoundingBox &pivot = container.get_bounds();
     const SDL_Rect rect = {.x = pivot.x + baked.m_bounds.x + baked.m_viewport.x, .y = pivot.y + baked.m_bounds.y + baked.m_viewport.y, .w = baked.m_bounds.w, .h = baked.m_bounds.h};
+    uint8_t alpha_backup = 0;
+    if ( alpha.has_value() ) {
+        SDL_GetTextureAlphaMod(baked.m_texture, &alpha_backup);
+        SDL_SetTextureAlphaMod(baked.m_texture, *alpha);
+    }
     SDL_RenderCopy(m_renderer, baked.m_texture, nullptr, &rect);
+    if ( alpha.has_value() ) {
+        SDL_SetTextureAlphaMod(baked.m_texture, alpha_backup);
+    }
 }
 
-void etsuko::Renderer::render_baked(const BakedDrawable &baked) const {
-    render_baked(baked, root_container());
+void etsuko::Renderer::render_baked(const BakedDrawable &baked, const std::optional<uint8_t> alpha) const {
+    render_baked(baked, root_container(), alpha);
 }
 
 void etsuko::Renderer::draw_horiz_progress_simple(const ProgressBarOpts &options, BoundingBox *out_box) const {

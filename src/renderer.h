@@ -365,14 +365,16 @@ namespace etsuko {
          * Renders a baked drawable to the screen
          * @param baked reference to the drawable to be drawn
          * @param container container the drawable is part of to calculate offsets and positioning
+         * @param alpha (optional) alpha offset for the texture after it's rendered
          */
-        void render_baked(const renderer::BakedDrawable &baked, const ContainerLike &container) const;
+        void render_baked(const renderer::BakedDrawable &baked, const ContainerLike &container, std::optional<uint8_t> alpha = std::nullopt) const;
 
         /**
          * Renders a baked drawable to the screen, using the default viewport as the container
          * @param baked reference to the drawable to be drawn
+         * @param alpha (optional) alpha offset for the texture after it's rendered
          */
-        void render_baked(const renderer::BakedDrawable &baked) const;
+        void render_baked(const renderer::BakedDrawable &baked, std::optional<uint8_t> alpha = std::nullopt) const;
 
         /* Loaders and whatnot */
         void load_font(const std::string &path, size_t index = 0);

@@ -199,7 +199,11 @@ namespace etsuko::renderer {
                 drawable->set_bounds({.x = x, .y = animated_y, .w = drawable->bounds().w, .h = drawable->bounds().h});
 
                 if ( y + drawable->bounds().h >= 0 ) {
-                    renderer.render_baked(*drawable, *this);
+                    auto alpha = 255;
+                    for ( int distance = 1; distance < std::min(static_cast<int>(i - m_active_index), 5); distance++ ) {
+                        alpha = static_cast<uint8_t>(alpha / 1.5);
+                    }
+                    renderer.render_baked(*drawable, *this, alpha);
                 }
 
                 y += drawable->bounds().h + m_opts.vertical_padding;
