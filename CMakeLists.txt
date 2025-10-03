@@ -53,8 +53,6 @@ if(EMSCRIPTEN)
             "SHELL:-O3"
             "SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
-            "SHELL:-sFULL_ES3=1"
-            "SHELL:-sUSE_WEBGL2=1"
             "SHELL:-sNO_DISABLE_EXCEPTION_CATCHING=1"
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
             "SHELL:-fexceptions"
