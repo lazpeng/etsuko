@@ -11,6 +11,7 @@ namespace etsuko {
     class Audio {
         Mix_Music *m_music = nullptr;
         bool m_paused = true;
+        double m_total_time = 0;
 
     public:
         int initialize();

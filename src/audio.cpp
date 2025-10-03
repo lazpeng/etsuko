@@ -30,7 +30,7 @@ double etsuko::Audio::elapsed_time() const {
 }
 
 double etsuko::Audio::total_time() const {
-    return Mix_MusicDuration(m_music);
+    return m_total_time;
 }
 
 void etsuko::Audio::load_song(const std::string &path) {
@@ -39,6 +39,7 @@ void etsuko::Audio::load_song(const std::string &path) {
         std::puts(Mix_GetError());
         throw std::runtime_error("Failed to load song");
     }
+    m_total_time = Mix_MusicDuration(m_music);
     Mix_PlayMusic(m_music, 1);
     Mix_PauseMusic();
 }

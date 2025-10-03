@@ -1,5 +1,6 @@
 #include "events.h"
 
+#include <algorithm>
 #include <print>
 #include <SDL2/SDL.h>
 
@@ -7,8 +8,32 @@ bool etsuko::EventManager::has_quit() const {
     return m_quit;
 }
 
+void etsuko::EventManager::handle_key(const SDL_Event &event) {
+    events::Key::Code code = events::Key::NONE;
+    switch ( event.key.keysym.sym ) {
+    case SDLK_SPACE:
+        code = events::Key::SPACE;
+        break;
+    case SDLK_LEFT:
+        code = events::Key::LEFT_ARROW;
+        break;
+    case SDLK_RIGHT:
+        code = events::Key::RIGHT_ARROW;
+        break;
+    default:
+        break;
+    }
+
+    m_keys_down.push_back(code);
+}
+
+bool etsuko::EventManager::is_key_down(const events::Key::Code key) const {
+    return std::ranges::any_of(m_keys_down, [key](const auto k) { return k == key;});
+}
+
 void etsuko::EventManager::loop() {
     m_mouse_clicks.clear();
+    m_keys_down.clear();
     m_scrolled = 0;
 
     SDL_Event event;
@@ -23,20 +48,23 @@ void etsuko::EventManager::loop() {
         case SDL_MOUSEWHEEL:
             m_scrolled += event.wheel.y;
             break;
+        case SDL_KEYDOWN:
+            handle_key(event);
+            break;
         default:
             break;
         }
     }
 }
 
-bool etsuko::EventManager::area_was_clicked(const BoundingBox &area, int32_t *dest_x, int32_t *dest_y) const {
+bool etsuko::EventManager::area_was_clicked(const BoundingBox &area, int32_t *destination_x, int32_t *destination_y) const {
     for ( const auto &[x, y] : m_mouse_clicks ) {
         if ( x >= area.x && x <= area.x + area.w
             && y >= area.y && y <= area.y + area.h ) {
-            if ( dest_x != nullptr )
-                *dest_x = x;
-            if ( dest_y != nullptr )
-                *dest_y = y;
+            if ( destination_x != nullptr )
+                *destination_x = x;
+            if ( destination_y != nullptr )
+                *destination_y = y;
 
             return true;
         }

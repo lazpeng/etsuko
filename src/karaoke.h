@@ -70,6 +70,11 @@ namespace etsuko {
         void async_initialize_loop();
         void initialize_lyrics_container();
 
+        void handle_input();
+
+        void toggle_play_pause();
+        void seek_to_time(double time) const;
+
         void draw_song_album_art();
         void draw_song_info();
         void draw_lyrics();

@@ -7,7 +7,7 @@ etsuko::config::Config etsuko::config::Config::get_default() {
     return {
         .font_path = DEFAULT_FONT,
         .font_index = 0,
-        .song_path = "inori.txt"
+        .song_path = "all these things that ive done.txt"
     };
 }
 
@@ -306,11 +306,7 @@ void etsuko::Karaoke::draw_song_controls() {
     m_renderer.render_baked(*m_play_button);
 
     if ( m_events.area_was_clicked(m_play_button->bounds(), nullptr, nullptr) ) {
-        m_audio.is_paused()
-            ? m_audio.resume()
-            : m_audio.pause();
-        // Redraw the button
-        m_play_button->invalidate();
+        toggle_play_pause();
     }
 
     // Progress bar
@@ -336,7 +332,7 @@ void etsuko::Karaoke::draw_song_controls() {
         if ( m_events.area_was_clicked(progress_box, &progress_click_x, nullptr) ) {
             const auto distance_clicked = progress_click_x - progress_box.x;
             const auto progress_percentage = distance_clicked / static_cast<double>(progress_box.w);
-            m_audio.seek(progress_percentage * m_audio.total_time());
+            seek_to_time(progress_percentage * m_audio.total_time());
         }
     }
 }
@@ -346,12 +342,44 @@ void etsuko::Karaoke::finalize() {
     m_audio.finalize();
 }
 
+void etsuko::Karaoke::handle_input() {
+    if ( m_events.is_key_down(events::Key::SPACE) ) {
+        toggle_play_pause();
+    }
+
+    constexpr auto seek_amount = 5.0;
+    const auto elapsed = m_audio.elapsed_time();
+    if ( m_events.is_key_down(events::Key::LEFT_ARROW) ) {
+        seek_to_time(elapsed - seek_amount);
+    } else if ( m_events.is_key_down(events::Key::RIGHT_ARROW) ) {
+        seek_to_time(elapsed + seek_amount);
+    }
+}
+
+void etsuko::Karaoke::toggle_play_pause() {
+    m_audio.is_paused()
+        ? m_audio.resume()
+        : m_audio.pause();
+    // Redraw the button
+    if ( m_play_button != nullptr && m_play_button->is_valid() ) {
+        m_play_button->invalidate();
+    }
+}
+
+void etsuko::Karaoke::seek_to_time(const double time) const {
+    if ( time > m_audio.total_time() ) {
+        throw std::runtime_error("Time is out of range");
+    }
+    m_audio.seek(time);
+}
+
 bool etsuko::Karaoke::loop() {
     const auto current_ticks = SDL_GetTicks64();
     m_delta_time = static_cast<double>(current_ticks - m_current_ticks) / 1000.0;
     m_current_ticks = current_ticks;
 
     m_events.loop();
+    handle_input();
 
     m_renderer.begin_loop();
 
