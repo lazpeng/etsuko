@@ -51,7 +51,7 @@ namespace etsuko {
         std::shared_ptr<renderer::BakedDrawable> m_play_button = {};
         std::shared_ptr<renderer::BakedDrawable> m_elapsed_time = {};
         // Lyrics
-        std::optional<renderer::BakedDrawableScrollingContainer<parser::TimedLyric>> m_lyrics_container;
+        std::optional<renderer::BakedDrawableScrollingLyricsContainer> m_lyrics_container;
         // Left panel
         std::optional<renderer::VerticalSplitContainer> m_left_container;
         std::shared_ptr<renderer::BakedDrawable> m_album_art;

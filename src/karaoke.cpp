@@ -28,52 +28,13 @@ int etsuko::Karaoke::initialize() {
 }
 
 void etsuko::Karaoke::initialize_lyrics_container() {
-    constexpr auto active_pts = 26;
-    const auto build_fn = [&](const parser::TimedLyric &line) {
-        const auto time = m_audio.elapsed_time();
-        const auto active = time >= line.base_start_time && time <= line.base_start_time + line.base_duration;
-        constexpr renderer::Color inactive_color = {.r = 100, .g = 100, .b = 100, .a = 255};
-        const auto active_color = renderer::Color::white();
-
-        const auto pts = active ? active_pts : 20;
-        const auto color = active ? active_color : inactive_color;
-        std::string line_text = line.full_line;
-        if ( line_text.empty() ) {
-            if ( line.base_duration > 1.5 || line.base_duration < 0 )
-                line_text = "...";
-            else
-                line_text = " ";
-        }
-        const renderer::TextOpts opts = {
-            .text = line_text,
-            .position = {},
-            .pt_size = pts,
-            .bold = false,
-            .color = color,
-            .layout_opts = {
-                .wrap = true,
-                .wrap_opts = {
-                    .measure_at_pts = active_pts,
-                    .wrap_width_threshold = 0.95,
-                    .line_padding = 10,
-                }
-            }
-        };
-        return m_renderer.draw_text_baked(opts, m_lyrics_container.value());
-    };
-    const auto is_enabled_fn = [&](const parser::TimedLyric &line, const size_t index) {
-        const auto time = m_audio.elapsed_time();
-        const auto active = time >= line.base_start_time;
-        return time <= line.base_start_time + line.base_duration && (!line.full_line.empty() || active);
-    };
     const renderer::ScrollingContainerOpts scroll_opts = {
         .margin_top = m_renderer.get_bounds().h / 2 - 100,
         .vertical_padding = 40,
         .alignment = renderer::ScrollingContainerOpts::ALIGN_CENTER
     };
-    m_lyrics_container = renderer::BakedDrawableScrollingContainer<parser::TimedLyric>(false, m_renderer.root_container(), build_fn, scroll_opts);
+    m_lyrics_container = renderer::BakedDrawableScrollingLyricsContainer(&m_renderer, false, m_renderer.root_container(), scroll_opts);
     m_lyrics_container->set_item_list(std::make_shared<std::vector<parser::TimedLyric>>(m_song.lyrics));
-    m_lyrics_container->set_is_enabled_fn(is_enabled_fn);
 }
 
 void etsuko::Karaoke::async_initialize_loop() {
@@ -164,7 +125,7 @@ void etsuko::Karaoke::draw_song_album_art() {
     if ( m_album_art == nullptr || !m_album_art->is_valid() ) {
         const renderer::ImageOpts opts = {
             .position = {.x = 0, .y = -50, .flags = renderer::Point::CENTERED},
-            .w = static_cast<int32_t>(m_left_container->get_bounds().w * 0.75),
+            .h = static_cast<int32_t>(m_left_container->get_bounds().h * 0.7),
             .resource_path = m_song.album_art_path,
         };
 
@@ -207,36 +168,8 @@ void etsuko::Karaoke::draw_song_info() {
 
 void etsuko::Karaoke::draw_lyrics() {
     if ( m_lyrics_container.has_value() ) {
-        const auto time = m_audio.elapsed_time();
-        size_t idx = 0;
-        for ( auto i = 0; i < m_song.lyrics.size(); i++ ) {
-            const auto &line = m_song.lyrics.at(i);
-            if ( time >= line.base_start_time && time < line.base_start_time + line.base_duration ) {
-                idx = i;
-                break;
-            }
-        }
-        if ( m_current_active_index != idx ) {
-            const auto &current = m_lyrics_container->drawables().at(m_current_active_index);
-            const auto &next = m_lyrics_container->drawables().at(idx);
-            if ( current != nullptr && next != nullptr ) {
-                constexpr auto distance = -50;
-                m_active_animation = renderer::TranslateYAnimation{0.3, distance};
-            }
-
-            m_current_active_index = idx;
-            m_lyrics_container->notify_item_list_changed();
-        } else {
-            const auto &current = m_lyrics_container->drawables().at(m_current_active_index);
-            if ( !m_audio.is_paused() && current != nullptr ) {
-                if ( m_active_animation.has_value() && !m_active_animation->is_done() ) {
-                    m_active_animation->loop(m_delta_time, current.get());
-                }
-            }
-        }
-
-        m_lyrics_container->loop(m_events);
-        m_lyrics_container->draw(m_renderer);
+        m_lyrics_container->loop(m_events, m_delta_time, m_audio.elapsed_time());
+        m_lyrics_container->draw(m_renderer, !m_audio.is_paused());
     }
 }
 
