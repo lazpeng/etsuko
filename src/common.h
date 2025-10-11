@@ -16,5 +16,5 @@ namespace etsuko {
         }
     };
 
-    constexpr auto VERSION_STRING = "0.3.4";
+    constexpr auto VERSION_STRING = "0.3.5";
 }

@@ -37,6 +37,7 @@ void etsuko::EventManager::loop() {
     m_mouse_clicks.clear();
     m_keys_down.clear();
     m_scrolled = 0;
+    m_window_resized = false;
 
     SDL_Event event;
     while ( SDL_PollEvent(&event) ) {
@@ -57,10 +58,19 @@ void etsuko::EventManager::loop() {
         case SDL_KEYDOWN:
             handle_key(event);
             break;
+        case SDL_WINDOWEVENT:
+            if ( event.window.event == SDL_WINDOWEVENT_RESIZED ) {
+                m_window_resized = true;
+            }
+            break;
         default:
             break;
         }
     }
+}
+
+bool etsuko::EventManager::window_was_resized() const {
+    return m_window_resized;
 }
 
 bool etsuko::EventManager::area_was_clicked(const BoundingBox &area, int32_t *destination_x, int32_t *destination_y) const {

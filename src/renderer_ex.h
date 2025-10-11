@@ -7,13 +7,24 @@
 #include "renderer.h"
 
 namespace etsuko::renderer {
+    struct ScrollingLyricsContainerOpts {
+        enum AlignMode {
+            ALIGN_LEFT = 0,
+            ALIGN_CENTER,
+            ALIGN_RIGHT
+        };
+
+        double margin_top_percent = 0;
+        double vertical_padding_percent = 0.025;
+        double active_padding_percent = 0.03;
+        AlignMode alignment = ALIGN_LEFT;
+    };
 
     class BakedDrawableScrollingLyricsContainer final : public VerticalSplitContainer {
         std::shared_ptr<parser::Song> m_song;
         std::vector<std::shared_ptr<BakedDrawable>> m_drawables;
-        BoundingBox m_bounds = {};
         BoundingBox m_viewport = {};
-        ScrollingContainerOpts m_opts;
+        ScrollingLyricsContainerOpts m_opts;
         double m_elapsed_time = 0.0;
         double m_delta_time = 0.0;
         size_t m_active_index = 0, m_draw_active_index = 0;
@@ -53,7 +64,6 @@ namespace etsuko::renderer {
         }
 
         [[nodiscard]] static TextOpts build_text_opts(const parser::TimedLyric &elem, const bool active) {
-            constexpr auto active_pts = 26;
             constexpr Color active_color = {.r = 255, .g = 255, .b = 255, .a = 255};
             constexpr Color inactive_color = {.r = 100, .g = 100, .b = 100, .a = 255};
             std::string line_text = elem.full_line;
@@ -64,38 +74,32 @@ namespace etsuko::renderer {
                     line_text = " ";
                 }
             }
-            const auto pts = active ? active_pts : 20;
+            constexpr auto active_em = 2.0;
+            const auto em = active ? active_em : 1.5;
             return {
                 .text = line_text,
                 .position = {},
-                .pt_size = pts,
+                .em_size = em,
                 .bold = false,
                 .color = active ? active_color : inactive_color,
                 .layout_opts = {
                     .wrap = true,
                     .wrap_opts = {
-                        .measure_at_pts = active_pts,
-                        .wrap_width_threshold = 0.95,
+                        .measure_at_em = active_em,
+                        .wrap_width_threshold = 0.85,
                         .line_padding = 10,
                     }
-                }
+                },
+                .font_kind = TextOpts::FONT_LYRIC,
             };
         }
 
     public:
-        explicit BakedDrawableScrollingLyricsContainer(Renderer *renderer, const std::shared_ptr<parser::Song> &song, const bool left, const ContainerLike &parent, const ScrollingContainerOpts &opts) :
+        explicit BakedDrawableScrollingLyricsContainer(Renderer *renderer, const std::shared_ptr<parser::Song> &song, const bool left, const ContainerLike *parent, const ScrollingLyricsContainerOpts &opts) :
             VerticalSplitContainer(left, parent), m_opts(opts), m_renderer(renderer), m_song(song) {
             if ( m_renderer == nullptr ) {
                 throw std::runtime_error("Renderer is null");
             }
-
-            const auto parent_bounds = parent.get_bounds();
-            if ( !left ) {
-                m_bounds.x = parent_bounds.w / 2;
-            }
-            m_bounds.y = 0;
-            m_bounds.w = parent_bounds.w / 2;
-            m_bounds.h = parent_bounds.h;
 
             m_viewport = m_bounds;
 
@@ -112,7 +116,7 @@ namespace etsuko::renderer {
             return m_drawables;
         }
 
-        [[nodiscard]] const ScrollingContainerOpts &opts() const {
+        [[nodiscard]] const ScrollingLyricsContainerOpts &opts() const {
             return m_opts;
         }
 
@@ -124,6 +128,14 @@ namespace etsuko::renderer {
             m_drawables[index]->set_enabled(enabled);
         }
 
+        void notify_window_resized() override {
+            VerticalSplitContainer::notify_window_resized();
+
+            for ( const auto &drawable : m_drawables ) {
+                drawable->invalidate();
+            }
+        }
+
         void draw(const Renderer &renderer, const bool animate) {
             if ( m_song->lyrics.size() != m_drawables.size() ) {
                 throw std::runtime_error("Invalid state: Not all lyric elements have generated drawables");
@@ -131,7 +143,8 @@ namespace etsuko::renderer {
 
             const auto last_visible_index = find_last_visible_index();
 
-            CoordinateType y = m_opts.margin_top - m_viewport.y;
+            const auto virtual_target_y = static_cast<int32_t>(m_bounds.h * m_opts.margin_top_percent);
+            CoordinateType y = virtual_target_y - m_viewport.y;
             for ( size_t i = last_visible_index; i < m_song->lyrics.size(); i++ ) {
                 if ( m_active_index != m_draw_active_index && i <= m_active_index ) {
                     // Invalidate the drawable
@@ -173,38 +186,40 @@ namespace etsuko::renderer {
                     break;
 
                 CoordinateType x;
-                if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_LEFT ) {
+                if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_LEFT ) {
                     x = 0;
-                } else if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_CENTER ) {
+                } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_CENTER ) {
                     x = m_bounds.w / 2 - drawable->bounds().w / 2;
-                } else if ( m_opts.alignment == ScrollingContainerOpts::ALIGN_RIGHT ) {
+                } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_RIGHT ) {
                     x = m_bounds.w - drawable->bounds().w;
                 } else
                     throw std::runtime_error("Invalid alignment option");
 
                 drawable->set_bounds({.x = x, .y = animated_y, .w = drawable->bounds().w, .h = drawable->bounds().h});
 
-                constexpr auto max_fade_steps = 5;
+                constexpr auto max_fade_steps = 4;
                 const auto max_distance_step = (get_bounds().y + get_bounds().h - y) / max_fade_steps;
-                const auto distance_to_target_y = y - m_opts.margin_top + drawable->bounds().h;
+                const auto distance_to_target_y = y - virtual_target_y + drawable->bounds().h;
 
                 if ( distance_to_target_y + drawable->bounds().h >= 0 ) {
-                    const auto steps = static_cast<int32_t>(std::floor(distance_to_target_y / max_distance_step));
-                    const auto current_distance = m_song->lyrics.at(m_active_index).full_line.empty() && m_active_index != i ? max_fade_steps : steps;
-
                     auto alpha = 255;
-                    for ( int distance = 1; distance < current_distance; distance++ ) {
-                        alpha = static_cast<uint8_t>(alpha / 1.25);
+                    if ( m_song->lyrics.at(m_active_index).full_line.empty() && m_active_index != i ) {
+                        alpha = 50;
+                    } else {
+                        const auto steps = static_cast<int32_t>(std::floor(distance_to_target_y / max_distance_step));
+                        for ( int distance = 1; distance < steps; distance++ ) {
+                            alpha = static_cast<uint8_t>(alpha / 1.5);
+                        }
                     }
                     renderer.render_baked(*drawable, *this, alpha);
                 }
 
-                auto vertical_padding = m_opts.vertical_padding;
+                auto vertical_padding = m_bounds.h * m_opts.vertical_padding_percent;
                 if ( m_active_index == i && m_song->lyrics.at(i).full_line.empty() ) {
-                    vertical_padding += 100;
+                    vertical_padding += m_bounds.h * m_opts.active_padding_percent;
                 }
 
-                y += drawable->bounds().h + vertical_padding;
+                y += static_cast<int32_t>(drawable->bounds().h + vertical_padding);
 
                 if ( m_first_draw ) {
                     m_first_draw = false;
@@ -218,7 +233,7 @@ namespace etsuko::renderer {
             CoordinateType h = 0;
             for ( const auto &drawable : m_drawables ) {
                 if ( drawable != nullptr && drawable->is_enabled() ) {
-                    h += drawable->bounds().h + m_opts.vertical_padding;
+                    h += drawable->bounds().h + static_cast<int32_t>(m_bounds.h * m_opts.vertical_padding_percent);
                 }
             }
 

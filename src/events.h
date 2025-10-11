@@ -33,20 +33,17 @@ namespace etsuko {
         std::vector<events::Key::Code> m_keys_down;
         double m_scrolled = 0.0;
         int32_t m_mouse_x = 0, m_mouse_y = 0;
+        bool m_window_resized = false;
 
         void handle_key(const SDL_Event &event);
 
     public:
         [[nodiscard]] bool has_quit() const;
-
         void loop();
-
         [[nodiscard]] bool area_was_clicked(const BoundingBox &area, int32_t *destination_x, int32_t *destination_y) const;
-
+        [[nodiscard]] bool window_was_resized() const;
         [[nodiscard]] double amount_scrolled() const;
-
         void get_mouse_position(int32_t *x, int32_t *y) const;
-
         [[nodiscard]] bool is_key_down(events::Key::Code key) const;
     };
 }

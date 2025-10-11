@@ -25,6 +25,16 @@ void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, 
     }
 }
 
+int32_t etsuko::Renderer::em_to_pt_size(const double em) const {
+    constexpr auto base_pt_size = DEFAULT_PT;
+    constexpr auto base_width = DEFAULT_WIDTH;
+    const auto scale = m_viewport.w / static_cast<double>(base_width);
+    const auto rem = std::max(12.0, std::round(base_pt_size * scale));
+    const auto pixels = em * rem;
+    const auto pt_size = static_cast<int32_t>(std::lround(pixels * 72.0 / m_h_dpi));
+    return pt_size;
+}
+
 int etsuko::Renderer::initialize() {
     if ( SDL_Init(SDL_INIT_VIDEO) != 0 ) {
         std::puts(SDL_GetError());
@@ -43,7 +53,7 @@ int etsuko::Renderer::initialize() {
     }
 
     constexpr auto pos = SDL_WINDOWPOS_CENTERED;
-    constexpr auto flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI;
+    constexpr auto flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE;
     m_window = SDL_CreateWindow(DEFAULT_TITLE, pos, pos, DEFAULT_WIDTH, DEFAULT_HEIGHT, flags);
     if ( m_window == nullptr ) {
         return -2;
@@ -59,10 +69,6 @@ int etsuko::Renderer::initialize() {
         return -3;
     }
 
-    // TODO: Revise this later because I might be doing this hidpi thing in reverse
-    // as of now the WindowSize is smaller (close to real size) and the logical size is larger (relative to dpi)
-    // if done in the opposite way, things look smaller but also crispier
-    // TODO: Investigate!!!
 #ifdef __EMSCRIPTEN__
     //double devicePixelRatio = emscripten_get_device_pixel_ratio();
     double cssWidth, cssHeight;
@@ -75,23 +81,26 @@ int etsuko::Renderer::initialize() {
     //SDL_RenderSetLogicalSize(m_renderer, cssWidth, cssHeight);
 #endif
 
+    notify_window_changed();
+
+    return 0;
+}
+
+void etsuko::Renderer::notify_window_changed() {
     int32_t outW, outH;
     SDL_GetRendererOutputSize(m_renderer, &outW, &outH);
     SDL_RenderSetLogicalSize(m_renderer, outW, outH);
 
     m_viewport = {.x = 0, .y = 0, .w = outW, .h = outH};
+    std::puts(std::format("viewport: {}x{}", m_viewport.w, m_viewport.h).c_str());
 
-    /* This value should be recalculated when the screen changes size(?) */
     float hdpi_temp, v_dpi_temp;
     if ( SDL_GetDisplayDPI(0, nullptr, &hdpi_temp, &v_dpi_temp) != 0 ) {
-        std::puts("Could not get DPI");
         std::puts(SDL_GetError());
-        return -4;
+        throw std::runtime_error("Failed to get DPI");
     }
 
     m_h_dpi = static_cast<int32_t>(hdpi_temp), m_v_dpi = static_cast<int32_t>(v_dpi_temp);
-
-    return 0;
 }
 
 void etsuko::Renderer::begin_loop() const {
@@ -128,9 +137,11 @@ size_t etsuko::Renderer::measure_text_wrap_stop(const TextOpts &text_opts, Conta
         if ( start == tmp_end_idx )
             break;
 
-        auto measure_pt_size = text_opts.layout_opts.wrap_opts.measure_at_pts;
-        if ( measure_pt_size <= 0 ) {
-            measure_pt_size = text_opts.pt_size;
+        auto measure_pt_size = 0;
+        if ( text_opts.layout_opts.wrap_opts.measure_at_em != 0 ) {
+            measure_pt_size = em_to_pt_size(text_opts.layout_opts.wrap_opts.measure_at_em);
+        } else {
+            measure_pt_size = em_to_pt_size(text_opts.em_size);
         }
         int32_t w, h;
         measure_line_size(text.substr(start, tmp_end_idx - start), measure_pt_size, &w, &h, text_opts.font_kind);
@@ -314,7 +325,8 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts 
         do {
             const size_t end = measure_text_wrap_stop(opts, container, start);
             const auto line = opts.text.substr(start, end - start);
-            const auto texture = draw_text(line, opts.pt_size, opts.bold, opts.color, opts.font_kind);
+            const auto pt_size = em_to_pt_size(opts.em_size);
+            const auto texture = draw_text(line, pt_size, opts.bold, opts.color, opts.font_kind);
             textures.push_back(texture);
 
             int32_t w, h;
@@ -353,7 +365,8 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts 
 
         restore_texture_target();
     } else {
-        final_texture = draw_text(opts.text, opts.pt_size, opts.bold, opts.color, opts.font_kind);
+        const auto pt_size = em_to_pt_size(opts.em_size);
+        final_texture = draw_text(opts.text, pt_size, opts.bold, opts.color, opts.font_kind);
     }
 
     // Initialize baked drawable
@@ -383,14 +396,14 @@ void etsuko::Renderer::render_baked(const BakedDrawable &baked, const ContainerL
 }
 
 void etsuko::Renderer::render_baked(const BakedDrawable &baked, const std::optional<uint8_t> alpha) const {
-    render_baked(baked, root_container(), alpha);
+    render_baked(baked, *root_container(), alpha);
 }
 
 void etsuko::Renderer::draw_horiz_progress_simple(const ProgressBarOpts &options, BoundingBox *out_box) const {
     BoundingBox temp = {.w = 1, .h = options.thickness};
-    measure_layout(temp, {.x = options.end_x, .y = 0, .flags = options.position.flags}, root_container(), temp);
+    measure_layout(temp, {.x = options.end_x, .y = 0, .flags = options.position.flags}, *root_container(), temp);
     BoundingBox box = {.w = 1, .h = options.thickness};
-    measure_layout(box, options.position, root_container(), box);
+    measure_layout(box, options.position, *root_container(), box);
     box.w = temp.x - box.x;
 
     const auto [r, g, b, a] = options.bg_color.has_value() ? options.bg_color.value() : options.color.darken();

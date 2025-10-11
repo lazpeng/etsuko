@@ -102,7 +102,7 @@ namespace etsuko {
                     WRAP_ALWAYS
                 };
 
-                int32_t measure_at_pts = 0;
+                double measure_at_em = 0;
                 double wrap_width_threshold = 0.8;
                 CoordinateType line_padding = 0;
                 WrapMeasuringMode measuring_mode = WRAP_SCREEN_WIDTH;
@@ -122,7 +122,7 @@ namespace etsuko {
 
             std::string text;
             Point position;
-            int32_t pt_size = DEFAULT_PT;
+            double em_size = 1.0;
             bool bold = false;
             Color color = Color::white();
             TextLayoutOpts layout_opts = {};
@@ -279,30 +279,26 @@ namespace etsuko {
         };
 
         class VerticalSplitContainer : public ContainerLike {
+            const ContainerLike *m_parent;
+            bool m_is_left;
+
         protected:
             BoundingBox m_bounds = {};
 
         public:
-            explicit VerticalSplitContainer(const bool left, const ContainerLike &parent) {
-                const auto x = left ? 0 : parent.get_bounds().w / 2;
-                m_bounds = {.x = x, .y = 0, .w = parent.get_bounds().w / 2, .h = parent.get_bounds().h};
+            explicit VerticalSplitContainer(const bool left, const ContainerLike *parent): m_parent(parent), m_is_left(left) {
+                VerticalSplitContainer::notify_window_resized();
             }
 
             [[nodiscard]] const BoundingBox &get_bounds() const override {
                 return m_bounds;
             }
-        };
 
-        struct ScrollingContainerOpts {
-            enum AlignMode {
-                ALIGN_LEFT = 0,
-                ALIGN_CENTER,
-                ALIGN_RIGHT
-            };
-
-            int32_t margin_top = 0;
-            int32_t vertical_padding = 0;
-            AlignMode alignment = ALIGN_LEFT;
+            virtual void notify_window_resized() {
+                const auto x = m_is_left ? 0 : m_parent->get_bounds().w / 2;
+                m_bounds = {.x = x, .y = 0, .w = m_parent->get_bounds().w / 2, .h = m_parent->get_bounds().h};
+                std::puts(std::format("Container bounds: x={}, y={}, w={}, h={}", m_bounds.x, m_bounds.y, m_bounds.w, m_bounds.h).c_str());
+            }
         };
 
         struct ImageOpts {
@@ -327,6 +323,8 @@ namespace etsuko {
         [[nodiscard]] size_t measure_text_wrap_stop(const renderer::TextOpts &text_opts, const ContainerLike &container, size_t start = 0) const;
         [[nodiscard]] SDL_Texture *draw_text(const std::string_view &text, int32_t pt_size, bool bold, renderer::Color color, renderer::TextOpts::FontKind kind) const;
 
+        [[nodiscard]] int32_t em_to_pt_size(double em) const;
+
         SDL_Texture *make_new_texture_target(int32_t w, int32_t h);
         void restore_texture_target();
 
@@ -336,14 +334,15 @@ namespace etsuko {
         void begin_loop() const;
         void end_loop() const;
         void finalize();
+        void notify_window_changed();
 
         /* Implements for being a (root) container for drawables */
         [[nodiscard]] const BoundingBox &get_bounds() const override {
             return m_viewport;
         }
 
-        [[nodiscard]] const Renderer &root_container() const {
-            return *this;
+        [[nodiscard]] const Renderer *root_container() const {
+            return this;
         }
 
         /* Actually doing stuff */

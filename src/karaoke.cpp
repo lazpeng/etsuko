@@ -30,10 +30,11 @@ int etsuko::Karaoke::initialize() {
 }
 
 void etsuko::Karaoke::initialize_lyrics_container() {
-    const renderer::ScrollingContainerOpts scroll_opts = {
-        .margin_top = m_renderer.get_bounds().h / 2 - 100,
-        .vertical_padding = 40,
-        .alignment = renderer::ScrollingContainerOpts::ALIGN_CENTER
+    constexpr renderer::ScrollingLyricsContainerOpts scroll_opts = {
+        .margin_top_percent = 0.4,
+        .vertical_padding_percent = 0.025,
+        .active_padding_percent = 0.1,
+        .alignment = renderer::ScrollingLyricsContainerOpts::ALIGN_CENTER
     };
     m_lyrics_container = renderer::BakedDrawableScrollingLyricsContainer(&m_renderer, m_song, false, m_renderer.root_container(), scroll_opts);
 }
@@ -144,11 +145,11 @@ void etsuko::Karaoke::draw_version() {
                 .y = 0,
                 .flags = renderer::Point::ANCHOR_RIGHT_X
             },
-            .pt_size = 12,
-            .bold = true,
+            .em_size = 0.8,
+            .bold = false,
             .color = color
         };
-        m_text_version = m_renderer.draw_text_baked(opts, m_renderer.root_container());
+        m_text_version = m_renderer.draw_text_baked(opts, *m_renderer.root_container());
     }
 
     m_renderer.render_baked(*m_text_version);
@@ -175,8 +176,9 @@ void etsuko::Karaoke::draw_song_album_art() {
 void etsuko::Karaoke::draw_song_info() {
     if ( m_album_art != nullptr && m_album_art->is_valid() && m_progress_bar_box.has_value() ) {
         if ( !m_song_info_container.has_value() ) {
-            // TODO: Fix height
-            const BoundingBox box = {.x = m_album_art->bounds().x, .y = m_album_art->bounds().y + m_album_art->bounds().h + 10, .w = m_album_art->bounds().w, .h = 1000};
+            const auto y = m_album_art->bounds().y + m_album_art->bounds().h + 10;
+            const auto height = m_left_container->get_bounds().h - y;
+            const BoundingBox box = {.x = m_album_art->bounds().x, .y = y, .w = m_album_art->bounds().w, .h = height};
             m_song_info_container = renderer::VirtualContainer(*m_left_container, box);
         }
 
@@ -192,21 +194,21 @@ void etsuko::Karaoke::draw_song_info() {
             const renderer::TextOpts name_opt = {
                 .text = m_song->name,
                 .position = {.x = 0, .y = y, .flags = renderer::Point::CENTERED_X},
-                .pt_size = 11,
-                .bold = true,
+                .em_size = 0.9,
+                .bold = false,
                 .color = renderer::Color::white().darken()
             };
             m_song_name = m_renderer.draw_text_baked(name_opt, *m_song_info_container);
         }
         m_renderer.render_baked(*m_song_name, *m_song_info_container);
 
-        constexpr renderer::Color grey = {.r = 150, .g = 150, .b = 150, .a = 255};
+        constexpr renderer::Color grey = {.r = 150, .g = 150, .b = 150, .a = 200};
         y += m_song_name->bounds().h + 10;
         const auto artist_album_text = std::format("{} - {}", m_song->artist, m_song->album);
         const renderer::TextOpts artist_opt = {
             .text = artist_album_text,
             .position = {.x = 0, .y = y, .flags = renderer::Point::CENTERED_X},
-            .pt_size = 10,
+            .em_size = 0.8,
             .bold = false,
             .color = grey
         };
@@ -242,10 +244,10 @@ void etsuko::Karaoke::draw_song_controls() {
                 .x = x,
                 .y = y
             },
-            .pt_size = 10,
+            .em_size = 0.8,
             .bold = false
         };
-        m_elapsed_time = m_renderer.draw_text_baked(elapsed_text_opt, m_renderer.root_container());
+        m_elapsed_time = m_renderer.draw_text_baked(elapsed_text_opt, *m_renderer.root_container());
         m_renderer.render_baked(*m_elapsed_time);
 
         x = m_album_art->bounds().x + m_album_art->bounds().w;
@@ -256,10 +258,10 @@ void etsuko::Karaoke::draw_song_controls() {
                 .y = y,
                 .flags = renderer::Point::ANCHOR_RIGHT_X
             },
-            .pt_size = 10,
+            .em_size = 0.8,
             .bold = false
         };
-        m_elapsed_time = m_renderer.draw_text_baked(remaining_text_opt, m_renderer.root_container());
+        m_elapsed_time = m_renderer.draw_text_baked(remaining_text_opt, *m_renderer.root_container());
         m_renderer.render_baked(*m_elapsed_time);
     }
 
@@ -361,6 +363,38 @@ bool etsuko::Karaoke::loop() {
 
     m_events.loop();
     handle_input();
+
+    if ( m_events.window_was_resized() ) {
+        m_renderer.notify_window_changed();
+
+        if ( m_lyrics_container.has_value() ) {
+            m_lyrics_container->notify_window_resized();
+        }
+
+        if ( m_left_container.has_value() ) {
+            m_left_container->notify_window_resized();
+        }
+
+        if ( m_album_art != nullptr && m_album_art->is_valid() ) {
+            m_album_art->invalidate();
+        }
+
+        if ( m_song_info_container.has_value() ) {
+            m_song_info_container = std::nullopt;
+        }
+
+        if ( m_artist_name != nullptr && m_artist_name->is_valid() ) {
+            m_artist_name->invalidate();
+        }
+
+        if ( m_song_name != nullptr && m_song_name->is_valid() ) {
+            m_song_name->invalidate();
+        }
+
+        if ( m_text_version != nullptr && m_text_version->is_valid() ) {
+            m_text_version->invalidate();
+        }
+    }
 
     m_renderer.begin_loop();
 
