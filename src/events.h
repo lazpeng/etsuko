@@ -10,6 +10,7 @@
 #include <SDL2/SDL_events.h>
 
 #include "common.h"
+#include "renderer.h"
 
 namespace etsuko {
     namespace events {
@@ -31,6 +32,7 @@ namespace etsuko {
         std::vector<events::Point> m_mouse_clicks;
         std::vector<events::Key::Code> m_keys_down;
         double m_scrolled = 0.0;
+        int32_t m_mouse_x = 0, m_mouse_y = 0;
 
         void handle_key(const SDL_Event &event);
 
@@ -42,6 +44,8 @@ namespace etsuko {
         [[nodiscard]] bool area_was_clicked(const BoundingBox &area, int32_t *destination_x, int32_t *destination_y) const;
 
         [[nodiscard]] double amount_scrolled() const;
+
+        void get_mouse_position(int32_t *x, int32_t *y) const;
 
         [[nodiscard]] bool is_key_down(events::Key::Code key) const;
     };

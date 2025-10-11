@@ -3,13 +3,18 @@
  */
 
 #pragma once
-
-#include <cstdint>
+#include <format>
 
 namespace etsuko {
+    using CoordinateType = int32_t;
+
     struct BoundingBox {
-        int32_t x, y, w, h;
+        CoordinateType x, y, w, h;
+
+        [[nodiscard]] bool is_inside_of(const CoordinateType trg_x, const CoordinateType trg_y) const {
+            return trg_x >= x && trg_x <= x + w && trg_y >= y && trg_y <= y + h;
+        }
     };
 
-    constexpr auto VERSION_STRING = "0.3.1";
+    constexpr auto VERSION_STRING = "0.3.4";
 }

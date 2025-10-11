@@ -9,7 +9,7 @@
 namespace etsuko::renderer {
 
     class BakedDrawableScrollingLyricsContainer final : public VerticalSplitContainer {
-        std::shared_ptr<std::vector<parser::TimedLyric>> m_source_list;
+        std::shared_ptr<parser::Song> m_song;
         std::vector<std::shared_ptr<BakedDrawable>> m_drawables;
         BoundingBox m_bounds = {};
         BoundingBox m_viewport = {};
@@ -18,18 +18,18 @@ namespace etsuko::renderer {
         double m_delta_time = 0.0;
         size_t m_active_index = 0, m_draw_active_index = 0;
         Renderer *m_renderer = nullptr;
-        bool m_first_draw = false;
+        bool m_first_draw = true;
         // Animations
         double m_active_y_offset_delta = 0.0, m_previous_active_y_offset = 0.0;
 
         [[nodiscard]] size_t find_last_visible_index() const {
-            if ( m_source_list == nullptr ) {
-                throw std::runtime_error("Source list is null");
+            if ( m_song == nullptr ) {
+                throw std::runtime_error("Song is null");
             }
 
-            for ( size_t i = 0; i < m_source_list->size() - 1; ++i ) {
-                const auto &elem = m_source_list->at(i);
-                const auto &next = m_source_list->at(i + 1);
+            for ( size_t i = 0; i < m_song->lyrics.size() - 1; ++i ) {
+                const auto &elem = m_song->lyrics.at(i);
+                const auto &next = m_song->lyrics.at(i + 1);
                 if ( m_elapsed_time >= elem.base_start_time && m_elapsed_time < next.base_start_time ) {
                     return i;
                 }
@@ -38,12 +38,12 @@ namespace etsuko::renderer {
         }
 
         [[nodiscard]] size_t find_active_index() const {
-            if ( m_source_list == nullptr ) {
-                throw std::runtime_error("Source list is null");
+            if ( m_song == nullptr ) {
+                throw std::runtime_error("Song is null");
             }
 
-            for ( size_t i = 0; i < m_source_list->size(); ++i ) {
-                const auto &elem = m_source_list->at(i);
+            for ( size_t i = 0; i < m_song->lyrics.size(); ++i ) {
+                const auto &elem = m_song->lyrics.at(i);
                 if ( m_elapsed_time >= elem.base_start_time && m_elapsed_time < elem.base_start_time + elem.base_duration ) {
                     return i;
                 }
@@ -83,8 +83,8 @@ namespace etsuko::renderer {
         }
 
     public:
-        explicit BakedDrawableScrollingLyricsContainer(Renderer *renderer, const bool left, const ContainerLike &parent, const ScrollingContainerOpts &opts) :
-            VerticalSplitContainer(left, parent), m_opts(opts), m_renderer(renderer) {
+        explicit BakedDrawableScrollingLyricsContainer(Renderer *renderer, const std::shared_ptr<parser::Song> &song, const bool left, const ContainerLike &parent, const ScrollingContainerOpts &opts) :
+            VerticalSplitContainer(left, parent), m_opts(opts), m_renderer(renderer), m_song(song) {
             if ( m_renderer == nullptr ) {
                 throw std::runtime_error("Renderer is null");
             }
@@ -98,16 +98,13 @@ namespace etsuko::renderer {
             m_bounds.h = parent_bounds.h;
 
             m_viewport = m_bounds;
-        }
 
-        void set_item_list(const std::shared_ptr<std::vector<parser::TimedLyric>> &source_list) {
-            m_source_list = source_list;
             m_drawables.clear();
-            m_drawables.reserve(source_list->size());
-            for ( size_t i = 0; i < source_list->size(); ++i ) {
-                const auto &elem = source_list->at(i);
-                const auto opts = build_text_opts(elem, i == m_active_index);
-                m_drawables.push_back(m_renderer->draw_text_baked(opts, *this));
+            m_drawables.reserve(m_song->lyrics.size());
+            for ( size_t i = 0; i < m_song->lyrics.size(); ++i ) {
+                const auto &elem = m_song->lyrics.at(i);
+                const auto text_opts = build_text_opts(elem, i == m_active_index);
+                m_drawables.push_back(m_renderer->draw_text_baked(text_opts, *this));
             }
         }
 
@@ -128,17 +125,14 @@ namespace etsuko::renderer {
         }
 
         void draw(const Renderer &renderer, const bool animate) {
-            if ( m_source_list->size() != m_drawables.size() ) {
+            if ( m_song->lyrics.size() != m_drawables.size() ) {
                 throw std::runtime_error("Invalid state: Not all lyric elements have generated drawables");
             }
 
             const auto last_visible_index = find_last_visible_index();
-            if ( m_active_index < last_visible_index ) {
-                //throw std::runtime_error("Impossible state: active_index is less than last_visible_index");
-            }
 
             CoordinateType y = m_opts.margin_top - m_viewport.y;
-            for ( size_t i = last_visible_index; i < m_source_list->size(); i++ ) {
+            for ( size_t i = last_visible_index; i < m_song->lyrics.size(); i++ ) {
                 if ( m_active_index != m_draw_active_index && i <= m_active_index ) {
                     // Invalidate the drawable
                     m_drawables[i]->invalidate();
@@ -150,7 +144,9 @@ namespace etsuko::renderer {
 
                 if ( !m_drawables.at(i)->is_valid() ) {
                     const auto old_bounds = m_drawables.at(i)->bounds();
-                    m_drawables[i] = m_renderer->draw_text_baked(build_text_opts(m_source_list->at(i), i == m_active_index), *this);
+                    const bool is_active = i == m_active_index;
+                    m_drawables[i] = m_renderer->draw_text_baked(build_text_opts(m_song->lyrics.at(i), is_active), *this);
+
                     const auto bounds = m_drawables.at(i)->bounds();
                     m_drawables.at(i)->set_bounds({.x = old_bounds.x, .y = old_bounds.y, .w = bounds.w, .h = bounds.h});
                 }
@@ -160,11 +156,9 @@ namespace etsuko::renderer {
                     continue;
 
                 if ( i == m_active_index && m_active_index != m_draw_active_index ) {
-                    constexpr auto translate_duration = 0.4;
-                    m_active_y_offset_delta = drawable->bounds().y > 0 ? (y - drawable->bounds().y) / translate_duration : 1.0;
-                    if ( m_active_y_offset_delta < -2000 ) {
-                        //std::puts(std::format("bounds {}, y {}", drawable->bounds().y, y).c_str());
-                    }
+                    constexpr auto translate_duration = 0.25;
+                    const auto duration = m_song->translate_duration_override == 0 ? translate_duration : m_song->translate_duration_override;
+                    m_active_y_offset_delta = drawable->bounds().y > 0 ? (y - drawable->bounds().y) / duration : 1.0;
                 }
 
                 auto animated_y = y;
@@ -172,18 +166,10 @@ namespace etsuko::renderer {
                 const auto frame_delta = m_active_y_offset_delta * m_delta_time;
                 const auto frame_target = drawable->bounds().y + frame_delta - m_viewport.y;
                 if ( !m_first_draw && animate && y < frame_target ) {
-                    if ( frame_target - y > 100 ) {
-                        // TODO: Fix fucking error that makes the lyric jump to the bottom of the screen on seek
-                        //std::puts(std::format("Frame delta: {}, target: {}, y {}, delta_time {}, offset_delta {}", frame_delta, frame_target, y, m_delta_time, m_active_y_offset_delta).c_str());
-                    }
                     animated_y = std::max(y, static_cast<CoordinateType>(frame_target));
                 }
 
-                if ( animate ) {
-                    //std::puts(std::format("animated_y {} y {}", animated_y, y).c_str());
-                    //animated_y = std::min(animated_y, y);
-                }
-                if ( animated_y + drawable->bounds().h >= m_bounds.y + m_bounds.h )
+                if ( animated_y >= m_bounds.y + m_bounds.h )
                     break;
 
                 CoordinateType x;
@@ -198,15 +184,27 @@ namespace etsuko::renderer {
 
                 drawable->set_bounds({.x = x, .y = animated_y, .w = drawable->bounds().w, .h = drawable->bounds().h});
 
-                if ( y + drawable->bounds().h >= 0 ) {
+                constexpr auto max_fade_steps = 5;
+                const auto max_distance_step = (get_bounds().y + get_bounds().h - y) / max_fade_steps;
+                const auto distance_to_target_y = y - m_opts.margin_top + drawable->bounds().h;
+
+                if ( distance_to_target_y + drawable->bounds().h >= 0 ) {
+                    const auto steps = static_cast<int32_t>(std::floor(distance_to_target_y / max_distance_step));
+                    const auto current_distance = m_song->lyrics.at(m_active_index).full_line.empty() && m_active_index != i ? max_fade_steps : steps;
+
                     auto alpha = 255;
-                    for ( int distance = 1; distance < std::min(static_cast<int>(i - m_active_index), 5); distance++ ) {
-                        alpha = static_cast<uint8_t>(alpha / 1.5);
+                    for ( int distance = 1; distance < current_distance; distance++ ) {
+                        alpha = static_cast<uint8_t>(alpha / 1.25);
                     }
                     renderer.render_baked(*drawable, *this, alpha);
                 }
 
-                y += drawable->bounds().h + m_opts.vertical_padding;
+                auto vertical_padding = m_opts.vertical_padding;
+                if ( m_active_index == i && m_song->lyrics.at(i).full_line.empty() ) {
+                    vertical_padding += 100;
+                }
+
+                y += drawable->bounds().h + vertical_padding;
 
                 if ( m_first_draw ) {
                     m_first_draw = false;
@@ -240,7 +238,7 @@ namespace etsuko::renderer {
                 constexpr auto scroll_speed = 10.0;
 #endif
 
-                m_viewport.y += static_cast<CoordinateType>(scrolled * scroll_speed);
+                m_viewport.y = static_cast<CoordinateType>(m_viewport.y - scrolled * scroll_speed);
 
                 m_viewport.y = std::max(0, m_viewport.y);
                 m_viewport.y = std::min(m_viewport.y, total_height());

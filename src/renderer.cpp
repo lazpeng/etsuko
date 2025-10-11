@@ -14,12 +14,13 @@ using namespace etsuko::renderer;
 
 constexpr auto TILING_PARTS = 20;
 
-void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, int32_t *w, int32_t *h) const {
-    if ( TTF_SetFontSizeDPI(m_font, pt, m_h_dpi, m_v_dpi) != 0 ) {
+void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, int32_t *w, int32_t *h, const TextOpts::FontKind kind) const {
+    const auto font = kind == TextOpts::FONT_UI ? m_ui_font : m_lyric_font;
+    if ( TTF_SetFontSizeDPI(font, pt, m_h_dpi, m_v_dpi) != 0 ) {
         throw std::runtime_error("Failed to set font size/DPI");
     }
 
-    if ( TTF_SizeUTF8(m_font, text.c_str(), w, h) != 0 ) {
+    if ( TTF_SizeUTF8(font, text.c_str(), w, h) != 0 ) {
         throw std::runtime_error("Failed to measure line size");
     }
 }
@@ -74,7 +75,7 @@ int etsuko::Renderer::initialize() {
     //SDL_RenderSetLogicalSize(m_renderer, cssWidth, cssHeight);
 #endif
 
-    int outW, outH;
+    int32_t outW, outH;
     SDL_GetRendererOutputSize(m_renderer, &outW, &outH);
     SDL_RenderSetLogicalSize(m_renderer, outW, outH);
 
@@ -94,9 +95,7 @@ int etsuko::Renderer::initialize() {
 }
 
 void etsuko::Renderer::begin_loop() const {
-    //Color color = {.r = 17, .g = 24, .b = 39, .a = 255};
-    Color color = {.r = 24, .g = 40, .b = 60, .a = 255};
-    auto [r,g,b,a] = color;
+    auto [r,g,b,a] = m_bg_color;
     SDL_SetRenderDrawColor(m_renderer, r, g, b, a);
     SDL_RenderClear(m_renderer);
 }
@@ -134,7 +133,7 @@ size_t etsuko::Renderer::measure_text_wrap_stop(const TextOpts &text_opts, Conta
             measure_pt_size = text_opts.pt_size;
         }
         int32_t w, h;
-        measure_line_size(text.substr(start, tmp_end_idx - start), measure_pt_size, &w, &h);
+        measure_line_size(text.substr(start, tmp_end_idx - start), measure_pt_size, &w, &h, text_opts.font_kind);
 
         if ( w > calculated_max_width ) {
             // go with whatever was on previously
@@ -181,7 +180,7 @@ void etsuko::Renderer::measure_layout(const BoundingBox &box, const Point &posit
     }
 
     if ( position.flags & Point::CENTERED_X ) {
-        x = static_cast<CoordinateType>(current_width / 2.0 - w / 2.0 - calc_w) + x;
+        x = static_cast<int32_t>(current_width / 2.0 - w / 2.0 - calc_w + x);
     } else {
         if ( x < 0 ) {
             x = current_width + x;
@@ -195,7 +194,7 @@ void etsuko::Renderer::measure_layout(const BoundingBox &box, const Point &posit
     }
 
     if ( position.flags & Point::CENTERED_Y ) {
-        y = static_cast<CoordinateType>(current_height / 2.0 - h / 2.0 - calc_h) + y;
+        y = static_cast<int32_t>(current_height / 2.0 - h / 2.0 - calc_h + y);
     } else {
         if ( y < 0 ) {
             y = current_height + y;
@@ -217,23 +216,24 @@ void etsuko::Renderer::measure_layout_texture(SDL_Texture *texture, const Point 
     measure_layout(box, position, container, out_box);
 }
 
-SDL_Texture *etsuko::Renderer::draw_text(const std::string_view &text, int32_t pt_size, bool bold, Color color) const {
-    if ( m_font == nullptr ) {
+SDL_Texture *etsuko::Renderer::draw_text(const std::string_view &text, const int32_t pt_size, const bool bold, const Color color, const TextOpts::FontKind kind) const {
+    const auto font = kind == TextOpts::FONT_UI ? m_ui_font : m_lyric_font;
+    if ( font == nullptr ) {
         throw std::runtime_error("Font not loaded");
     }
     if ( text.empty() ) {
         throw std::runtime_error("Text is empty");
     }
 
-    if ( TTF_SetFontSizeDPI(m_font, pt_size, m_h_dpi, m_v_dpi) != 0 ) {
+    if ( TTF_SetFontSizeDPI(font, pt_size, m_h_dpi, m_v_dpi) != 0 ) {
         std::puts(TTF_GetError());
         throw std::runtime_error("Failed to set font size/DPI");
     }
     const auto style = bold ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL;
-    TTF_SetFontStyle(m_font, style);
+    TTF_SetFontStyle(font, style);
 
     const auto sdl_color = SDL_Color{color.r, color.g, color.b, color.a};
-    SDL_Surface *surface = TTF_RenderUTF8_Blended(m_font, text.data(), sdl_color);
+    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text.data(), sdl_color);
     if ( surface == nullptr ) {
         std::puts(TTF_GetError());
         throw std::runtime_error("Failed to render to surface");
@@ -314,7 +314,7 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts 
         do {
             const size_t end = measure_text_wrap_stop(opts, container, start);
             const auto line = opts.text.substr(start, end - start);
-            const auto texture = draw_text(line, opts.pt_size, opts.bold, opts.color);
+            const auto texture = draw_text(line, opts.pt_size, opts.bold, opts.color, opts.font_kind);
             textures.push_back(texture);
 
             int32_t w, h;
@@ -353,7 +353,7 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_text_baked(const TextOpts 
 
         restore_texture_target();
     } else {
-        final_texture = draw_text(opts.text, opts.pt_size, opts.bold, opts.color);
+        final_texture = draw_text(opts.text, opts.pt_size, opts.bold, opts.color, opts.font_kind);
     }
 
     // Initialize baked drawable
@@ -405,7 +405,7 @@ void etsuko::Renderer::draw_horiz_progress_simple(const ProgressBarOpts &options
         *out_box = box;
 }
 
-SDL_Texture *etsuko::Renderer::make_new_texture_target(int32_t w, int32_t h) {
+SDL_Texture *etsuko::Renderer::make_new_texture_target(const int32_t w, const int32_t h) {
     if ( m_root_texture != nullptr ) {
         throw std::runtime_error("Drawing to two textures simultaneously is not supported yet");
     }
@@ -434,13 +434,13 @@ void etsuko::Renderer::restore_texture_target() {
 }
 
 namespace {
-    void internal_draw_play_icon(SDL_Renderer *renderer, int32_t x, int32_t y, int32_t width, int32_t height, const Color &color) {
+    void internal_draw_play_icon(SDL_Renderer *renderer, const int32_t x, const int32_t y, const int32_t width, const int32_t height, const Color &color) {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 0xFF);
         const SDL_Point playTriangle[4] = {{x, y}, {x, y + height}, {x + width, y + height / 2}, {x, y}};
         SDL_RenderDrawLines(renderer, playTriangle, 4);
     }
 
-    void internal_draw_pause_icon(SDL_Renderer *renderer, int32_t x, int32_t y, int32_t width, int32_t height, const Color &color) {
+    void internal_draw_pause_icon(SDL_Renderer *renderer, const int32_t x, const int32_t y, const int32_t width, const int32_t height, const Color &color) {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 0xFF);
         const SDL_Rect pauseRect1 = {x, y, width / 3, height};
         const SDL_Rect pauseRect2 = {x + 2 * width / 3, y, width / 3, height};
@@ -454,20 +454,7 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_button_baked(const ButtonO
         throw std::runtime_error("Can't have an empty button");
     }
 
-    std::shared_ptr<BakedDrawable> baked_text = nullptr;
-    int32_t w = 0, h = 0;
-    if ( opts.label.has_value() ) {
-        baked_text = draw_text_baked(opts.label.value(), container);
-        w = baked_text->m_bounds.w;
-        h = baked_text->m_bounds.h;
-    }
-
-    constexpr auto default_icon_width = 16, default_icon_height = 16;
-    if ( opts.label_icon != ButtonOpts::LABEL_ICON_NONE ) {
-        w = std::max(w, default_icon_width);
-        h = std::max(h, default_icon_height);
-    }
-
+    int32_t w = opts.icon_size, h = opts.icon_size;
     w += opts.horizontal_padding * 2;
     h += opts.vertical_padding * 2;
 
@@ -495,18 +482,14 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_button_baked(const ButtonO
     // Label inside
     rect.x = opts.horizontal_padding;
     rect.y = opts.vertical_padding;
-    if ( baked_text != nullptr ) {
-        SDL_RenderCopy(m_renderer, baked_text->m_texture, nullptr, &rect);
-        rect.w += baked_text->bounds().w + opts.horizontal_padding;
-    }
 
     if ( opts.label_icon != ButtonOpts::LABEL_ICON_NONE ) {
         switch ( opts.label_icon ) {
         case ButtonOpts::LABEL_ICON_PLAY:
-            internal_draw_play_icon(m_renderer, rect.x, rect.y, default_icon_width, default_icon_height, Color::white());
+            internal_draw_play_icon(m_renderer, rect.x, rect.y, opts.icon_size, opts.icon_size, Color::white());
             break;
         case ButtonOpts::LABEL_ICON_PAUSE:
-            internal_draw_pause_icon(m_renderer, rect.x, rect.y, default_icon_width, default_icon_height, Color::white());
+            internal_draw_pause_icon(m_renderer, rect.x, rect.y, opts.icon_size, opts.icon_size, Color::white());
             break;
         default:
             throw std::runtime_error("Invalid label icon value");
@@ -525,24 +508,28 @@ std::shared_ptr<BakedDrawable> etsuko::Renderer::draw_button_baked(const ButtonO
     return baked;
 }
 
-void etsuko::Renderer::load_font(const std::string &path, const size_t index) {
+void etsuko::Renderer::load_font(const std::string &path, TextOpts::FontKind kind) {
     const auto last_dot = path.find_last_of('.');
     if ( last_dot == std::string::npos ) {
         throw std::runtime_error("Invalid font path");
     }
 
-    if ( path.substr(last_dot + 1) == "ttc" ) {
-        m_font = TTF_OpenFontIndexDPI(path.c_str(), DEFAULT_PT, static_cast<int64_t>(index), m_h_dpi, m_v_dpi);
-    } else {
-        m_font = TTF_OpenFontDPI(path.c_str(), DEFAULT_PT, m_h_dpi, m_v_dpi);
-    }
+    const auto font = TTF_OpenFontDPI(path.c_str(), DEFAULT_PT, m_h_dpi, m_v_dpi);
 
-    if ( m_font == nullptr ) {
+    if ( font == nullptr ) {
         std::puts("Could not load font");
         std::puts(TTF_GetError());
         return;
     }
 
-    TTF_SetFontHinting(m_font, TTF_HINTING_NORMAL);
-    TTF_SetFontKerning(m_font, 1);
+    TTF_SetFontHinting(font, TTF_HINTING_NORMAL);
+    TTF_SetFontKerning(font, 1);
+
+    if ( kind == TextOpts::FONT_UI ) {
+        m_ui_font = font;
+    } else if ( kind == TextOpts::FONT_LYRIC ) {
+        m_lyric_font = font;
+    } else {
+        throw std::runtime_error("Invalid font kind");
+    }
 }

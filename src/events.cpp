@@ -28,7 +28,9 @@ void etsuko::EventManager::handle_key(const SDL_Event &event) {
 }
 
 bool etsuko::EventManager::is_key_down(const events::Key::Code key) const {
-    return std::ranges::any_of(m_keys_down, [key](const auto k) { return k == key;});
+    return std::ranges::any_of(m_keys_down, [key](const auto k) {
+        return k == key;
+    });
 }
 
 void etsuko::EventManager::loop() {
@@ -44,6 +46,10 @@ void etsuko::EventManager::loop() {
             break;
         case SDL_MOUSEBUTTONDOWN:
             m_mouse_clicks.emplace_back(event.button.x, event.button.y);
+            break;
+        case SDL_MOUSEMOTION:
+            m_mouse_x = event.motion.x;
+            m_mouse_y = event.motion.y;
             break;
         case SDL_MOUSEWHEEL:
             m_scrolled += event.wheel.y;
@@ -71,6 +77,16 @@ bool etsuko::EventManager::area_was_clicked(const BoundingBox &area, int32_t *de
     }
 
     return false;
+}
+
+void etsuko::EventManager::get_mouse_position(int32_t *x, int32_t *y) const {
+    if ( x != nullptr ) {
+        *x = m_mouse_x;
+    }
+
+    if ( y != nullptr ) {
+        *y = m_mouse_y;
+    }
 }
 
 double etsuko::EventManager::amount_scrolled() const {

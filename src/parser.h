@@ -36,6 +36,9 @@ namespace etsuko {
             std::vector<std::string> raw_original;
             std::vector<TimedLyric> lyrics;
             std::vector<TimedLyric> original;
+            double time_offset = 0;
+            std::string bg_color;
+            double translate_duration_override = 0;
         };
     }
 

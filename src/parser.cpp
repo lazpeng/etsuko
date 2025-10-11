@@ -51,6 +51,12 @@ static void read_header(const std::string_view &line, Song &song) {
         song.language = value;
     } else if ( property == "albumArt" ) {
         song.album_art_path = value;
+    } else if ( property == "timeOffset" ) {
+        song.time_offset = std::strtod(value.data(), nullptr);
+    } else if ( property == "bgColor" ) {
+        song.bg_color = value;
+    } else if ( property == "translateDurationOverride" ) {
+        song.translate_duration_override = std::strtod(value.data(), nullptr);
     }
 }
 

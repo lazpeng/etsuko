@@ -10,14 +10,10 @@
 
 #include <optional>
 #include <string>
-#include <utility>
-#include <vector>
 #include <functional>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-
-#include "events.h"
 
 namespace etsuko {
 
@@ -52,7 +48,7 @@ namespace etsuko {
             }
         };
 
-        using CoordinateType = int32_t;
+        constexpr Color DEFAULT_COLOR = {.r = 16, .g = 17, .b = 36, .a = 255};
 
         /**
          * Used to position elements when baking or drawing them using the renderer. The x and y values
@@ -119,12 +115,18 @@ namespace etsuko {
         };
 
         struct TextOpts {
+            enum FontKind {
+                FONT_UI = 0,
+                FONT_LYRIC
+            };
+
             std::string text;
             Point position;
             int32_t pt_size = DEFAULT_PT;
             bool bold = false;
             Color color = Color::white();
             TextLayoutOpts layout_opts = {};
+            FontKind font_kind = FONT_UI;
         };
 
         struct TextWrapOpts {
@@ -141,6 +143,7 @@ namespace etsuko {
 
             std::optional<TextOpts> label;
             LabelIcon label_icon = LABEL_ICON_NONE;
+            int32_t icon_size = 16;
             Point position;
             bool draw_border = true, draw_background = false;
             CoordinateType vertical_padding = 0, horizontal_padding = 0;
@@ -251,7 +254,7 @@ namespace etsuko {
                 }
                 AnimationLike::loop(delta_time);
 
-                target->viewport().y += static_cast<CoordinateType>(m_distance_per_second * delta_time);
+                target->viewport().y += static_cast<int32_t>(m_distance_per_second * delta_time);
             }
         };
 
@@ -312,16 +315,17 @@ namespace etsuko {
     class Renderer final : public renderer::ContainerLike {
         SDL_Window *m_window = nullptr;
         SDL_Renderer *m_renderer = nullptr;
-        TTF_Font *m_font = nullptr;
+        TTF_Font *m_ui_font = nullptr, *m_lyric_font = nullptr;
         SDL_Texture *m_root_texture = nullptr;
         BoundingBox m_viewport = {};
         int32_t m_h_dpi = 0, m_v_dpi = 0;
+        renderer::Color m_bg_color = renderer::DEFAULT_COLOR;
 
-        void measure_line_size(const std::string &text, int pt, int32_t *w, int32_t *h) const;
+        void measure_line_size(const std::string &text, int pt, int32_t *w, int32_t *h, renderer::TextOpts::FontKind kind) const;
         static void measure_layout(const BoundingBox &box, const renderer::Point &position, const ContainerLike &container, BoundingBox &out_box);
         static void measure_layout_texture(SDL_Texture *texture, const renderer::Point &position, const ContainerLike &container, BoundingBox &out_box);
         [[nodiscard]] size_t measure_text_wrap_stop(const renderer::TextOpts &text_opts, const ContainerLike &container, size_t start = 0) const;
-        [[nodiscard]] SDL_Texture *draw_text(const std::string_view &text, int32_t pt_size, bool bold, renderer::Color color) const;
+        [[nodiscard]] SDL_Texture *draw_text(const std::string_view &text, int32_t pt_size, bool bold, renderer::Color color, renderer::TextOpts::FontKind kind) const;
 
         SDL_Texture *make_new_texture_target(int32_t w, int32_t h);
         void restore_texture_target();
@@ -377,6 +381,10 @@ namespace etsuko {
         void render_baked(const renderer::BakedDrawable &baked, std::optional<uint8_t> alpha = std::nullopt) const;
 
         /* Loaders and whatnot */
-        void load_font(const std::string &path, size_t index = 0);
+        void load_font(const std::string &path, renderer::TextOpts::FontKind kind);
+
+        void set_bg_color(const renderer::Color color) {
+            m_bg_color = color;
+        }
     };
 } // namespace etsuko
