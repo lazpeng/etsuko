@@ -12,3 +12,4 @@ vcpkg_installed/
 *.a
 *.out
 *.pdb
+assets/
