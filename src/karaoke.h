@@ -14,7 +14,7 @@
 #include "repository.h"
 
 namespace etsuko {
-    constexpr auto DEFAULT_UI_FONT = "files/NotoSans-Bold.ttf";
+    constexpr auto DEFAULT_UI_FONT = "files/NotoSans-Regular.ttf";
     constexpr auto DEFAULT_LYRIC_FONT = "files/NotoSans_ExtraCondensed-Bold.ttf";
 
     namespace config {
