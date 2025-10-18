@@ -20,9 +20,8 @@ namespace etsuko {
     namespace config {
         class Config {
         public:
-            std::string ui_font_path, lyric_font_path;
-            int font_index;
-            std::string song_path;
+            std::string ui_font_path, lyric_font_path, song_path;
+            parser::Song song;
 
             static Config get_default();
         };
@@ -37,7 +36,6 @@ namespace etsuko {
         double m_delta_time = 0.0;
         config::Config m_config = config::Config::get_default();
         size_t m_current_active_index = 0;
-        bool m_initialized = false;
 
         // Version text
         std::shared_ptr<renderer::BakedDrawable> m_text_version = {};
@@ -53,12 +51,7 @@ namespace etsuko {
         std::shared_ptr<renderer::BakedDrawable> m_song_name;
         std::shared_ptr<renderer::BakedDrawable> m_artist_name;
 
-        /** Tasks */
-        repository::LoadJob m_load_ui_font = {}, m_load_lyric_font = {}, m_load_song = {}, m_load_audio = {}, m_load_art = {};
-
-        void async_initialize_loop();
         void initialize_lyrics_container();
-        void initialize_song_opts();
 
         void handle_input();
 
@@ -72,7 +65,7 @@ namespace etsuko {
         void draw_version();
 
     public:
-        int initialize();
+        void initialize(const config::Config &config);
         void finalize();
         bool loop();
         void wait_vsync() const;

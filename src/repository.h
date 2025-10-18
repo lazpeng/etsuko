@@ -13,8 +13,7 @@ namespace etsuko {
             enum Status {
                 NOT_STARTED = 0,
                 LOADING,
-                DONE,
-                NONE,
+                DONE
             };
 
             std::string result_path;

@@ -8,118 +8,27 @@ etsuko::config::Config etsuko::config::Config::get_default() {
     return {
         .ui_font_path = DEFAULT_UI_FONT,
         .lyric_font_path = DEFAULT_LYRIC_FONT,
-        .font_index = 0,
         .song_path = "all these things that ive done.txt"
     };
 }
 
-int etsuko::Karaoke::initialize() {
+void etsuko::Karaoke::initialize(const config::Config &config) {
+    m_config = config;
+
     if ( m_audio.initialize() != 0 ) {
-        std::puts("Failed to initialize audio");
-        return -1;
+        throw std::runtime_error("Failed to initialize audio");
     }
+
+    m_audio.load_song(m_config.song.file_path);
 
     if ( m_renderer.initialize() != 0 ) {
-        std::puts("Failed to initialize renderer");
-        return -2;
+        throw std::runtime_error("Failed to initialize renderer");
     }
 
-    // Begin initialization
-    async_initialize_loop();
-    return 0;
-}
+    m_renderer.load_font(m_config.ui_font_path, renderer::TextOpts::FONT_UI);
+    m_renderer.load_font(m_config.lyric_font_path, renderer::TextOpts::FONT_LYRIC);
 
-void etsuko::Karaoke::initialize_lyrics_container() {
-    constexpr renderer::ScrollingLyricsContainerOpts scroll_opts = {
-        .margin_top_percent = 0.4,
-        .vertical_padding_percent = 0.025,
-        .active_padding_percent = 0.1,
-        .alignment = renderer::ScrollingLyricsContainerOpts::ALIGN_CENTER
-    };
-    m_lyrics_container = renderer::BakedDrawableScrollingLyricsContainer(&m_renderer, m_song, false, m_renderer.root_container(), scroll_opts);
-}
-
-void etsuko::Karaoke::async_initialize_loop() {
-    // Check loading of the ui font
-    switch ( m_load_ui_font.status ) {
-    case repository::LoadJob::NOT_STARTED:
-        Repository::get_resource(m_config.ui_font_path, &m_load_ui_font);
-        break;
-    case repository::LoadJob::DONE:
-        if ( m_load_ui_font.error.empty() ) {
-            m_renderer.load_font(m_load_ui_font.result_path, renderer::TextOpts::FONT_UI);
-        } else {
-            std::puts("Failed to load font");
-            std::puts(m_load_ui_font.error.c_str());
-            // TODO: Find a way to quit, or just keep running forever?
-        }
-
-        m_load_ui_font.status = repository::LoadJob::NONE;
-    default:
-        break;
-    }
-
-    // lyrics font
-    switch ( m_load_lyric_font.status ) {
-    case repository::LoadJob::NOT_STARTED:
-        Repository::get_resource(m_config.lyric_font_path, &m_load_lyric_font);
-        break;
-    case repository::LoadJob::DONE:
-        if ( m_load_lyric_font.error.empty() ) {
-            m_renderer.load_font(m_load_lyric_font.result_path, renderer::TextOpts::FONT_LYRIC);
-        } else {
-            std::puts("Failed to load font");
-            std::puts(m_load_lyric_font.error.c_str());
-        }
-
-        m_load_lyric_font.status = repository::LoadJob::NONE;
-    default:
-        break;
-    }
-
-    // TODO: Treat errors better
-    // Load the base song definition
-    switch ( m_load_song.status ) {
-    case repository::LoadJob::NOT_STARTED:
-        Repository::get_resource(m_config.song_path, &m_load_song);
-        break;
-    case repository::LoadJob::DONE:
-        m_song = std::make_shared<parser::Song>(Parser::parse(m_load_song.result_path));
-        initialize_song_opts();
-        m_load_song.status = repository::LoadJob::NONE;
-        break;
-    default:
-        break;
-    }
-
-    // Load other parts of the song
-    if ( m_load_song.status == repository::LoadJob::NONE ) {
-        // Load the actual song file
-        if ( m_load_audio.status == repository::LoadJob::NOT_STARTED ) {
-            Repository::get_resource(m_song->file_path, &m_load_audio);
-        } else if ( m_load_audio.status == repository::LoadJob::DONE ) {
-            m_audio.load_song(m_load_audio.result_path);
-            m_load_audio.status = repository::LoadJob::NONE;
-        }
-
-        // Load the album art
-        if ( m_load_art.status == repository::LoadJob::NOT_STARTED ) {
-            Repository::get_resource(m_song->album_art_path, &m_load_art);
-        } else if ( m_load_art.status == repository::LoadJob::DONE ) {
-            m_song->album_art_path = m_load_art.result_path;
-        }
-
-        if ( m_load_audio.status == repository::LoadJob::NONE ) {
-            m_initialized = m_load_ui_font.status == repository::LoadJob::NONE && m_load_lyric_font.status == repository::LoadJob::NONE;
-
-            if ( m_initialized && !m_lyrics_container.has_value() ) {
-                initialize_lyrics_container();
-            }
-        }
-    }
-}
-
-void etsuko::Karaoke::initialize_song_opts() {
+    m_song = std::make_shared<parser::Song>(config.song);
     if ( !m_song->bg_color.empty() ) {
         uint8_t r, g, b;
         if ( m_song->bg_color.size() == 6 ) {
@@ -133,6 +42,18 @@ void etsuko::Karaoke::initialize_song_opts() {
         const renderer::Color color = {.r = r, .g = g, .b = b, .a = 255};
         m_renderer.set_bg_color(color);
     }
+
+    initialize_lyrics_container();
+}
+
+void etsuko::Karaoke::initialize_lyrics_container() {
+    constexpr renderer::ScrollingLyricsContainerOpts scroll_opts = {
+        .margin_top_percent = 0.4,
+        .vertical_padding_percent = 0.025,
+        .active_padding_percent = 0.1,
+        .alignment = renderer::ScrollingLyricsContainerOpts::ALIGN_CENTER
+    };
+    m_lyrics_container = renderer::BakedDrawableScrollingLyricsContainer(&m_renderer, m_song, false, m_renderer.root_container(), scroll_opts);
 }
 
 void etsuko::Karaoke::draw_version() {
@@ -185,7 +106,7 @@ void etsuko::Karaoke::draw_song_info() {
         int32_t mouse_x, mouse_y;
         m_events.get_mouse_position(&mouse_x, &mouse_y);
 
-        if ( m_song_info_container->get_bounds().is_inside_of(mouse_x, mouse_y) || m_audio.is_paused() ) {
+        if ( m_song_info_container->get_bounds().is_inside_of(mouse_x, mouse_y) || (m_audio.is_paused() && m_audio.elapsed_time() == 0) ) {
             return;
         }
 
@@ -275,7 +196,7 @@ void etsuko::Karaoke::draw_song_controls() {
     int32_t mouse_x, mouse_y;
     m_events.get_mouse_position(&mouse_x, &mouse_y);
 
-    if ( m_song_info_container.has_value() && (m_audio.is_paused() || m_song_info_container->get_bounds().is_inside_of(mouse_x, mouse_y)) ) {
+    if ( m_song_info_container.has_value() && ((m_audio.is_paused() && m_audio.elapsed_time() == 0) || m_song_info_container->get_bounds().is_inside_of(mouse_x, mouse_y)) ) {
         const auto button = renderer::ButtonOpts{
             .label_icon = m_audio.is_paused() ? renderer::ButtonOpts::LABEL_ICON_PLAY : renderer::ButtonOpts::LABEL_ICON_PAUSE,
             .icon_size = 32,
@@ -344,6 +265,10 @@ void etsuko::Karaoke::handle_input() {
 }
 
 void etsuko::Karaoke::toggle_play_pause() {
+    if ( m_audio.is_paused() ) {
+        m_lyrics_container->snap_back_to_active();
+    }
+
     m_audio.is_paused()
         ? m_audio.resume()
         : m_audio.pause();
@@ -398,15 +323,11 @@ bool etsuko::Karaoke::loop() {
 
     m_renderer.begin_loop();
 
-    if ( !m_initialized ) {
-        async_initialize_loop();
-    } else {
-        draw_song_album_art();
-        draw_song_controls();
-        draw_song_info();
-        draw_lyrics();
-        draw_version();
-    }
+    draw_song_album_art();
+    draw_song_controls();
+    draw_song_info();
+    draw_lyrics();
+    draw_version();
 
     m_renderer.end_loop();
 

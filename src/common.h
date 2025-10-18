@@ -3,7 +3,6 @@
  */
 
 #pragma once
-#include <format>
 
 namespace etsuko {
     using CoordinateType = int32_t;

@@ -28,6 +28,7 @@ namespace etsuko::renderer {
         double m_elapsed_time = 0.0;
         double m_delta_time = 0.0;
         size_t m_active_index = 0, m_draw_active_index = 0;
+        size_t m_total_before_size = 0;
         Renderer *m_renderer = nullptr;
         bool m_first_draw = true;
         // Animations
@@ -45,7 +46,7 @@ namespace etsuko::renderer {
                     return i;
                 }
             }
-            return -1;
+            return m_active_index;
         }
 
         [[nodiscard]] size_t find_active_index() const {
@@ -144,7 +145,34 @@ namespace etsuko::renderer {
             const auto last_visible_index = find_last_visible_index();
 
             const auto virtual_target_y = static_cast<int32_t>(m_bounds.h * m_opts.margin_top_percent);
-            CoordinateType y = virtual_target_y - m_viewport.y;
+            CoordinateType y = virtual_target_y - m_viewport.y - static_cast<int32_t>(m_opts.vertical_padding_percent * m_bounds.h);
+            // Draw lines before the current one
+            if ( m_viewport.y < 0 ) {
+                for ( ssize_t i = static_cast<ssize_t>(last_visible_index) - 1; i >= 0; i-- ) {
+                    const auto opts = build_text_opts(m_song->lyrics.at(i), false);
+
+                    const auto drawable = m_renderer->draw_text_baked(opts, *this);
+
+                    CoordinateType x;
+                    if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_LEFT ) {
+                        x = 0;
+                    } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_CENTER ) {
+                        x = m_bounds.w / 2 - drawable->bounds().w / 2;
+                    } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_RIGHT ) {
+                        x = m_bounds.w - drawable->bounds().w;
+                    } else
+                        throw std::runtime_error("Invalid alignment option");
+
+                    const BoundingBox line_bounds = {.x = x, .y = y - drawable->bounds().h, .w = drawable->bounds().w, .h = drawable->bounds().h};
+                    drawable->set_bounds(line_bounds);
+
+                    m_renderer->render_baked(*drawable, *this, 200);
+                    y = line_bounds.y - static_cast<int32_t>(m_opts.vertical_padding_percent * m_bounds.h);
+                }
+            }
+
+            // The current line and the previous ones
+            y = virtual_target_y - m_viewport.y;
             for ( size_t i = last_visible_index; i < m_song->lyrics.size(); i++ ) {
                 if ( m_active_index != m_draw_active_index && i <= m_active_index ) {
                     // Invalidate the drawable
@@ -182,8 +210,8 @@ namespace etsuko::renderer {
                     animated_y = std::max(y, static_cast<CoordinateType>(frame_target));
                 }
 
-                if ( animated_y >= m_bounds.y + m_bounds.h )
-                    break;
+                /*if ( animated_y >= m_bounds.y + m_bounds.h )
+                    break;*/
 
                 CoordinateType x;
                 if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_LEFT ) {
@@ -201,14 +229,14 @@ namespace etsuko::renderer {
                 const auto max_distance_step = (get_bounds().y + get_bounds().h - y) / max_fade_steps;
                 const auto distance_to_target_y = y - virtual_target_y + drawable->bounds().h;
 
-                if ( distance_to_target_y + drawable->bounds().h >= 0 ) {
+                if ( distance_to_target_y + drawable->bounds().h >= 0 || 1 ) {
                     auto alpha = 255;
                     if ( m_song->lyrics.at(m_active_index).full_line.empty() && m_active_index != i ) {
                         alpha = 50;
                     } else {
                         const auto steps = static_cast<int32_t>(std::floor(distance_to_target_y / max_distance_step));
                         for ( int distance = 1; distance < steps; distance++ ) {
-                            alpha = static_cast<uint8_t>(alpha / 1.5);
+                            //alpha = static_cast<uint8_t>(alpha / 1.5);
                         }
                     }
                     renderer.render_baked(*drawable, *this, alpha);
@@ -227,6 +255,10 @@ namespace etsuko::renderer {
             }
 
             m_draw_active_index = m_active_index;
+        }
+
+        void snap_back_to_active() {
+            m_viewport.y = 0;
         }
 
         [[nodiscard]] CoordinateType total_height() const {
@@ -255,7 +287,7 @@ namespace etsuko::renderer {
 
                 m_viewport.y = static_cast<CoordinateType>(m_viewport.y - scrolled * scroll_speed);
 
-                m_viewport.y = std::max(0, m_viewport.y);
+                //m_viewport.y = std::max(0, m_viewport.y);
                 m_viewport.y = std::min(m_viewport.y, total_height());
             }
         }
