@@ -51,12 +51,11 @@ if(EMSCRIPTEN)
             "SHELL:-sASSERTIONS=1"
             "SHELL:-sEXIT_RUNTIME=0"
             "SHELL:-O3"
-            "SHELL:-sASYNCIFY=0"
+            #"SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
-            "SHELL:-sNO_DISABLE_EXCEPTION_CATCHING=1"
+            #"SHELL:-sNO_DISABLE_EXCEPTION_CATCHING=1"
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
-            "SHELL:-fexceptions"
-            "SHELL:-sASSERTIONS=1"
+            #"SHELL:-fexceptions"
             "SHELL:--profiling-funcs"
             "SHELL:--use-preload-plugins"
             # Preload assets directory into virtual FS
@@ -65,9 +64,6 @@ if(EMSCRIPTEN)
 
 else()
     message(STATUS "Configuring regular desktop build")
-
-    find_package(OpenAL CONFIG REQUIRED)
-    target_link_libraries(etsuko PRIVATE OpenAL::OpenAL)
 
     target_link_options(etsuko PRIVATE "-Wl,-dead_strip")
 
