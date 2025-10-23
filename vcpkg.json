@@ -4,6 +4,7 @@
   "dependencies": [
     "sdl2",
     "sdl2-ttf",
+    "sdl2-gfx",
     {
       "name": "sdl2-mixer",
       "features": [ "mpg123" ]

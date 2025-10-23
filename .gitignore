@@ -12,4 +12,6 @@ vcpkg_installed/
 *.a
 *.out
 *.pdb
-assets/
+assets_dbg/
+# leave out the env
+src/secret.h

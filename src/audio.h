@@ -1,30 +1,22 @@
 /**
- * audio.h - Controls initialization, playback and queries information about the audio device
+ * audio.h - Handles playing, loading and management of audio for the application
  */
 
-#pragma once
+#ifndef ETSUKO_AUDIO_H
+#define ETSUKO_AUDIO_H
 
-#include <SDL_mixer.h>
-#include <string>
+#include <stdbool.h>
 
-namespace etsuko {
-    class Audio {
-        Mix_Music *m_music = nullptr;
-        bool m_paused = true;
-        double m_total_time = 0;
+void audio_init(void);
+void audio_finish(void);
+void audio_load(const char *file);
+void audio_resume(void);
+void audio_pause(void);
+void audio_seek(double time);
+void audio_seek_relative(double diff);
 
-    public:
-        int initialize();
+double audio_elapsed_time(void);
+double audio_total_time(void);
+bool audio_is_paused(void);
 
-        void finalize();
-
-        void load_song(const std::string& path);
-        void pause();
-        void resume();
-        void seek(double time) const;
-
-        [[nodiscard]] double elapsed_time() const;
-        [[nodiscard]] double total_time() const;
-        [[nodiscard]] bool is_paused() const;
-    };
-} // namespace etsuko
+#endif // ETSUKO_AUDIO_H
