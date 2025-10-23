@@ -17,7 +17,7 @@ add_executable(etsuko src/main.cpp
         src/events.cpp
         src/events.h
         src/common.h
-        src/renderer_ex.h)
+)
 
 find_package(SDL2 CONFIG REQUIRED)
 target_link_libraries(etsuko

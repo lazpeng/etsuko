@@ -47,13 +47,17 @@ void etsuko::Karaoke::initialize(const config::Config &config) {
 }
 
 void etsuko::Karaoke::initialize_lyrics_container() {
-    constexpr renderer::ScrollingLyricsContainerOpts scroll_opts = {
+    const renderer::ScrollingLyricsContainerOpts scroll_opts = {
         .margin_top_percent = 0.4,
         .vertical_padding_percent = 0.025,
         .active_padding_percent = 0.1,
-        .alignment = renderer::ScrollingLyricsContainerOpts::ALIGN_CENTER
+        .alignment = renderer::ScrollingLyricsContainerOpts::ALIGN_CENTER,
+        .parent = m_renderer.root_container(),
+        .is_left  = false,
+        .song = m_song,
+        .renderer = &m_renderer,
     };
-    m_lyrics_container = renderer::BakedDrawableScrollingLyricsContainer(&m_renderer, m_song, false, m_renderer.root_container(), scroll_opts);
+    m_lyrics_container = renderer::ScrollingLyricsContainer(scroll_opts);
 }
 
 void etsuko::Karaoke::draw_version() {

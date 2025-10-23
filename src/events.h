@@ -10,7 +10,6 @@
 #include <SDL2/SDL_events.h>
 
 #include "common.h"
-#include "renderer.h"
 
 namespace etsuko {
     namespace events {

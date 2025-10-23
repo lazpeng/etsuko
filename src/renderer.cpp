@@ -14,6 +14,231 @@ using namespace etsuko::renderer;
 
 constexpr auto TILING_PARTS = 20;
 
+int32_t ScrollingLyricsContainer::total_size_before_active() const {
+    if ( m_active_index == 0 )
+        return 0;
+
+    int32_t total_size = 0;
+    for ( int32_t i = 0; i < m_active_index; ++i ) {
+        total_size += m_drawables.at(i)->bounds().h;
+        total_size += static_cast<int32_t>(m_opts.vertical_padding_percent * m_bounds.h);
+    }
+
+    return total_size;
+}
+
+[[nodiscard]] TextOpts ScrollingLyricsContainer::build_text_opts(const parser::TimedLyric &elem, const bool active) {
+    constexpr Color active_color = {.r = 255, .g = 255, .b = 255, .a = 255};
+    constexpr Color inactive_color = {.r = 100, .g = 100, .b = 100, .a = 255};
+    std::string line_text = elem.full_line;
+    if ( line_text.empty() ) {
+        if ( elem.base_duration > 1.5 ) {
+            line_text = "...";
+        } else {
+            line_text = " ";
+        }
+    }
+    constexpr auto active_em = 2.0;
+    const auto em = active ? active_em : 1.5;
+    return {
+        .text = line_text,
+        .position = {},
+        .em_size = em,
+        .bold = false,
+        .color = active ? active_color : inactive_color,
+        .layout_opts = {
+            .wrap = true,
+            .wrap_opts = {
+                .measure_at_em = active_em,
+                .wrap_width_threshold = 0.85,
+                .line_padding = 10,
+            }
+        },
+        .font_kind = TextOpts::FONT_LYRIC,
+    };
+}
+
+ScrollingLyricsContainer::ScrollingLyricsContainer(const ScrollingLyricsContainerOpts &opts) :
+    VerticalSplitContainer(opts.is_left, opts.parent) {
+    m_opts = opts;
+    m_song = opts.song;
+    m_renderer = opts.renderer;
+    if ( m_renderer == nullptr ) {
+        throw std::runtime_error("Renderer is null");
+    }
+    m_viewport = m_bounds;
+    m_drawables.reserve(m_song->lyrics.size());
+    rebuild_drawables();
+}
+
+void ScrollingLyricsContainer::rebuild_drawables() {
+    m_drawables.clear();
+    for ( size_t i = 0; i < m_song->lyrics.size(); ++i ) {
+        const auto &elem = m_song->lyrics.at(i);
+        const auto text_opts = build_text_opts(elem, i == m_active_index);
+        m_drawables.push_back(m_renderer->draw_text_baked(text_opts, *this));
+    }
+}
+
+[[nodiscard]] int32_t ScrollingLyricsContainer::find_active_index() const {
+    if ( m_song == nullptr ) {
+        throw std::runtime_error("Song is null");
+    }
+
+    for ( int32_t i = 0; i < m_song->lyrics.size(); ++i ) {
+        const auto &elem = m_song->lyrics.at(i);
+        if ( m_elapsed_time >= elem.base_start_time && m_elapsed_time < elem.base_start_time + elem.base_duration ) {
+            return i;
+        }
+    }
+
+    return 0;
+}
+
+int32_t ScrollingLyricsContainer::distance_between_lines(int32_t a, int32_t b) const {
+    if ( a == b )
+        return 0;
+    auto invert_flag = false;
+    if ( a > b ) {
+        invert_flag = true;
+        std::swap(a, b);
+    }
+
+    int32_t distance = 0;
+    for ( int32_t i = a; i < b; i++ ) {
+        distance += m_drawables.at(i)->bounds().h;
+        distance += static_cast<int32_t>(m_bounds.h * m_opts.vertical_padding_percent);
+    }
+
+    if ( invert_flag )
+        distance *= -1;
+
+    return distance;
+}
+
+void ScrollingLyricsContainer::draw(const Renderer &renderer, const bool animate) {
+    if ( m_song->lyrics.size() != m_drawables.size() ) {
+        throw std::runtime_error("Invalid state: Not all lyric elements have generated drawables");
+    }
+
+    const auto before_active_offset = total_size_before_active();
+    const auto virtual_target_y = static_cast<int32_t>(m_bounds.h * m_opts.margin_top_percent) - m_viewport.y;
+    CoordinateType y = virtual_target_y - before_active_offset;
+    for ( int32_t i = 0; i < m_drawables.size(); ++i ) {
+        const auto &drawable = m_drawables.at(i);
+        if ( (i < m_active_index && m_viewport.y > 0) ) {
+            y += static_cast<int32_t>(drawable->bounds().h + m_bounds.h * m_opts.vertical_padding_percent);
+            continue;
+        }
+
+        if ( m_active_index != m_draw_active_index && i <= m_active_index ) {
+            // Invalidate the drawable
+            m_drawables[i]->invalidate();
+
+            if ( i != m_draw_active_index ) {
+                m_drawables[m_draw_active_index]->invalidate();
+            }
+        }
+
+        if ( !m_drawables.at(i)->is_valid() ) {
+            const auto old_bounds = m_drawables.at(i)->bounds();
+            const bool is_active = i == m_active_index;
+            m_drawables[i] = m_renderer->draw_text_baked(build_text_opts(m_song->lyrics.at(i), is_active), *this);
+
+            const auto bounds = m_drawables.at(i)->bounds();
+            m_drawables.at(i)->set_bounds({.x = old_bounds.x, .y = old_bounds.y, .w = bounds.w, .h = bounds.h});
+        }
+
+        if ( !drawable->is_enabled() )
+            continue;
+
+        constexpr auto translate_duration = 2.5;
+        if ( i == m_active_index && m_active_index != m_draw_active_index ) {
+            const auto duration = m_song->translate_duration_override == 0 ? translate_duration : m_song->translate_duration_override;
+            const auto distance = std::min(0, virtual_target_y - drawable->bounds().y);
+            m_active_y_offset_delta = distance / duration;
+            m_anim_duration = 0;
+            std::print("active offset delta: {} distance: {} \n", m_active_y_offset_delta, distance);
+        }
+
+        auto animated_y = y;
+
+        const auto frame_delta = m_active_y_offset_delta * m_delta_time;
+        const auto frame_target = drawable->bounds().y + frame_delta - m_viewport.y;
+        if ( !m_first_draw && animate && m_anim_duration < translate_duration ) {
+            std::print("frame delta: {}\n", frame_delta);
+            animated_y = drawable->bounds().y + frame_delta;// std::min(y, static_cast<CoordinateType>(y + frame_delta));
+            std::print("animated y: {}\n", animated_y);
+            m_anim_duration += m_delta_time;
+        }
+
+        if ( animated_y >= m_bounds.y + m_bounds.h )
+            break;
+
+        CoordinateType x;
+        if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_LEFT ) {
+            x = 0;
+        } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_CENTER ) {
+            x = m_bounds.w / 2 - drawable->bounds().w / 2;
+        } else if ( m_opts.alignment == ScrollingLyricsContainerOpts::ALIGN_RIGHT ) {
+            x = m_bounds.w - drawable->bounds().w;
+        } else
+            throw std::runtime_error("Invalid alignment option");
+
+        drawable->set_bounds({.x = x, .y = animated_y, .w = drawable->bounds().w, .h = drawable->bounds().h});
+
+        constexpr auto max_fade_steps = 4;
+        const auto max_distance_step = (get_bounds().y + get_bounds().h - y) / max_fade_steps;
+        const auto distance_to_target_y = y - virtual_target_y + drawable->bounds().h;
+
+        if ( distance_to_target_y + drawable->bounds().h >= 0 || true ) {
+            auto alpha = 255;
+            if ( m_song->lyrics.at(m_active_index).full_line.empty() && m_active_index != i ) {
+                alpha = 50;
+            } else {
+                const auto steps = static_cast<int32_t>(std::floor(distance_to_target_y / max_distance_step));
+                for ( int distance = 1; distance < steps; distance++ ) {
+                    //alpha = static_cast<uint8_t>(alpha / 1.5);
+                }
+            }
+            renderer.render_baked(*drawable, *this, alpha);
+        }
+
+        auto vertical_padding = m_bounds.h * m_opts.vertical_padding_percent;
+        if ( m_active_index == i && m_song->lyrics.at(i).full_line.empty() ) {
+            vertical_padding += m_bounds.h * m_opts.active_padding_percent;
+        }
+
+        y += static_cast<int32_t>(drawable->bounds().h + vertical_padding);
+
+        if ( m_first_draw ) {
+            m_first_draw = false;
+        }
+    }
+
+    m_draw_active_index = m_active_index;
+}
+
+void ScrollingLyricsContainer::loop(const EventManager &events, const double delta_time, const double audio_elapsed_time) {
+    const auto scrolled = events.amount_scrolled();
+    m_elapsed_time = audio_elapsed_time;
+    m_delta_time = delta_time;
+    m_active_index = find_active_index();
+
+    if ( scrolled != 0.0 ) {
+#ifdef __EMSCRIPTEN__
+        constexpr auto scroll_speed = 50.0;
+#else
+        constexpr auto scroll_speed = 10.0;
+#endif
+
+        m_viewport.y = static_cast<CoordinateType>(m_viewport.y - scrolled * scroll_speed);
+
+        //m_viewport.y = std::max(0, m_viewport.y);
+        m_viewport.y = std::min(m_viewport.y, total_height());
+    }
+}
+
 void etsuko::Renderer::measure_line_size(const std::string &text, const int pt, int32_t *w, int32_t *h, const TextOpts::FontKind kind) const {
     const auto font = kind == TextOpts::FONT_UI ? m_ui_font : m_lyric_font;
     if ( TTF_SetFontSizeDPI(font, pt, m_h_dpi, m_v_dpi) != 0 ) {
@@ -63,7 +288,7 @@ int etsuko::Renderer::initialize() {
     SDL_SetHint(SDL_HINT_RENDER_OPENGL_SHADERS, "1");
     SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
 
-    constexpr auto renderer_flags = SDL_RENDERER_ACCELERATED;
+    constexpr auto renderer_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
     m_renderer = SDL_CreateRenderer(m_window, -1, renderer_flags);
     if ( m_renderer == nullptr ) {
         return -3;
@@ -103,7 +328,9 @@ void etsuko::Renderer::notify_window_changed() {
     m_h_dpi = static_cast<int32_t>(hdpi_temp), m_v_dpi = static_cast<int32_t>(v_dpi_temp);
 }
 
-void etsuko::Renderer::begin_loop() const {
+void etsuko::Renderer::begin_loop() {
+    m_start_ticks = SDL_GetTicks64();
+
     auto [r,g,b,a] = m_bg_color;
     SDL_SetRenderDrawColor(m_renderer, r, g, b, a);
     SDL_RenderClear(m_renderer);
@@ -111,6 +338,8 @@ void etsuko::Renderer::begin_loop() const {
 
 void etsuko::Renderer::end_loop() const {
     SDL_RenderPresent(m_renderer);
+
+    SDL_SetWindowTitle(m_window, std::format("etsuko | {} fps", 1000 / (SDL_GetTicks64() - m_start_ticks)).c_str());
 }
 
 void etsuko::Renderer::finalize() {

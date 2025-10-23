@@ -15,6 +15,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
+#include "events.h"
+#include "parser.h"
+
 namespace etsuko {
 
     /* Forward declaration */
@@ -286,7 +289,8 @@ namespace etsuko {
             BoundingBox m_bounds = {};
 
         public:
-            explicit VerticalSplitContainer(const bool left, const ContainerLike *parent): m_parent(parent), m_is_left(left) {
+            explicit VerticalSplitContainer(const bool left, const ContainerLike *parent) :
+                m_parent(parent), m_is_left(left) {
                 VerticalSplitContainer::notify_window_resized();
             }
 
@@ -298,6 +302,90 @@ namespace etsuko {
                 const auto x = m_is_left ? 0 : m_parent->get_bounds().w / 2;
                 m_bounds = {.x = x, .y = 0, .w = m_parent->get_bounds().w / 2, .h = m_parent->get_bounds().h};
                 std::puts(std::format("Container bounds: x={}, y={}, w={}, h={}", m_bounds.x, m_bounds.y, m_bounds.w, m_bounds.h).c_str());
+            }
+        };
+
+        struct ScrollingLyricsContainerOpts {
+            enum AlignMode {
+                ALIGN_LEFT = 0,
+                ALIGN_CENTER,
+                ALIGN_RIGHT
+            };
+
+            double margin_top_percent = 0;
+            double vertical_padding_percent = 0.025;
+            double active_padding_percent = 0.03;
+            AlignMode alignment = ALIGN_LEFT;
+            const ContainerLike *parent = nullptr;
+            bool is_left = false;
+            std::shared_ptr<parser::Song> song = nullptr;
+            Renderer *renderer = nullptr;
+        };
+
+        class ScrollingLyricsContainer final : public VerticalSplitContainer {
+            std::shared_ptr<parser::Song> m_song;
+            std::vector<std::shared_ptr<BakedDrawable>> m_drawables;
+            BoundingBox m_viewport = {};
+            ScrollingLyricsContainerOpts m_opts;
+            double m_elapsed_time = 0.0;
+            double m_delta_time = 0.0;
+            int32_t m_active_index = 0, m_draw_active_index = 0;
+            Renderer *m_renderer = nullptr;
+            bool m_first_draw = true;
+            // Animations
+            double m_active_y_offset_delta = 0.0, m_anim_duration = 0.0;
+
+            [[nodiscard]] int32_t total_size_before_active() const;
+            [[nodiscard]] int32_t distance_between_lines(int32_t a, int32_t b) const;
+            [[nodiscard]] int32_t find_active_index() const;
+            [[nodiscard]] static TextOpts build_text_opts(const parser::TimedLyric &elem, bool active);
+            void rebuild_drawables();
+
+        public:
+            explicit ScrollingLyricsContainer(const ScrollingLyricsContainerOpts &opts);
+
+            [[nodiscard]] const std::vector<std::shared_ptr<BakedDrawable>> &drawables() const {
+                return m_drawables;
+            }
+
+            [[nodiscard]] const ScrollingLyricsContainerOpts &opts() const {
+                return m_opts;
+            }
+
+            void set_item_enabled(const size_t index, const bool enabled) const {
+                if ( index >= m_drawables.size() ) {
+                    throw std::runtime_error("Invalid index passed to set_item_enabled");
+                }
+
+                m_drawables[index]->set_enabled(enabled);
+            }
+
+            void notify_window_resized() override {
+                VerticalSplitContainer::notify_window_resized();
+                rebuild_drawables();
+            }
+
+            void draw(const Renderer &renderer, bool animate);
+
+            void snap_back_to_active() {
+                m_viewport.y = 0;
+            }
+
+            [[nodiscard]] CoordinateType total_height() const {
+                CoordinateType h = 0;
+                for ( const auto &drawable : m_drawables ) {
+                    if ( drawable != nullptr && drawable->is_enabled() ) {
+                        h += drawable->bounds().h + static_cast<int32_t>(m_bounds.h * m_opts.vertical_padding_percent);
+                    }
+                }
+
+                return h;
+            }
+
+            void loop(const EventManager &events, double delta_time, double audio_elapsed_time);
+
+            [[nodiscard]] const BoundingBox &get_bounds() const override {
+                return m_bounds;
             }
         };
 
@@ -316,6 +404,7 @@ namespace etsuko {
         BoundingBox m_viewport = {};
         int32_t m_h_dpi = 0, m_v_dpi = 0;
         renderer::Color m_bg_color = renderer::DEFAULT_COLOR;
+        uint64_t m_start_ticks = 0;
 
         void measure_line_size(const std::string &text, int pt, int32_t *w, int32_t *h, renderer::TextOpts::FontKind kind) const;
         static void measure_layout(const BoundingBox &box, const renderer::Point &position, const ContainerLike &container, BoundingBox &out_box);
@@ -331,7 +420,7 @@ namespace etsuko {
     public:
         /* Init and lifetime functions */
         int initialize();
-        void begin_loop() const;
+        void begin_loop();
         void end_loop() const;
         void finalize();
         void notify_window_changed();
@@ -341,7 +430,7 @@ namespace etsuko {
             return m_viewport;
         }
 
-        [[nodiscard]] const Renderer *root_container() const {
+        [[nodiscard]] const ContainerLike *root_container() const {
             return this;
         }
 

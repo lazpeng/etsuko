@@ -10,7 +10,6 @@
 #include "events.h"
 #include "parser.h"
 #include "renderer.h"
-#include "renderer_ex.h"
 #include "repository.h"
 
 namespace etsuko {
@@ -44,7 +43,7 @@ namespace etsuko {
         std::optional<renderer::VirtualContainer> m_song_info_container;
         std::optional<BoundingBox> m_progress_bar_box;
         // Lyrics
-        std::optional<renderer::BakedDrawableScrollingLyricsContainer> m_lyrics_container;
+        std::optional<renderer::ScrollingLyricsContainer> m_lyrics_container;
         // Left panel
         std::optional<renderer::VerticalSplitContainer> m_left_container;
         std::shared_ptr<renderer::BakedDrawable> m_album_art;
