@@ -178,7 +178,7 @@ void karaoke_init(void) {
             .bold = false,
             .color = {255, 255, 255, 128},
         },
-        renderer_root_container(), &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X});
+        renderer_root_container(), &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
 
     // Album art
     g_album_image = renderer_drawable_make_image(
@@ -210,11 +210,7 @@ void karaoke_init(void) {
             .bold = false,
             .color = {200, 200, 200, 255},
         },
-        g_song_info_container,
-        &(etsuko_Layout_t){
-            .offset_x = 0,
-            .offset_y = 0,
-        });
+        g_song_info_container, &(etsuko_Layout_t){0});
 
     // Remaining time
     g_remaining_time_text = renderer_drawable_make_text(
@@ -225,7 +221,7 @@ void karaoke_init(void) {
             .bold = false,
             .color = {200, 200, 200, 255},
         },
-        g_song_info_container, &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X});
+        g_song_info_container, &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
 
     // Progress bar
     // TODO: Not recomputing correctly on y axis after screen resize

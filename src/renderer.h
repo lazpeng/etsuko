@@ -43,6 +43,9 @@ typedef enum etsuko_LayoutFlags_t {
     LAYOUT_RELATIVE_TO_HEIGHT = 1 << 13,
     LAYOUT_RELATIVE_TO_WIDTH = 1 << 14,
     LAYOUT_RELATIVE_TO_SIZE = LAYOUT_RELATIVE_TO_HEIGHT | LAYOUT_RELATIVE_TO_WIDTH,
+    LAYOUT_WRAP_AROUND_X = 1 << 15,
+    LAYOUT_WRAP_AROUND_Y = 1 << 16,
+    LAYOUT_WRAP_AROUND = LAYOUT_WRAP_AROUND_X | LAYOUT_WRAP_AROUND_Y,
 } etsuko_LayoutFlags_t;
 
 typedef struct etsuko_Layout_t {
@@ -84,17 +87,20 @@ typedef struct etsuko_Drawable_t {
     bool enabled, dynamic;
     etsuko_Layout_t layout;
     uint8_t alpha_mod;
+    Vector_t *animations;
 } etsuko_Drawable_t;
 
 typedef enum etsuko_AnimationType_t {
     ANIM_EASE_TRANSLATION = 0,
+    ANIM_FADE_IN_OUT,
 } etsuko_AnimationType_t;
 
 typedef struct etsuko_Animation_t {
     double duration, elapsed;
     etsuko_AnimationType_t type;
     void *custom_data;
-    const etsuko_Drawable_t *target;
+    etsuko_Drawable_t *target;
+    bool active;
 } etsuko_Animation_t;
 
 // Options and custom data
@@ -135,6 +141,11 @@ typedef struct etsuko_Animation_EaseTranslationData_t {
     bool ease;
 } etsuko_Animation_EaseTranslationData_t;
 
+typedef struct etsuko_Animation_FadeInOutData_t {
+    int32_t from_alpha, to_alpha;
+    double duration;
+} etsuko_Animation_FadeInOutData_t;
+
 // Init and lifetime functions
 int renderer_init(void);
 void renderer_begin_loop(double delta_time);
@@ -153,17 +164,19 @@ etsuko_Drawable_t *renderer_drawable_make_text(etsuko_Drawable_TextData_t *data,
                                                const etsuko_Layout_t *layout);
 etsuko_Drawable_t *renderer_drawable_make_image(etsuko_Drawable_ImageData_t *data, etsuko_Container_t *container,
                                                 const etsuko_Layout_t *layout);
-etsuko_Drawable_t *renderer_drawable_make_progressbar(const etsuko_Drawable_ProgressBarData_t *data, etsuko_Container_t *container,
-                                                      const etsuko_Layout_t *layout);
+etsuko_Drawable_t *renderer_drawable_make_progressbar(const etsuko_Drawable_ProgressBarData_t *data,
+                                                      etsuko_Container_t *container, const etsuko_Layout_t *layout);
 void renderer_recompute_drawable(etsuko_Drawable_t *drawable);
 void renderer_reposition_drawable(etsuko_Drawable_t *drawable);
 void renderer_drawable_destroy(etsuko_Drawable_t *drawable);
+void renderer_drawable_set_alpha(etsuko_Drawable_t *drawable, int32_t alpha);
 // Containers
 etsuko_Container_t *renderer_container_make(etsuko_Container_t *parent, const etsuko_Layout_t *layout,
                                             etsuko_ContainerFlags_t flags);
 void renderer_recompute_container(etsuko_Container_t *container);
 void renderer_container_destroy(etsuko_Container_t *container);
 // Animations
-etsuko_Animation_t *renderer_animate_translation(const etsuko_Drawable_t *target, etsuko_Animation_EaseTranslationData_t *data);
+void renderer_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_EaseTranslationData_t *data);
+void renderer_animate_fade(etsuko_Drawable_t *target, const etsuko_Animation_FadeInOutData_t *data);
 
 #endif // ETSUKO_RENDERER_H

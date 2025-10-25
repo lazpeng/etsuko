@@ -42,6 +42,14 @@ static void read_header(etsuko_Song_t *song, const char *buffer, const size_t le
     } else if ( strncmp(buffer, "bgColor", equals) == 0 ) {
         song->bg_color = strtol(value, NULL, 16);
         free(value);
+    } else if ( strncmp(buffer, "alignment", equals) == 0 ) {
+        if ( strncmp(value, "left", 4) == 0 ) {
+            song->line_alignment = SONG_LINE_LEFT;
+        } else if ( strncmp(value, "center", 5) == 0 ) {
+            song->line_alignment = SONG_LINE_CENTER;
+        } else {
+            error_abort("Invalid song line alignment");
+        }
     }
 }
 
@@ -69,7 +77,7 @@ static void read_timings(const etsuko_Song_t *song, const char *buffer, size_t l
     free(minutes_str);
     const double seconds = strtod(colon + 1, NULL);
 
-    line->base_start_time = minutes * 60.0 + seconds;
+    line->base_start_time = minutes * 60.0 + seconds; // - 0.3;
     if ( song->lyrics_lines->size > 0 ) {
         etsuko_SongLine_t *last_line = song->lyrics_lines->data[song->lyrics_lines->size - 1];
         last_line->base_duration = line->base_start_time - last_line->base_start_time;

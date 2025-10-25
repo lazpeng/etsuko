@@ -22,6 +22,11 @@ typedef struct etsuko_SongLine_t {
     int32_t num_timings;
 } etsuko_SongLine_t;
 
+typedef enum etsuko_Song_LineAlignment_t {
+    SONG_LINE_CENTER = 0,
+    SONG_LINE_LEFT = 1,
+} etsuko_Song_LineAlignment_t;
+
 typedef struct {
     // Data about the song
     char *name, *translated_name, *artist, *album;
@@ -31,6 +36,7 @@ typedef struct {
     char *id;
     char *file_path, *album_art_path;
     char *karaoke, *language, *hidden;
+    etsuko_Song_LineAlignment_t line_alignment;
     uint32_t bg_color;
 } etsuko_Song_t;
 

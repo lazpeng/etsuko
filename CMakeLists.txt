@@ -87,11 +87,11 @@ else()
 
     target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_compile_options(etsuko PRIVATE "-g")
-    target_compile_options(etsuko PRIVATE "-O2")
+    target_compile_options(etsuko PRIVATE "-O1")
     target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_link_options(etsuko PRIVATE "-Wl,-dead_strip")
     target_compile_options(etsuko PRIVATE "-g")
-    target_compile_options(etsuko PRIVATE "-O2")
+    target_compile_options(etsuko PRIVATE "-O1")
 
     add_custom_command(TARGET etsuko POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory

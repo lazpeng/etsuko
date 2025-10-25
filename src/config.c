@@ -43,7 +43,8 @@ static etsuko_Config_t *get_default_config(void) {
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
-    config->song_file = strdup("lonely planet.txt");
+    config->song_file = strdup("all these things that ive done.txt");
+    // config->song_file = strdup("fukashigi no carte.txt");
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);
