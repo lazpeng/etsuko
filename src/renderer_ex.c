@@ -173,8 +173,8 @@ static void set_line_inactive(const etsuko_LyricsView_t *view, const size_t inde
 static void set_line_hidden(const etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
-    const LineState_t new_state = LINE_INACTIVE;
-    if ( *(LineState_t *)view->line_states->data[index] == LINE_ACTIVE ) {
+    const LineState_t new_state = LINE_HIDDEN;
+    if ( *(LineState_t *)view->line_states->data[index] != new_state ) {
         // Line went from active to hidden
         *(LineState_t *)view->line_states->data[index] = new_state;
         drawable->layout.relative_to = NULL;

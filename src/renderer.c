@@ -360,6 +360,7 @@ static void apply_fade_animation(etsuko_Animation_t *animation, int32_t *final_a
         const int32_t amount = data->from_alpha + (int32_t)(alpha_delta * progress);
         *final_alpha = amount;
     } else {
+        animation->target->alpha_mod = data->to_alpha;
         animation->active = false;
     }
 }
