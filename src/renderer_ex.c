@@ -3,16 +3,14 @@
 #include "audio.h"
 #include "error.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-typedef enum LineState_t {
-    LINE_INACTIVE,
-    LINE_ACTIVE,
-    LINE_HIDDEN,
-} LineState_t;
-
 #define LINE_VERTICAL_PADDING (30)
+#define LINE_FADE_MAX_DISTANCE (5)
+#define SCROLL_THRESHOLD (0.05)
+#define SCROLL_MODIFIER (10)
 
 static bool is_line_intermission(const etsuko_LyricsView_t *view, const size_t index) {
     const etsuko_SongLine_t *line = view->song->lyrics_lines->data[index];
@@ -32,7 +30,6 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
     view->container = parent;
     view->song = song;
     view->line_drawables = vec_init();
-    view->line_states = vec_init();
 
     if ( song->lyrics_lines->size == 0 ) {
         error_abort("Song has no lyrics");
@@ -57,6 +54,11 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
         const etsuko_SongLine_t *line = song->lyrics_lines->data[i];
 
         char *line_text = line->full_text;
+        if ( line_text == NULL ) {
+            printf("Warn: line was not initialized properly. idx: %lu\n", i);
+            continue;
+        }
+
         if ( strncmp(line_text, "", 1) == 0 ) {
             if ( is_line_intermission(view, i) ) {
                 line_text = "...";
@@ -108,10 +110,7 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
     }
 
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
-        int *state = calloc(1, sizeof(*state));
-        *state = LINE_INACTIVE;
-        vec_add(view->line_states, state);
-
+        view->line_states[i] = LINE_INACTIVE;
         renderer_animate_translation(view->line_drawables->data[i],
                                      &(etsuko_Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
         renderer_animate_fade(view->line_drawables->data[i], &(etsuko_Animation_FadeInOutData_t){.duration = 1.0});
@@ -120,7 +119,7 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
     return view;
 }
 
-static void set_line_active(const etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
+static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
     drawable->enabled = true;
@@ -132,8 +131,8 @@ static void set_line_active(const etsuko_LyricsView_t *view, const size_t index,
     data->bold = false;
 
     const LineState_t new_state = LINE_ACTIVE;
-    if ( *(LineState_t *)view->line_states->data[index] != new_state ) {
-        *(LineState_t *)view->line_states->data[index] = new_state;
+    if ( view->line_states[index] != new_state ) {
+        view->line_states[index] = new_state;
         renderer_recompute_drawable(drawable);
     }
 
@@ -146,11 +145,16 @@ static void set_line_active(const etsuko_LyricsView_t *view, const size_t index,
     if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
         drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
     }
+    drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
     renderer_reposition_drawable(drawable);
 }
 
-static void set_line_inactive(const etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
+static int32_t calculate_alpha(const int32_t distance) {
+    return 225 - 200 / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
+}
+
+static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
     if ( index > 0 ) {
         etsuko_Drawable_t *prev = view->line_drawables->data[index - 1];
@@ -160,56 +164,106 @@ static void set_line_inactive(const etsuko_LyricsView_t *view, const size_t inde
     if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
         drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
     }
+    drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
     etsuko_Drawable_TextData_t *data = drawable->custom_data;
     data->em = 1.5;
     data->color = (etsuko_Color_t){.r = 100, .b = 100, .g = 100, .a = 255};
     data->bold = false;
 
-    size_t alpha = 200;
+    int32_t alpha = 200;
     if ( prev_active >= 0 && prev_active != (int32_t)index ) {
-        const int max_distance = 5;
-        size_t distance = (int32_t)index - prev_active;
+        int32_t distance = (int32_t)index - prev_active;
 
         if ( is_line_intermission(view, prev_active) ) {
             // When the current line is an intermission between two segments, make every other line have min alpha
-            distance = max_distance;
+            distance = LINE_FADE_MAX_DISTANCE;
         }
-        alpha = 225 - 200 / max_distance * MIN(distance, max_distance);
+        alpha = calculate_alpha(distance);
     }
 
-    if ( *(LineState_t *)view->line_states->data[index] != LINE_INACTIVE ) {
+    if ( view->line_states[index] != LINE_INACTIVE ) {
         // Don't animate
-        drawable->alpha_mod = (int32_t)alpha;
+        drawable->alpha_mod = alpha;
     } else {
         // Maybe animate if our alpha changed while still being inactive
-        renderer_drawable_set_alpha(drawable, (int32_t)alpha);
+        renderer_drawable_set_alpha(drawable, alpha);
     }
 
     const LineState_t new_state = LINE_INACTIVE;
-    if ( *(LineState_t *)view->line_states->data[index] != new_state ) {
-        *(LineState_t *)view->line_states->data[index] = new_state;
+    if ( view->line_states[index] != new_state ) {
+        view->line_states[index] = new_state;
         renderer_recompute_drawable(drawable);
     } else {
         renderer_reposition_drawable(drawable);
     }
 }
 
-static void set_line_hidden(const etsuko_LyricsView_t *view, const size_t index) {
+static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
     const LineState_t new_state = LINE_HIDDEN;
-    if ( *(LineState_t *)view->line_states->data[index] != new_state ) {
-        // Line went from active to hidden
-        *(LineState_t *)view->line_states->data[index] = new_state;
+    if ( view->line_states[index] != new_state ) {
+        view->line_states[index] = new_state;
         drawable->layout.relative_to = NULL;
         drawable->layout.offset_y = -LINE_VERTICAL_PADDING;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
-        // Animate fade out
-        renderer_drawable_set_alpha(drawable, 0);
-        renderer_reposition_drawable(drawable);
+        if ( drawable->layout.flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
+            drawable->layout.flags ^= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+        }
+
+        etsuko_Drawable_TextData_t *data = drawable->custom_data;
+        data->em = 1.5;
+        data->color = (etsuko_Color_t){.r = 100, .b = 100, .g = 100, .a = 255};
+        data->bold = false;
+
+        renderer_recompute_drawable(drawable);
     }
+
+    // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
+    if ( view->container->viewport_y < SCROLL_THRESHOLD ) {
+        renderer_drawable_set_alpha(drawable, 0);
+    } else {
+        int32_t distance = abs(view->current_active_index - (int32_t)index);
+        if ( is_line_intermission(view, view->current_active_index) ) {
+            distance = LINE_FADE_MAX_DISTANCE;
+        }
+        renderer_drawable_set_alpha(drawable, calculate_alpha(distance));
+    }
+}
+
+static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index) {
+    etsuko_Drawable_t *drawable = view->line_drawables->data[index];
+
+    const LineState_t new_state = LINE_ALMOST_HIDDEN;
+    if ( view->line_states[index] != new_state ) {
+        if ( view->line_states[index] == LINE_ACTIVE ) {
+            // Don't do anything, just fade into a low alpha
+            const int32_t alpha = calculate_alpha(LINE_FADE_MAX_DISTANCE);
+            renderer_drawable_set_alpha(drawable, alpha);
+        } else {
+            // Position the same as the drawable
+            drawable->layout.relative_to = NULL;
+            drawable->layout.offset_y = 0;
+            if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
+                drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
+            }
+            renderer_reposition_drawable(drawable);
+        }
+        view->line_states[index] = new_state;
+    }
+}
+
+static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t *view, const size_t idx) {
+    if ( idx >= view->line_drawables->size - 1 || view->line_states[idx] != LINE_HIDDEN )
+        return NULL;
+
+    etsuko_Drawable_t *drawable = view->line_drawables->data[idx];
+    drawable->layout.relative_to = stack_hidden_line_recursive(view, idx + 1);
+    renderer_reposition_drawable(drawable);
+
+    return drawable;
 }
 
 void renderer_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
@@ -230,23 +284,75 @@ void renderer_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
                 set_line_active(view, i, prev_active);
                 prev_active = (int32_t)i;
             } else {
+                if ( prev_active < 0 ) {
+                    prev_active = view->current_active_index;
+                }
                 set_line_inactive(view, i, prev_active);
             }
         } else {
+            // If the next line still hasn't reached its start time, don't completely vanish the line just yet
+            if ( i + 1 < view->song->lyrics_lines->size ) {
+                const etsuko_SongLine_t *next_line = view->song->lyrics_lines->data[i + 1];
+                if ( elapsed_time < next_line->base_start_time ) {
+                    set_line_almost_hidden(view, i);
+                    continue;
+                }
+            }
+            // else just set it hidden (or afterward when it finally should disappear)
             set_line_hidden(view, i);
         }
     }
+
+    view->current_active_index = prev_active;
+
+    // Now do a reverse loop setting all the hidden lines to stack on top of each other
+    stack_hidden_line_recursive(view, 0);
+
+    view->prev_viewport_y = view->container->viewport_y;
+}
+
+static double get_hidden_height(const etsuko_LyricsView_t *view) {
+    double height = 0;
+    for (size_t i = 0; i < view->line_drawables->size; i++) {
+        const LineState_t state = view->line_states[i];
+        if ( state == LINE_HIDDEN || state == LINE_ALMOST_HIDDEN ) {
+            const etsuko_Drawable_t *drawable = view->line_drawables->data[i];
+            height += drawable->bounds.h + LINE_VERTICAL_PADDING;
+        }
+    }
+
+    return height;
+}
+
+static double get_visible_height(const etsuko_LyricsView_t *view) {
+    double height = 0;
+    for (size_t i = 0; i < view->line_drawables->size; i++) {
+        const LineState_t state = view->line_states[i];
+        if ( state == LINE_ACTIVE || state == LINE_INACTIVE ) {
+            const etsuko_Drawable_t *drawable = view->line_drawables->data[i];
+            height += drawable->bounds.h + LINE_VERTICAL_PADDING;
+        }
+    }
+
+    return -height + view->container->bounds.h * 0.5;
+}
+
+void renderer_ex_lyrics_view_scroll(const etsuko_LyricsView_t *view, const double delta_y) {
+    if ( fabs(delta_y) < SCROLL_THRESHOLD )
+        return;
+
+    double new_viewport_y = view->container->viewport_y + delta_y * SCROLL_MODIFIER;
+    new_viewport_y = MIN(new_viewport_y, get_hidden_height(view));
+    new_viewport_y = MAX(new_viewport_y, get_visible_height(view));
+
+    view->container->viewport_y = new_viewport_y;
 }
 
 void renderer_ex_lyrics_view_destroy(etsuko_LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("destroy: lyrics_view is null");
     }
-    // The drawables themselves are owned by the renderer
+    // No need to free the drawables individually
     vec_destroy(view->line_drawables);
-    for ( size_t i = 0; i < view->line_states->size; i++ ) {
-        free(view->line_states->data[i]);
-    }
-    vec_destroy(view->line_states);
     free(view);
 }

@@ -420,7 +420,7 @@ static void draw_all_container(const etsuko_Container_t *container, etsuko_Bound
         return;
 
     base_bounds.x += container->bounds.x;
-    base_bounds.y += container->bounds.y + container->align_content_offset_y;
+    base_bounds.y += container->bounds.y + container->align_content_offset_y + container->viewport_y;
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         renderer_draw(container->child_drawables->data[i], &base_bounds);
@@ -462,7 +462,17 @@ etsuko_Container_t *renderer_root_container(void) { return &g_renderer->root_con
 
 void renderer_drawable_get_canonical_pos(const etsuko_Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    const etsuko_Container_t *parent = drawable->parent;
+    renderer_container_get_canonical_pos(drawable->parent, &parent_x, &parent_y);
+
+    if ( x != NULL )
+        *x = parent_x + drawable->bounds.x;
+    if ( y != NULL )
+        *y = parent_y + drawable->bounds.y;
+}
+
+void renderer_container_get_canonical_pos(const etsuko_Container_t *container, double *x, double *y) {
+    double parent_x = 0, parent_y = 0;
+    const etsuko_Container_t *parent = container;
     while ( parent != NULL ) {
         parent_x += parent->bounds.x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
@@ -470,9 +480,9 @@ void renderer_drawable_get_canonical_pos(const etsuko_Drawable_t *drawable, doub
     }
 
     if ( x != NULL )
-        *x = parent_x + drawable->bounds.x;
+        *x = parent_x;
     if ( y != NULL )
-        *y = parent_y + drawable->bounds.y;
+        *y = parent_y;
 }
 
 static etsuko_Drawable_TextData_t *dup_text_data(const etsuko_Drawable_TextData_t *data) {

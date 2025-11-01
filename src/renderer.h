@@ -76,6 +76,7 @@ typedef struct etsuko_Container_t {
     bool enabled;
     etsuko_ContainerFlags_t flags;
     double align_content_offset_y;
+    double viewport_y;
 } etsuko_Container_t;
 
 typedef struct etsuko_Drawable_t {
@@ -174,6 +175,7 @@ void renderer_drawable_set_alpha(etsuko_Drawable_t *drawable, int32_t alpha);
 etsuko_Container_t *renderer_container_make(etsuko_Container_t *parent, const etsuko_Layout_t *layout,
                                             etsuko_ContainerFlags_t flags);
 void renderer_recompute_container(etsuko_Container_t *container);
+void renderer_container_get_canonical_pos(const etsuko_Container_t *container, double *x, double *y);
 void renderer_container_destroy(etsuko_Container_t *container);
 // Animations
 void renderer_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_EaseTranslationData_t *data);
