@@ -226,7 +226,7 @@ static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
     }
 
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
-    if ( view->container->viewport_y < SCROLL_THRESHOLD ) {
+    if ( view->container->viewport_y < -SCROLL_THRESHOLD ) {
         renderer_drawable_set_alpha(drawable, 0);
     } else {
         int32_t distance = abs(view->current_active_index - (int32_t)index);
