@@ -10,7 +10,11 @@
 #define LINE_VERTICAL_PADDING (30)
 #define LINE_FADE_MAX_DISTANCE (5)
 #define SCROLL_THRESHOLD (0.05)
+#ifdef __EMSCRIPTEN__
+#define SCROLL_MODIFIER (50)
+#else
 #define SCROLL_MODIFIER (10)
+#endif
 
 static bool is_line_intermission(const etsuko_LyricsView_t *view, const size_t index) {
     const etsuko_SongLine_t *line = view->song->lyrics_lines->data[index];
@@ -313,7 +317,7 @@ void renderer_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
 
 static double get_hidden_height(const etsuko_LyricsView_t *view) {
     double height = 0;
-    for (size_t i = 0; i < view->line_drawables->size; i++) {
+    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
         const LineState_t state = view->line_states[i];
         if ( state == LINE_HIDDEN || state == LINE_ALMOST_HIDDEN ) {
             const etsuko_Drawable_t *drawable = view->line_drawables->data[i];
@@ -326,7 +330,7 @@ static double get_hidden_height(const etsuko_LyricsView_t *view) {
 
 static double get_visible_height(const etsuko_LyricsView_t *view) {
     double height = 0;
-    for (size_t i = 0; i < view->line_drawables->size; i++) {
+    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
         const LineState_t state = view->line_states[i];
         if ( state == LINE_ACTIVE || state == LINE_INACTIVE ) {
             const etsuko_Drawable_t *drawable = view->line_drawables->data[i];
