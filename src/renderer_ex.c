@@ -263,16 +263,18 @@ static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t 
     if ( idx >= view->line_drawables->size - 1 )
         return NULL;
 
-    int32_t next_hidden = -1;
-    for ( size_t i = idx + 1; i < view->line_drawables->size; i++ ) {
-        if ( view->line_states[i] != LINE_HIDDEN )
-            continue;
-        next_hidden = (int32_t)i;
-        break;
+    if ( view->line_states[idx] != LINE_HIDDEN ) {
+        int32_t next_hidden = -1;
+        for ( size_t i = idx + 1; i < view->line_drawables->size; i++ ) {
+            if ( view->line_states[i] != LINE_HIDDEN )
+                continue;
+            next_hidden = (int32_t)i;
+            break;
+        }
+        if ( next_hidden < 0 )
+            return NULL;
+        idx = next_hidden;
     }
-    if ( next_hidden < 0 )
-        return NULL;
-    idx = next_hidden;
 
     etsuko_Drawable_t *drawable = view->line_drawables->data[idx];
     drawable->layout.relative_to = stack_hidden_line_recursive(view, idx + 1);
