@@ -149,11 +149,11 @@ void renderer_begin_loop(const double delta_time) {
 
 static void draw_dynamic_progressbar(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
     const etsuko_Drawable_ProgressBarData_t *data = (etsuko_Drawable_ProgressBarData_t *)drawable->custom_data;
-    const double x = (Sint16)(base_bounds->x + drawable->bounds.x);
-    const double y = (Sint16)(base_bounds->y + drawable->bounds.y);
-    const double w = (Sint16)drawable->bounds.w;
-    const double h = (Sint16)drawable->bounds.h;
-    const double radius = (Sint16)(h / 3);
+    const double x = base_bounds->x + drawable->bounds.x;
+    const double y = base_bounds->y + drawable->bounds.y;
+    const double w = drawable->bounds.w;
+    const double h = drawable->bounds.h;
+    const double radius = h / 3.0;
 
     const etsuko_Color_t bg = data->bg_color;
     Sint16 x1 = (Sint16)x, x2 = (Sint16)(x + w - 1), y1 = (Sint16)y, y2 = (Sint16)(y + h - 1), rad = (Sint16)radius;
@@ -1059,7 +1059,7 @@ void renderer_recompute_drawable(etsuko_Drawable_t *drawable) {
         free_image_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
         // There's nothing to do in this case
-        measure_layout(&drawable->layout, container, &drawable->bounds);
+        renderer_reposition_drawable(drawable);
     } else {
         error_abort("Invalid drawable type");
     }

@@ -40,6 +40,18 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
 
     const etsuko_Color_t color = {.r = 100, .b = 100, .g = 100, .a = 200};
 
+    etsuko_DrawableAlignment_t base_alignment = ALIGN_LEFT;
+    etsuko_LayoutFlags_t base_alignment_flags = LAYOUT_NONE;
+    double base_offset_x = 0;
+    if ( song->line_alignment == SONG_LINE_CENTER ) {
+        base_alignment = ALIGN_CENTER;
+        base_alignment_flags = LAYOUT_CENTER_X;
+    } else if ( song->line_alignment == SONG_LINE_RIGHT ) {
+        base_alignment = ALIGN_RIGHT;
+        base_alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X | LAYOUT_PROPORTIONAL_X;
+        base_offset_x = -0.3;
+    }
+
     etsuko_Drawable_t *prev = NULL;
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         const etsuko_SongLine_t *line = song->lyrics_lines->data[i];
@@ -53,11 +65,23 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
             }
         }
 
-        etsuko_DrawableAlignment_t alignment = ALIGN_CENTER;
-        etsuko_LayoutFlags_t alignment_flags = LAYOUT_CENTER_X;
-        if ( song->line_alignment == SONG_LINE_LEFT || true ) {
-            alignment = ALIGN_LEFT;
-            alignment_flags = 0;
+        etsuko_DrawableAlignment_t alignment = base_alignment;
+        etsuko_LayoutFlags_t alignment_flags = base_alignment_flags;
+        double offset_x = base_offset_x;
+        // line override
+        if ( line->alignment != song->line_alignment ) {
+            if ( line->alignment == SONG_LINE_CENTER ) {
+                alignment = ALIGN_CENTER;
+                alignment_flags = LAYOUT_CENTER_X;
+            } else if ( line->alignment == SONG_LINE_RIGHT ) {
+                alignment = ALIGN_RIGHT;
+                alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X;
+                offset_x = -200;
+            } else if ( line->alignment == SONG_LINE_LEFT ) {
+                alignment = ALIGN_LEFT;
+                alignment_flags = LAYOUT_NONE;
+                offset_x = 0;
+            }
         }
 
         etsuko_Drawable_TextData_t data = {
@@ -73,6 +97,7 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
         };
         etsuko_Layout_t layout = {
             .offset_y = LINE_VERTICAL_PADDING,
+            .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
         };
         if ( prev != NULL ) {
@@ -194,8 +219,9 @@ void renderer_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
 
     view->active_changed = false;
 
-    const double elapsed_time = audio_elapsed_time();
     int32_t prev_active = -1;
+    const double offset = view->song->time_offset;
+    const double elapsed_time = audio_elapsed_time() + offset;
 
     for ( size_t i = 0; i < view->song->lyrics_lines->size; i++ ) {
         const etsuko_SongLine_t *line = view->song->lyrics_lines->data[i];

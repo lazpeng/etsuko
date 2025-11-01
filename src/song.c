@@ -47,9 +47,43 @@ static void read_header(etsuko_Song_t *song, const char *buffer, const size_t le
             song->line_alignment = SONG_LINE_LEFT;
         } else if ( strncmp(value, "center", 5) == 0 ) {
             song->line_alignment = SONG_LINE_CENTER;
+        } else if ( strncmp(value, "right", 5) == 0 ) {
+            song->line_alignment = SONG_LINE_RIGHT;
         } else {
             error_abort("Invalid song line alignment");
         }
+    } else if ( strncmp(buffer, "offset", equals) == 0 ) {
+        song->time_offset = strtod(value, NULL);
+        free(value);
+    } else if ( strncmp(buffer, "fontOverride", equals) == 0 ) {
+        song->font_override = value;
+    }
+}
+
+static void read_lyrics_opts(etsuko_SongLine_t *line, const char *opts) {
+    const char *comma = strchr(opts, ',');
+    const size_t end = comma == NULL ? strlen(opts) : comma - opts;
+
+    if ( end == 0 )
+        return;
+
+    const char *equals = strchr(opts, '=');
+    if ( equals != NULL ) {
+        if ( strncmp(opts, "alignment", equals - opts) == 0 ) {
+            if ( strncmp(equals + 1, "left", 4) == 0 ) {
+                line->alignment = SONG_LINE_LEFT;
+            } else if ( strncmp(equals + 1, "center", 5) == 0 ) {
+                line->alignment = SONG_LINE_CENTER;
+            } else if ( strncmp(equals + 1, "right", 5) == 0 ) {
+                line->alignment = SONG_LINE_RIGHT;
+            } else {
+                error_abort("Invalid song line opt alignment");
+            }
+        }
+    } // else TODO: Not supported non-key-value options
+
+    if ( comma != NULL ) {
+        read_lyrics_opts(line, comma + 1);
     }
 }
 
@@ -62,27 +96,48 @@ static void read_lyrics(const etsuko_Song_t *song, const char *buffer) {
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         etsuko_SongLine_t *line = song->lyrics_lines->data[i];
         if ( line->full_text == NULL ) {
-            line->full_text = strdup(buffer);
+            const char *hash = strchr(buffer, '#');
+            const size_t end = hash == NULL ? strlen(buffer) : (hash - buffer);
+            line->full_text = strndup(buffer, end);
+            if ( hash != NULL ) {
+                read_lyrics_opts(line, hash + 1);
+            }
             return;
         }
     }
 }
 
-static void read_timings(const etsuko_Song_t *song, const char *buffer, size_t length) {
-    etsuko_SongLine_t *line = calloc(1, sizeof(*line));
-
-    const char *colon = strchr(buffer, ':');
-    char *minutes_str = strndup(buffer, colon - buffer);
+static double convert_timing(const char *str, const size_t len) {
+    const char *colon = strchr(str, ':');
+    char *minutes_str = strndup(str, colon - str);
     const double minutes = strtod(minutes_str, NULL);
     free(minutes_str);
-    const double seconds = strtod(colon + 1, NULL);
+    char *seconds_str = strndup(colon + 1, len - (colon - str));
+    const double seconds = strtod(seconds_str, NULL);
+    free(seconds_str);
 
-    line->base_start_time = minutes * 60.0 + seconds; // - 0.3;
+    return minutes * 60.0 + seconds;
+}
+
+static void read_timings(const etsuko_Song_t *song, const char *buffer) {
+    etsuko_SongLine_t *line = calloc(1, sizeof(*line));
+
+    const char *comma = strchr(buffer, ',');
+    const size_t start_len = comma == NULL ? strlen(buffer) : (comma - buffer);
+
+    line->base_start_time = convert_timing(buffer, start_len);
     if ( song->lyrics_lines->size > 0 ) {
         etsuko_SongLine_t *last_line = song->lyrics_lines->data[song->lyrics_lines->size - 1];
-        last_line->base_duration = line->base_start_time - last_line->base_start_time;
+        if ( last_line->base_duration == 0.0 ) {
+            last_line->base_duration = line->base_start_time - last_line->base_start_time;
+        }
+    }
+    if ( comma != NULL ) {
+        const double end = convert_timing(comma + 1, strlen(comma + 1));
+        line->base_duration = end - line->base_start_time;
     }
 
+    line->alignment = song->line_alignment;
     vec_add(song->lyrics_lines, line);
 }
 
@@ -125,7 +180,7 @@ void song_load(const char *src) {
             read_lyrics(g_song, buffer);
             break;
         case BLOCK_TIMINGS:
-            read_timings(g_song, buffer, len);
+            read_timings(g_song, buffer);
             break;
         }
     }
@@ -176,6 +231,9 @@ void song_destroy(void) {
         }
         if ( g_song->album_art_path != NULL ) {
             free(g_song->album_art_path);
+        }
+        if ( g_song->font_override != NULL ) {
+            free(g_song->font_override);
         }
         // Free the song
         free(g_song);

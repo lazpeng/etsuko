@@ -16,6 +16,8 @@ static etsuko_Load_t g_load_lyrics_font;
 static etsuko_Load_t g_load_audio;
 static etsuko_Load_t g_load_album_art;
 
+static bool g_loaded_override = false;
+
 static uint64_t g_prev_ticks = 0;
 
 static etsuko_Drawable_t *g_version_text = NULL;
@@ -34,48 +36,6 @@ static etsuko_Container_t *g_song_info_container = NULL;
 static etsuko_Container_t *g_song_controls_container = NULL;
 
 static etsuko_LyricsView_t *g_lyrics_view = NULL;
-
-static void update_elapsed_text(void) {
-    const double elapsed = audio_elapsed_time();
-    const int32_t minutes = (int32_t)(elapsed / 60);
-    const int32_t seconds = (int32_t)elapsed % 60;
-
-    char *time_str;
-    asprintf(&time_str, "%.2d:%.2d", minutes, seconds);
-
-    etsuko_Drawable_TextData_t *custom_data = g_elapsed_time_text->custom_data;
-    if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
-        free(custom_data->text);
-        custom_data->text = time_str;
-        renderer_recompute_drawable(g_elapsed_time_text);
-    } else {
-        free(time_str);
-    }
-}
-
-static void update_remaining_text(void) {
-    const double remaining = audio_total_time() - audio_elapsed_time();
-    const int32_t minutes = (int32_t)(remaining / 60);
-    const int32_t seconds = (int32_t)remaining % 60;
-    char *time_str;
-    asprintf(&time_str, "-%.2d:%.2d", minutes, seconds);
-
-    etsuko_Drawable_TextData_t *custom_data = g_remaining_time_text->custom_data;
-    if ( strncmp(time_str, custom_data->text, MAX_TEXT_SIZE) != 0 ) {
-        free(custom_data->text);
-        custom_data->text = time_str;
-        renderer_recompute_drawable(g_remaining_time_text);
-    } else {
-        free(time_str);
-    }
-}
-
-static void update_song_progressbar(void) {
-    if ( g_song_progressbar != NULL ) {
-        const double progress = audio_elapsed_time() / audio_total_time();
-        ((etsuko_Drawable_ProgressBarData_t *)g_song_progressbar->custom_data)->progress = progress;
-    }
-}
 
 int karaoke_load_async(void) {
     etsuko_Config_t *config = config_get();
@@ -113,6 +73,12 @@ int karaoke_load_async(void) {
         return 0;
     }
     // Finish loading the song before we load the rest
+
+    if ( song_get()->font_override != NULL && !g_loaded_override ) {
+        config->lyrics_font = strdup(song_get()->font_override);
+        g_loaded_override = true;
+        repository_get_resource(config->lyrics_font, "files", &g_load_lyrics_font);
+    }
 
     // Song audio file
     if ( g_load_audio.status == LOAD_NOT_STARTED ) {
@@ -152,6 +118,7 @@ void karaoke_init(void) {
     char *window_title;
     asprintf(&window_title, "%s - %s", APP_NAME, song_get()->name);
     renderer_set_window_title(window_title);
+    free(window_title);
 
     const double vertical_padding = 20;
 
@@ -204,7 +171,7 @@ void karaoke_init(void) {
     // Elapsed time
     g_elapsed_time_text = renderer_drawable_make_text(
         &(etsuko_Drawable_TextData_t){
-            .text = strdup("00:00"),
+            .text = "00:00",
             .font_type = FONT_UI,
             .em = 0.8,
             .bold = false,
@@ -292,6 +259,48 @@ void karaoke_init(void) {
     g_pause_button->enabled = false;
 
     g_lyrics_view = renderer_ex_make_lyrics_view(g_right_container, song_get());
+}
+
+static void update_elapsed_text(void) {
+    const double elapsed = audio_elapsed_time();
+    const int32_t minutes = (int32_t)(elapsed / 60);
+    const int32_t seconds = (int32_t)elapsed % 60;
+
+    char *time_str;
+    asprintf(&time_str, "%.2d:%.2d", minutes, seconds);
+
+    etsuko_Drawable_TextData_t *custom_data = g_elapsed_time_text->custom_data;
+    if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
+        free(custom_data->text);
+        custom_data->text = time_str;
+        renderer_recompute_drawable(g_elapsed_time_text);
+    } else {
+        free(time_str);
+    }
+}
+
+static void update_remaining_text(void) {
+    const double remaining = audio_total_time() - audio_elapsed_time();
+    const int32_t minutes = (int32_t)(remaining / 60);
+    const int32_t seconds = (int32_t)remaining % 60;
+    char *time_str;
+    asprintf(&time_str, "-%.2d:%.2d", minutes, seconds);
+
+    etsuko_Drawable_TextData_t *custom_data = g_remaining_time_text->custom_data;
+    if ( strncmp(time_str, custom_data->text, MAX_TEXT_SIZE) != 0 ) {
+        free(custom_data->text);
+        custom_data->text = time_str;
+        renderer_recompute_drawable(g_remaining_time_text);
+    } else {
+        free(time_str);
+    }
+}
+
+static void update_song_progressbar(void) {
+    if ( g_song_progressbar != NULL ) {
+        const double progress = audio_elapsed_time() / audio_total_time();
+        ((etsuko_Drawable_ProgressBarData_t *)g_song_progressbar->custom_data)->progress = progress;
+    }
 }
 
 static void toggle_pause(void) {

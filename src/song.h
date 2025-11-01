@@ -15,17 +15,19 @@ typedef struct etsuko_SongLineTiming_t {
     double start_time, duration;
 } etsuko_SongLineTiming_t;
 
+typedef enum etsuko_Song_LineAlignment_t {
+    SONG_LINE_LEFT = 0,
+    SONG_LINE_CENTER,
+    SONG_LINE_RIGHT
+} etsuko_Song_LineAlignment_t;
+
 typedef struct etsuko_SongLine_t {
     char *full_text;
     double base_start_time, base_duration;
     etsuko_SongLineTiming_t timings[MAX_TIMINGS_PER_LINE];
     int32_t num_timings;
+    etsuko_Song_LineAlignment_t alignment;
 } etsuko_SongLine_t;
-
-typedef enum etsuko_Song_LineAlignment_t {
-    SONG_LINE_CENTER = 0,
-    SONG_LINE_LEFT = 1,
-} etsuko_Song_LineAlignment_t;
 
 typedef struct {
     // Data about the song
@@ -38,6 +40,8 @@ typedef struct {
     char *karaoke, *language, *hidden;
     etsuko_Song_LineAlignment_t line_alignment;
     uint32_t bg_color;
+    double time_offset;
+    char *font_override;
 } etsuko_Song_t;
 
 void song_load(const char *src);
