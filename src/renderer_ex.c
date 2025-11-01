@@ -240,7 +240,7 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
             // Don't do anything, just fade into a low alpha
-            const int32_t alpha = calculate_alpha(LINE_FADE_MAX_DISTANCE);
+            const int32_t alpha = calculate_alpha(LINE_FADE_MAX_DISTANCE - 1);
             renderer_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable
