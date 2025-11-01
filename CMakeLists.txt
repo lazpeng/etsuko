@@ -67,16 +67,12 @@ if(EMSCRIPTEN)
 
     target_link_options(etsuko PRIVATE
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
-            "SHELL:-sASSERTIONS=1"
             "SHELL:-sEXIT_RUNTIME=0"
             "SHELL:-O3"
-            "SHELL:-sASYNCIFY=0"
+            "SHELL:-dead_strip"
+            "SHELL:-sASYNCIFY=1"
             "SHELL:-sFETCH=1"
-            "SHELL:-sNO_DISABLE_EXCEPTION_CATCHING=1"
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
-            "SHELL:-fexceptions"
-            "SHELL:-sASSERTIONS=1"
-            "SHELL:--profiling-funcs"
             "SHELL:--use-preload-plugins"
             # Preload assets directory into virtual FS
             "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
@@ -87,11 +83,9 @@ else()
 
     target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_compile_options(etsuko PRIVATE "-g")
-    target_compile_options(etsuko PRIVATE "-O1")
     target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_link_options(etsuko PRIVATE "-Wl,-dead_strip")
     target_compile_options(etsuko PRIVATE "-g")
-    target_compile_options(etsuko PRIVATE "-O1")
 
     add_custom_command(TARGET etsuko POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
