@@ -120,7 +120,7 @@ void karaoke_init(void) {
     ui_set_window_title(window_title);
     free(window_title);
 
-    const double vertical_padding = 20;
+    const double vertical_padding = 0.01;
 
     // Make the left container
     g_left_container =
@@ -151,7 +151,7 @@ void karaoke_init(void) {
     g_album_image = ui_make_image(
         &(etsuko_Drawable_ImageData_t){
             .file_path = song_get()->album_art_path,
-            .corner_radius = 25,
+            .border_radius_em = 4.0,
         },
         g_left_container,
         &(etsuko_Layout_t){.height = 0.6,
@@ -165,7 +165,7 @@ void karaoke_init(void) {
                                              .relative_to = g_album_image,
                                              .relative_to_size = g_album_image,
                                              .flags = LAYOUT_CENTER_X | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_RELATIVE_TO_Y |
-                                                      LAYOUT_RELATIVE_TO_WIDTH | LAYOUT_PROPORTIONAL_H},
+                                                      LAYOUT_RELATIVE_TO_WIDTH | LAYOUT_PROPORTIONAL_H | LAYOUT_PROPORTIONAL_Y},
                           CONTAINER_NONE);
 
     // Elapsed time
@@ -194,15 +194,16 @@ void karaoke_init(void) {
     g_song_progressbar = ui_make_progressbar(
         &(etsuko_Drawable_ProgressBarData_t){
             .progress = 0,
-            .thickness = 10,
             .fg_color = (etsuko_Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
             .bg_color = (etsuko_Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
         },
         g_song_info_container,
-        &(etsuko_Layout_t){.offset_y = 10,
+        &(etsuko_Layout_t){.offset_y = 0.02,
                            .width = 1.0,
+                           .height = 0.025,
                            .relative_to = g_elapsed_time_text,
-                           .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT});
+                           .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
+                                    LAYOUT_PROPORTIONAL_Y});
 
     // Song name
     g_song_name_text = ui_make_text(
@@ -214,9 +215,10 @@ void karaoke_init(void) {
             .color = {200, 200, 200, 255},
         },
         g_song_info_container,
-        &(etsuko_Layout_t){.offset_y = 20,
+        &(etsuko_Layout_t){.offset_y = 0.05,
                            .relative_to = g_song_progressbar,
-                           .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT});
+                           .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
+                                    LAYOUT_PROPORTIONAL_Y});
 
     // Song artist and album
     char *artist_album_text;
@@ -231,9 +233,10 @@ void karaoke_init(void) {
             .color = {150, 150, 150, 255},
         },
         g_song_info_container,
-        &(etsuko_Layout_t){.offset_y = 10,
+        &(etsuko_Layout_t){.offset_y = 0.01,
                            .relative_to = g_song_name_text,
-                           .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT});
+                           .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
+                                    LAYOUT_PROPORTIONAL_Y});
     free(artist_album_text);
 
     // Song controls container
@@ -241,20 +244,26 @@ void karaoke_init(void) {
         ui_make_container(g_song_info_container,
                           &(etsuko_Layout_t){.width = 1.0,
                                              .height = 0.15,
-                                             .offset_y = vertical_padding,
+                                             .offset_y = 0.07,
                                              .relative_to = g_song_progressbar,
                                              .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
-                                                      LAYOUT_RELATION_Y_INCLUDE_HEIGHT},
+                                                      LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y},
                           CONTAINER_NONE);
 
     // Play and pause buttons
-    g_play_button = ui_make_image(
-        &(etsuko_Drawable_ImageData_t){.file_path = "assets/play.png"}, g_song_controls_container,
-        &(etsuko_Layout_t){.offset_x = 0, .offset_y = 0, .width = 36, .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER});
+    g_play_button =
+        ui_make_image(&(etsuko_Drawable_ImageData_t){.file_path = "assets/play.png"}, g_song_controls_container,
+                      &(etsuko_Layout_t){.offset_x = 0,
+                                         .offset_y = 0,
+                                         .width = 0.05,
+                                         .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
 
-    g_pause_button = ui_make_image(
-        &(etsuko_Drawable_ImageData_t){.file_path = "assets/pause.png"}, g_song_controls_container,
-        &(etsuko_Layout_t){.offset_x = 0, .offset_y = 0, .width = 36, .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER});
+    g_pause_button =
+        ui_make_image(&(etsuko_Drawable_ImageData_t){.file_path = "assets/pause.png"}, g_song_controls_container,
+                      &(etsuko_Layout_t){.offset_x = 0,
+                                         .offset_y = 0,
+                                         .width = 0.01,
+                                         .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
     g_pause_button->enabled = false;
 
     g_lyrics_view = ui_ex_make_lyrics_view(g_right_container, song_get());

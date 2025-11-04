@@ -8,13 +8,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef __EMSCRIPTEN__
-#include <GLES3/gl3.h>
-#endif
-
 typedef struct etsuko_Texture_t {
     unsigned int id;
     int32_t width, height;
+    double border_radius_em;
 } etsuko_Texture_t;
 
 typedef struct etsuko_Color_t {
@@ -55,8 +52,8 @@ int32_t render_measure_pt_from_em(double em);
 
 etsuko_Texture_t *render_make_text(const char *text, int32_t pt_size, bool bold, const etsuko_Color_t *color,
                                    etsuko_FontType_t font_type);
-etsuko_Texture_t *render_make_image(const char *file_path, int corner_radius);
-etsuko_Texture_t *render_make_dummy_image(int corner_radius);
+etsuko_Texture_t *render_make_image(const char *file_path, double border_radius_em);
+etsuko_Texture_t *render_make_dummy_image(double border_radius_em);
 void render_destroy_texture(etsuko_Texture_t *texture);
 const etsuko_RenderTarget_t *render_make_texture_target(int32_t w, int32_t h);
 void render_restore_texture_target(void);

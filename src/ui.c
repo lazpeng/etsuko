@@ -199,10 +199,9 @@ static void position_layout(const etsuko_Layout_t *layout, etsuko_Container_t *p
         x = parent->bounds.w * x;
     } else {
         if ( x < 0 && layout->flags & LAYOUT_WRAP_AROUND_X )
-            x = parent->bounds.w + x - calc_w;
-        else
-            x -= calc_w;
+            x = parent->bounds.w + x;
     }
+    x -= calc_w;
 
     double y = layout->offset_y;
     double calc_h = 0;
@@ -215,10 +214,9 @@ static void position_layout(const etsuko_Layout_t *layout, etsuko_Container_t *p
         y = parent->bounds.h * y;
     } else {
         if ( y < 0 && layout->flags & LAYOUT_WRAP_AROUND_Y )
-            y = parent->bounds.h + y - calc_h;
-        else
-            y -= calc_h;
+            y = parent->bounds.h + y;
     }
+    y -= calc_h;
 
     if ( layout->relative_to != NULL ) {
         if ( layout->relative_to->parent != parent ) {
@@ -425,7 +423,7 @@ static etsuko_Drawable_ImageData_t *dup_image_data(const etsuko_Drawable_ImageDa
         error_abort("Failed to allocate image data");
     }
     result->file_path = strdup(data->file_path);
-    result->corner_radius = data->corner_radius;
+    result->border_radius_em = data->border_radius_em;
     return result;
 }
 
@@ -440,7 +438,6 @@ static etsuko_Drawable_ProgressBarData_t *dup_progressbar_data(const etsuko_Draw
         error_abort("Failed to allocate image data");
     }
     result->progress = data->progress;
-    result->thickness = data->thickness;
     result->fg_color = data->fg_color;
     result->bg_color = data->bg_color;
     return result;
@@ -602,7 +599,7 @@ etsuko_Drawable_t *ui_make_text(etsuko_Drawable_TextData_t *data, etsuko_Contain
 static void internal_make_image(etsuko_Drawable_t *result, etsuko_Drawable_ImageData_t *data, const etsuko_Layout_t *layout) {
     data = dup_image_data(data);
 
-    etsuko_Texture_t *texture = render_make_image(data->file_path, data->corner_radius);
+    etsuko_Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
     result->bounds.w = texture->width;
     result->bounds.h = texture->height;
 
@@ -626,7 +623,6 @@ etsuko_Drawable_t *ui_make_progressbar(const etsuko_Drawable_ProgressBarData_t *
     etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
 
     result->custom_data = dup_progressbar_data(data);
-    result->bounds.h = data->thickness;
     result->layout = *layout;
 
     ui_reposition_drawable(result);

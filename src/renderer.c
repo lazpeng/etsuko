@@ -43,6 +43,7 @@ typedef struct etsuko_Renderer_t {
     GLuint VAO, VBO;
     GLuint texture_shader;
     GLuint rect_shader;
+    GLuint rounded_corners_shader;
     float projection_matrix[16];
 
     // Shader uniform locations
@@ -108,6 +109,44 @@ static const char *rect_fragment_shader =
                                 "    float dist = roundedBoxSDF(pos, rectSize * 0.5, cornerRadius);\n"
                                 "    float alpha = 1.0 - smoothstep(-1.0, 1.0, dist);\n"
                                 "    FragColor = vec4(color.rgb, color.a * alpha);\n"
+                                "}\n";
+
+static const char *rounded_corners_vertex_shader =
+    GLSL_VERSION GLSL_PRECISION "layout(location = 0) in vec2 aPos;\n"
+                                "layout(location = 1) in vec2 aTexCoord;\n"
+                                "out vec2 TexCoord;\n"
+                                "out vec2 FragPos;\n"
+                                "uniform mat4 uProjection;\n"
+                                "uniform vec4 uBounds;\n"
+                                "void main() {\n"
+                                "    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);\n"
+                                "    TexCoord = aTexCoord;\n"
+                                "    FragPos = aTexCoord * uBounds.zw;\n"
+                                "}\n";
+
+static const char *rounded_corners_fragment_shader =
+    GLSL_VERSION GLSL_PRECISION "in vec2 TexCoord;\n"
+                                "in vec2 FragPos;\n"
+                                "out vec4 FragColor;\n"
+                                "uniform sampler2D uTexture;\n"
+                                "uniform float uCornerRadius;\n"
+                                "uniform vec2 uRectSize; // width, height\n"
+                                "uniform int uRounded; // 0 or 1\n"
+                                "void main() {\n"
+                                "    vec4 texColor = texture(uTexture, TexCoord);\n"
+                                "    // Distance from edges\n"
+                                "    vec2 halfSize = uRectSize * 0.5;\n"
+                                "    vec2 pos = FragPos - halfSize;\n"
+                                "    // Distance to nearest corner (only outside the inner rectangle)\n"
+                                "    vec2 cornerDist = max(vec2(0.0), abs(pos) - (halfSize - uCornerRadius));\n"
+                                "    float dist = length(cornerDist);\n"
+                                "    if (dist > uCornerRadius) {\n"
+                                "        discard;\n"
+                                "    }\n"
+                                "    // Optional: smooth edges with anti-aliasing\n"
+                                "    float alpha = 1.0 - smoothstep(uCornerRadius - 1.0, uCornerRadius, dist);\n"
+                                "    texColor.a *= alpha;\n"
+                                "    FragColor = texColor;\n"
                                 "}\n";
 
 // ============================================================================
@@ -306,6 +345,7 @@ void render_init(void) {
     // Compile shaders
     g_renderer->texture_shader = create_shader_program(texture_vertex_shader, texture_fragment_shader);
     g_renderer->rect_shader = create_shader_program(rect_vertex_shader, rect_fragment_shader);
+    g_renderer->rounded_corners_shader = create_shader_program(rounded_corners_vertex_shader, rounded_corners_fragment_shader);
 
     // Get uniform locations for texture shader
     g_renderer->tex_projection_loc = glGetUniformLocation(g_renderer->texture_shader, "projection");
@@ -317,6 +357,8 @@ void render_init(void) {
     g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "rectPos");
     g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "rectSize");
     g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "cornerRadius");
+
+    // Get uniform locations for rounded corners shader
 }
 
 void render_finish(void) {
@@ -592,102 +634,6 @@ etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, cons
     return texture;
 }
 
-static SDL_Surface *round_corners_surface(SDL_Surface *surf, const int radius) {
-    if ( !surf )
-        return NULL;
-
-    SDL_Surface *rounded = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA32, 0);
-    if ( !rounded ) {
-        SDL_Log("ConvertSurfaceFormat failed: %s", SDL_GetError());
-        return NULL;
-    }
-    SDL_LockSurface(rounded);
-
-    Uint32 *pixels = rounded->pixels;
-    const int pitch = rounded->pitch / 4;
-    const int w = rounded->w;
-    const int h = rounded->h;
-
-    // Top-left corner
-    for ( int y = 0; y < radius; y++ ) {
-        for ( int x = 0; x < radius; x++ ) {
-            const double dx = (radius - 0.5) - (x + 0.5);
-            const double dy = (radius - 0.5) - (y + 0.5);
-            const double dist = sqrt(dx * dx + dy * dy);
-
-            long double alpha = 1.0;
-            if ( dist > radius - 1.0 ) {
-                alpha = fmaxl(0.0f, radius - dist);
-            }
-
-            const Uint32 pixel = pixels[y * pitch + x];
-            const Uint32 current_alpha = (pixel >> 24) & 0xFF;
-            const Uint32 new_alpha = (Uint8)(current_alpha * alpha);
-            pixels[y * pitch + x] = (pixel & 0x00FFFFFF) | (new_alpha << 24);
-        }
-    }
-
-    // Top-right corner
-    for ( int y = 0; y < radius; y++ ) {
-        for ( int x = w - radius; x < w; x++ ) {
-            const double dx = (x + 0.5) - (w - radius + 0.5);
-            const double dy = (radius - 0.5) - (y + 0.5);
-            const double dist = sqrt(dx * dx + dy * dy);
-
-            long double alpha = 1.0;
-            if ( dist > radius - 1.0 ) {
-                alpha = fmaxl(0.0, radius - dist);
-            }
-
-            const Uint32 pixel = pixels[y * pitch + x];
-            const Uint32 current_alpha = (pixel >> 24) & 0xFF;
-            const Uint32 new_alpha = (Uint8)(current_alpha * alpha);
-            pixels[y * pitch + x] = (pixel & 0x00FFFFFF) | (new_alpha << 24);
-        }
-    }
-
-    // Bottom-left corner
-    for ( int y = h - radius; y < h; y++ ) {
-        for ( int x = 0; x < radius; x++ ) {
-            const double dx = (radius - 0.5) - (x + 0.5);
-            const double dy = (y + 0.5) - (h - radius + 0.5);
-            const double dist = sqrt(dx * dx + dy * dy);
-
-            long double alpha = 1.0;
-            if ( dist > radius - 1.0 ) {
-                alpha = fmaxl(0.0, radius - dist);
-            }
-
-            const Uint32 pixel = pixels[y * pitch + x];
-            const Uint32 current_alpha = (pixel >> 24) & 0xFF;
-            const Uint32 new_alpha = (Uint8)(current_alpha * alpha);
-            pixels[y * pitch + x] = (pixel & 0x00FFFFFF) | (new_alpha << 24);
-        }
-    }
-
-    // Bottom-right corner
-    for ( int y = h - radius; y < h; y++ ) {
-        for ( int x = w - radius; x < w; x++ ) {
-            const double dx = (x + 0.5) - (w - radius + 0.5);
-            const double dy = (y + 0.5) - (h - radius + 0.5);
-            const double dist = sqrt(dx * dx + dy * dy);
-
-            long double alpha = 1.0;
-            if ( dist > radius - 1.0 ) {
-                alpha = fmaxl(0.0, radius - dist);
-            }
-
-            const Uint32 pixel = pixels[y * pitch + x];
-            const Uint32 current_alpha = (pixel >> 24) & 0xFF;
-            const Uint32 new_alpha = (Uint8)(current_alpha * alpha);
-            pixels[y * pitch + x] = (pixel & 0x00FFFFFF) | (new_alpha << 24);
-        }
-    }
-
-    SDL_UnlockSurface(rounded);
-    return rounded;
-}
-
 static etsuko_Texture_t *create_test_texture(void) {
     const int size = 256;
     unsigned char *pixels = malloc(size * size * 4);
@@ -725,20 +671,11 @@ static etsuko_Texture_t *create_test_texture(void) {
     return texture;
 }
 
-etsuko_Texture_t *render_make_image(const char *file_path, const int corner_radius) {
+etsuko_Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
     SDL_Surface *loaded = IMG_Load(file_path);
     if ( loaded == NULL ) {
         printf("IMG_GetError: %s\n", IMG_GetError());
         error_abort("Failed to load image");
-    }
-
-    if ( corner_radius > 0 ) {
-        SDL_Surface *prev = loaded;
-        loaded = round_corners_surface(loaded, corner_radius);
-        if ( loaded == NULL ) {
-            error_abort("Failed to round corners of image");
-        }
-        SDL_FreeSurface(prev);
     }
 
     SDL_Surface *converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA8888, 0);
@@ -750,21 +687,21 @@ etsuko_Texture_t *render_make_image(const char *file_path, const int corner_radi
     etsuko_Texture_t *final_texture = create_texture_from_surface(converted);
     SDL_FreeSurface(converted);
 
+    if ( border_radius_em > 0 ) {
+        final_texture->border_radius_em = border_radius_em;
+    }
+
     return final_texture;
 }
 
-etsuko_Texture_t *render_make_dummy_image(const int corner_radius) {
-    if ( corner_radius > 0 ) {
-        // TODO: Do with shaders
-        // SDL_Surface *prev = loaded;
-        // loaded = round_corners_surface(loaded, corner_radius);
-        // if ( loaded == NULL ) {
-        //     error_abort("Failed to round corners of image");
-        // }
-        // SDL_FreeSurface(prev);
+etsuko_Texture_t *render_make_dummy_image(const double border_radius_em) {
+    etsuko_Texture_t *texture = create_test_texture();
+
+    if ( border_radius_em > 0 ) {
+        texture->border_radius_em = border_radius_em;
     }
 
-    return create_test_texture();
+    return texture;
 }
 
 void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color) {
@@ -821,6 +758,17 @@ void render_draw_texture(const etsuko_Texture_t *texture, const etsuko_Bounds_t 
 
     glUniform1f(g_renderer->tex_alpha_loc, (float)alpha_mod / 255.0f);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, g_renderer->projection_matrix);
+
+    if ( texture->border_radius_em > 0 ) {
+        const int border_radius = render_measure_pt_from_em(texture->border_radius_em);
+        const GLuint program = g_renderer->rounded_corners_shader;
+        glUseProgram(program);
+
+        glUniform1f(glGetUniformLocation(program, "uCornerRadius"), (float)border_radius);
+        glUniform2f(glGetUniformLocation(program, "uRectSize"), (float)at->w, (float)at->h);
+        glUniform4f(glGetUniformLocation(program, "uBounds"), (float)at->x, (float)at->y, (float)at->w, (float)at->h);
+        glUniformMatrix4fv(glGetUniformLocation(program, "uProjection"), 1, GL_FALSE, g_renderer->projection_matrix);
+    }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 

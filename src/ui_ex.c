@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define LINE_VERTICAL_PADDING (30)
+#define LINE_VERTICAL_PADDING (0.035)
 #define LINE_FADE_MAX_DISTANCE (5)
 #define SCROLL_THRESHOLD (0.05)
 #ifdef __EMSCRIPTEN__
@@ -104,7 +104,7 @@ etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const et
         etsuko_Layout_t layout = {
             .offset_y = LINE_VERTICAL_PADDING,
             .offset_x = offset_x,
-            .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
+            .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
         };
         if ( prev != NULL ) {
             layout.relative_to = prev;

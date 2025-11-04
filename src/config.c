@@ -44,7 +44,7 @@ static etsuko_Config_t *get_default_config(void) {
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
     // config->song_file = strdup("stop crying your heart out.txt");
-    config->song_file = strdup("Sayonara invader.txt");
+    config->song_file = strdup("fukashigi no karte.txt");
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

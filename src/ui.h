@@ -116,12 +116,11 @@ typedef struct etsuko_Drawable_TextData_t {
 
 typedef struct etsuko_Drawable_ImageData_t {
     char *file_path;
-    int32_t corner_radius;
+    double border_radius_em;
 } etsuko_Drawable_ImageData_t;
 
 typedef struct etsuko_Drawable_ProgressBarData_t {
     double progress;
-    double thickness;
     etsuko_Color_t fg_color, bg_color;
 } etsuko_Drawable_ProgressBarData_t;
 
