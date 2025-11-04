@@ -46,8 +46,8 @@ typedef enum etsuko_LayoutFlags_t {
 
 typedef struct etsuko_Layout_t {
     etsuko_LayoutFlags_t flags;
-    float offset_x, offset_y;
-    float width, height;
+    double offset_x, offset_y;
+    double width, height;
     etsuko_Drawable_t *relative_to_size;
     etsuko_Drawable_t *relative_to;
 } etsuko_Layout_t;
@@ -67,8 +67,8 @@ typedef struct etsuko_Container_t {
     etsuko_Layout_t layout;
     bool enabled;
     etsuko_ContainerFlags_t flags;
-    float align_content_offset_y;
-    float viewport_y;
+    double align_content_offset_y;
+    double viewport_y;
 } etsuko_Container_t;
 
 typedef struct etsuko_Drawable_t {
@@ -89,7 +89,7 @@ typedef enum etsuko_AnimationType_t {
 } etsuko_AnimationType_t;
 
 typedef struct etsuko_Animation_t {
-    float duration, elapsed;
+    double duration, elapsed;
     etsuko_AnimationType_t type;
     void *custom_data;
     etsuko_Drawable_t *target;
@@ -103,13 +103,13 @@ typedef struct etsuko_Drawable_TextData_t {
     // Regular options
     char *text;
     etsuko_FontType_t font_type;
-    float em;
+    double em;
     etsuko_Color_t color;
     bool bold;
     // Wrap options
     int wrap_enabled;
-    float wrap_width_threshold;
-    float measure_at_em;
+    double wrap_width_threshold;
+    double measure_at_em;
     int32_t line_padding;
     etsuko_DrawableAlignment_t alignment;
 } etsuko_Drawable_TextData_t;
@@ -120,27 +120,27 @@ typedef struct etsuko_Drawable_ImageData_t {
 } etsuko_Drawable_ImageData_t;
 
 typedef struct etsuko_Drawable_ProgressBarData_t {
-    float progress;
-    float thickness;
+    double progress;
+    double thickness;
     etsuko_Color_t fg_color, bg_color;
 } etsuko_Drawable_ProgressBarData_t;
 
 typedef struct etsuko_Animation_EaseTranslationData_t {
-    float from_x, from_y;
-    float to_x, to_y;
-    float duration;
+    double from_x, from_y;
+    double to_x, to_y;
+    double duration;
     bool ease;
 } etsuko_Animation_EaseTranslationData_t;
 
 typedef struct etsuko_Animation_FadeInOutData_t {
     int32_t from_alpha, to_alpha;
-    float duration;
+    double duration;
 } etsuko_Animation_FadeInOutData_t;
 
 // Init and lifetime functions
 int ui_init(void);
 void ui_finish(void);
-void ui_begin_loop(float delta_time);
+void ui_begin_loop(double delta_time);
 void ui_end_loop(void);
 void ui_load_font(etsuko_FontType_t type, const char *path);
 void ui_draw(void);
@@ -149,8 +149,8 @@ void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
 void ui_on_window_changed(void);
 etsuko_Container_t *ui_root_container(void);
-void ui_get_drawable_canon_pos(const etsuko_Drawable_t *drawable, float *x, float *y);
-void ui_get_container_canon_pos(const etsuko_Container_t *container, float *x, float *y);
+void ui_get_drawable_canon_pos(const etsuko_Drawable_t *drawable, double *x, double *y);
+void ui_get_container_canon_pos(const etsuko_Container_t *container, double *x, double *y);
 // Drawables
 etsuko_Drawable_t *ui_make_text(etsuko_Drawable_TextData_t *data, etsuko_Container_t *container,
                                                const etsuko_Layout_t *layout);

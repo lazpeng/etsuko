@@ -17,7 +17,8 @@ typedef struct etsuko_Renderer_t {
     double h_dpi, v_dpi;
     etsuko_Color_t bg_color;
     etsuko_Color_t draw_color;
-    etsuko_Texture_t root_texture;
+    etsuko_RenderTarget_t *render_target;
+    etsuko_BlendMode_t blend_mode;
 } etsuko_Renderer_t;
 
 static etsuko_Renderer_t *g_renderer = NULL;
@@ -99,7 +100,8 @@ void render_on_window_changed(void) {
 void render_clear(void) {
     SDL_SetRenderDrawColor(g_renderer->renderer, g_renderer->bg_color.r, g_renderer->bg_color.g, g_renderer->bg_color.b, 255);
     SDL_RenderClear(g_renderer->renderer);
-    SDL_SetRenderDrawColor(g_renderer->renderer, g_renderer->draw_color.r, g_renderer->draw_color.g, g_renderer->draw_color.b, 255);
+    SDL_SetRenderDrawColor(g_renderer->renderer, g_renderer->draw_color.r, g_renderer->draw_color.g, g_renderer->draw_color.b,
+                           255);
 }
 
 void render_present(void) { SDL_RenderPresent(g_renderer->renderer); }
@@ -138,7 +140,7 @@ void render_measure_text_size(const char *text, const int32_t pt, int32_t *w, in
     }
 }
 
-int32_t render_measure_pt_from_em(const float em) {
+int32_t render_measure_pt_from_em(const double em) {
     const double scale = g_renderer->viewport.w / DEFAULT_WIDTH;
     const double rem = fmax(12.0, round(DEFAULT_PT * scale));
     const double pixels = em * rem;
@@ -146,11 +148,7 @@ int32_t render_measure_pt_from_em(const float em) {
     return pt_size;
 }
 
-etsuko_Texture_t render_make_texture_target(int32_t w, int32_t h) {
-    if ( g_renderer->root_texture != NULL ) {
-        error_abort("Drawing to two textures simultaneously is not supported yet");
-    }
-
+const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const int32_t h) {
     const int format = SDL_PIXELFORMAT_RGBA8888;
     const int access = SDL_TEXTUREACCESS_TARGET;
     SDL_Texture *texture = SDL_CreateTexture(g_renderer->renderer, format, access, w, h);
@@ -159,20 +157,37 @@ etsuko_Texture_t render_make_texture_target(int32_t w, int32_t h) {
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 
-    // Clear texture
-    g_renderer->root_texture = SDL_GetRenderTarget(g_renderer->renderer);
+    etsuko_RenderTarget_t *target = calloc(1, sizeof(*target));
+    if ( target == NULL ) {
+        error_abort("Failed to allocate render target");
+    }
+
+    target->prev_target = g_renderer->render_target;
+    if ( target->prev_target == NULL ) {
+        target->prev_target = calloc(1, sizeof(*target->prev_target));
+        if ( target->prev_target == NULL ) {
+            error_abort("Failed to allocate render target");
+        }
+        target->prev_target->prev_target = NULL;
+        target->prev_target->texture = SDL_GetRenderTarget(g_renderer->renderer);
+    }
+    g_renderer->render_target = target;
 
     SDL_SetRenderDrawColor(g_renderer->renderer, 0, 0, 0, 0);
     SDL_SetRenderTarget(g_renderer->renderer, texture);
     SDL_SetRenderDrawBlendMode(g_renderer->renderer, SDL_BLENDMODE_BLEND);
     SDL_RenderClear(g_renderer->renderer);
 
-    return texture;
+    target->texture = texture;
+    return target;
 }
 
 void render_restore_texture_target(void) {
-    SDL_SetRenderTarget(g_renderer->renderer, g_renderer->root_texture);
-    g_renderer->root_texture = NULL;
+    if ( g_renderer->render_target == NULL ) {
+        error_abort("No render target to restore");
+    }
+    SDL_SetRenderTarget(g_renderer->renderer, g_renderer->render_target->prev_target->texture);
+    g_renderer->render_target = g_renderer->render_target->prev_target;
 }
 
 void render_destroy_texture(etsuko_Texture_t texture) { SDL_DestroyTexture(texture); }
@@ -188,6 +203,9 @@ etsuko_Color_t render_color_parse(const uint32_t color) {
 }
 
 void render_set_bg_color(const etsuko_Color_t color) { g_renderer->bg_color = color; }
+
+void render_set_blend_mode(const etsuko_BlendMode_t mode) { g_renderer->blend_mode = mode; }
+etsuko_BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; }
 
 etsuko_Texture_t render_make_text(const char *text, const int32_t pt_size, const bool bold, const etsuko_Color_t *color,
                                   const etsuko_FontType_t font_type) {
@@ -351,11 +369,13 @@ etsuko_Texture_t render_make_image(const char *file_path, const int corner_radiu
     SDL_QueryTexture(texture, NULL, NULL, &src_w, &src_h);
     const float w = (float)src_w, h = (float)src_h;
 
-    SDL_Texture *final_texture = render_make_texture_target(src_w, src_h);
+    const etsuko_RenderTarget_t *target = render_make_texture_target(src_w, src_h);
 
     const SDL_FRect destination_rect = {.x = 0, .y = 0, .w = w, .h = h};
     SDL_RenderCopyF(g_renderer->renderer, texture, NULL, &destination_rect);
     SDL_DestroyTexture(texture);
+
+    etsuko_Texture_t final_texture = target->texture;
 
     render_restore_texture_target();
 
@@ -366,10 +386,12 @@ void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_
     const double radius = bounds->h / 3.0;
 
     if ( bounds->w > 0 ) {
-        // TODO: Find a way to calculate this number or, even better, not need this at all
+        /* TODO: Find a way to calculate this number or, even better, not need this at all.
+            This is needed because under very small widths, the rounded calculation seems to go wrong.
+            this might not be needed under opengl */
         if ( bounds->w < 7 ) {
             SDL_SetRenderDrawColor(g_renderer->renderer, color->r, color->g, color->b, color->a);
-            const SDL_FRect rect = {.x = bounds->x, .y = bounds->y, .w = bounds->w, .h = bounds->h};
+            const SDL_FRect rect = {.x = (float)bounds->x, .y = (float)bounds->y, .w = (float)bounds->w, .h = (float)bounds->h};
             SDL_RenderFillRectF(g_renderer->renderer, &rect);
             return;
         }
@@ -384,18 +406,7 @@ void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_
 }
 
 void render_draw_texture(etsuko_Texture_t texture, const etsuko_Bounds_t *at, const int32_t alpha_mod) {
-    const SDL_FRect rect = {.x = at->x, .y = at->y, .w = at->w, .h = at->h};
-    if ( rect.y < 0 || rect.y > g_renderer->viewport.h || rect.x < 0 || rect.x > g_renderer->viewport.w ) {
-        return;
-    }
-
-    SDL_SetTextureAlphaMod(texture, alpha_mod);
-    SDL_RenderCopyF(g_renderer->renderer, texture, NULL, &rect);
-}
-
-void render_draw_texture_no_blend(etsuko_Texture_t texture, const etsuko_Bounds_t *at, const int32_t alpha_mod) {
-    const SDL_FRect rect = {.x = at->x, .y = at->y, .w = at->w, .h = at->h};
-    // TODO: We're certainly drawing to a target texture, so check against that instead of against the viewport
+    const SDL_FRect rect = {.x = (float)at->x, .y = (float)at->y, .w = (float)at->w, .h = (float)at->h};
     if ( rect.y < 0 || rect.y > g_renderer->viewport.h || rect.x < 0 || rect.x > g_renderer->viewport.w ) {
         return;
     }
@@ -403,7 +414,19 @@ void render_draw_texture_no_blend(etsuko_Texture_t texture, const etsuko_Bounds_
     SDL_BlendMode blend;
     SDL_GetTextureBlendMode(texture, &blend);
 
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+    SDL_BlendMode mode;
+    switch ( g_renderer->blend_mode ) {
+    case BLEND_MODE_BLEND:
+        mode = SDL_BLENDMODE_BLEND;
+        break;
+    case BLEND_MODE_NONE:
+        mode = SDL_BLENDMODE_NONE;
+        break;
+    default:
+        error_abort("Invalid blend mode");
+    }
+
+    SDL_SetTextureBlendMode(texture, mode);
     SDL_SetTextureAlphaMod(texture, alpha_mod);
     SDL_RenderCopyF(g_renderer->renderer, texture, NULL, &rect);
 

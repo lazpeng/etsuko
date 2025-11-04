@@ -298,7 +298,7 @@ static void update_remaining_text(void) {
 static void update_song_progressbar(void) {
     if ( g_song_progressbar != NULL ) {
         const double progress = audio_elapsed_time() / audio_total_time();
-        ((etsuko_Drawable_ProgressBarData_t *)g_song_progressbar->custom_data)->progress = progress;
+        ((etsuko_Drawable_ProgressBarData_t *)g_song_progressbar->custom_data)->progress = (float)progress;
     }
 }
 
