@@ -304,19 +304,20 @@ static void update_song_progressbar(void) {
 }
 
 static void toggle_pause(void) {
-    const bool paused = audio_is_paused();
-
-    if ( paused ) {
+    if ( audio_is_paused() ) {
         audio_resume();
         g_lyrics_view->container->viewport_y = 0;
     } else
         audio_pause();
-
-    g_play_button->enabled = !paused;
-    g_pause_button->enabled = paused;
 }
 
-static void check_user_input(double delta_time) {
+static void update_play_pause_state(void) {
+    const bool paused = audio_is_paused();
+    g_play_button->enabled = paused;
+    g_pause_button->enabled = !paused;
+}
+
+static void check_user_input(void) {
     if ( events_key_was_pressed(KEY_SPACE) ) {
         toggle_pause();
     }
@@ -367,7 +368,8 @@ static void check_user_input(double delta_time) {
         renderer_drawable_get_canonical_pos(g_song_artist_album_text, NULL, &can_y);
         const double end_x = begin_x + g_song_info_container->bounds.w, end_y = can_y + g_song_artist_album_text->bounds.h;
 
-        const bool inside_area = mouse_x >= begin_x && mouse_x <= end_x && mouse_y >= begin_y && mouse_y <= end_y;
+        const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
+        const bool inside_area = is_not_played || (mouse_x >= begin_x && mouse_x <= end_x && mouse_y >= begin_y && mouse_y <= end_y);
 
         g_song_name_text->enabled = g_song_artist_album_text->enabled = !inside_area;
         g_song_controls_container->enabled = inside_area;
@@ -393,6 +395,7 @@ int karaoke_loop(void) {
     events_loop();
     if ( events_has_quit() )
         return -1;
+    audio_loop();
 
     if ( events_window_changed() ) {
         // Recalculate everything
@@ -400,12 +403,13 @@ int karaoke_loop(void) {
     }
 
     // Check for user inputs
-    check_user_input(delta);
+    check_user_input();
 
     // Recalculate dynamic elements
     update_elapsed_text();
     update_remaining_text();
     update_song_progressbar();
+    update_play_pause_state();
     // Update the lyrics view
     renderer_ex_lyrics_view_loop(g_lyrics_view);
 
