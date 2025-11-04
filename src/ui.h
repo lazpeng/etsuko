@@ -73,7 +73,7 @@ typedef struct etsuko_Container_t {
 
 typedef struct etsuko_Drawable_t {
     etsuko_DrawableType_t type;
-    etsuko_Texture_t texture;
+    etsuko_Texture_t *texture;
     etsuko_Bounds_t bounds;
     void *custom_data;
     etsuko_Container_t *parent;

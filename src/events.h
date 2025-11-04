@@ -27,5 +27,7 @@ bool events_get_mouse_click(int32_t *x, int32_t *y);
 bool events_mouse_was_clicked_inside_area(int32_t x, int32_t y, int32_t w, int32_t h);
 double events_get_mouse_scrolled(void);
 bool events_key_was_pressed(etsuko_Key_t key);
+// Config
+void events_set_window_pixel_scale(double scale);
 
 #endif // ETSUKO_EVENTS_H

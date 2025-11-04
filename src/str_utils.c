@@ -7,9 +7,9 @@
 #define MAX_STRLEN (1024)
 
 int32_t str_find(const char *src, const char c, const int32_t start, int32_t max_len) {
-    const uint64_t size = strnlen(src, MAX_STRLEN);
+    const int32_t size = (int32_t)strnlen(src, MAX_STRLEN);
     if ( max_len < 0 )
-        max_len = (int32_t)size;
+        max_len = size;
 
     if ( start >= size )
         return -1;
@@ -45,7 +45,7 @@ char *str_get_filename_no_ext(const char *path) {
 }
 
 void str_replace_char(char *str, const char old_c, const char new_c) {
-    for ( int32_t i = 0; i < strnlen(str, MAX_STRLEN); i++ ) {
+    for ( size_t i = 0; i < strnlen(str, MAX_STRLEN); i++ ) {
         if ( str[i] == old_c )
             str[i] = new_c;
     }

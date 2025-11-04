@@ -11,6 +11,7 @@ static int32_t g_mouse_x, g_mouse_y;
 static bool g_mouse_clicked = false;
 static int32_t g_mouse_click_x, g_mouse_click_y;
 static Vector_t *g_key_presses;
+static double g_window_pixel_scale = 1.0;
 
 static void clear_key_presses(void) {
     // Remove one by one from right to left
@@ -69,13 +70,13 @@ void events_loop(void) {
             }
             break;
         case SDL_MOUSEBUTTONDOWN:
-            g_mouse_click_x = event.button.x;
-            g_mouse_click_y = event.button.y;
+            g_mouse_click_x = (int32_t)(event.button.x * g_window_pixel_scale);
+            g_mouse_click_y = (int32_t)(event.button.y * g_window_pixel_scale);
             g_mouse_clicked = true;
             break;
         case SDL_MOUSEMOTION:
-            g_mouse_x = event.motion.x;
-            g_mouse_y = event.motion.y;
+            g_mouse_x = (int32_t)(event.motion.x * g_window_pixel_scale);
+            g_mouse_y = (int32_t)(event.motion.y * g_window_pixel_scale);
             break;
         case SDL_MOUSEWHEEL:
             g_mouse_scroll += event.wheel.y;
@@ -117,7 +118,7 @@ bool events_get_mouse_click(int32_t *x, int32_t *y) {
 double events_get_mouse_scrolled(void) { return g_mouse_scroll; }
 
 bool events_key_was_pressed(const etsuko_Key_t key) {
-    for ( int i = 0; i < g_key_presses->size; i++ ) {
+    for ( size_t i = 0; i < g_key_presses->size; i++ ) {
         if ( *(etsuko_Key_t *)g_key_presses->data[i] == key ) {
             return true;
         }
@@ -128,3 +129,7 @@ bool events_key_was_pressed(const etsuko_Key_t key) {
 bool events_has_quit(void) { return g_quit; }
 
 bool events_window_changed(void) { return g_window_resized; }
+
+void events_set_window_pixel_scale(const double scale) {
+    g_window_pixel_scale = scale;
+}

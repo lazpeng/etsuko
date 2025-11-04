@@ -513,32 +513,30 @@ static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko
 
 static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_Drawable_TextData_t *data,
                                              const etsuko_Container_t *container, const etsuko_Layout_t *layout) {
-    SDL_Texture *final_texture = NULL;
+    etsuko_Texture_t *final_texture = NULL;
 
     data = dup_text_data(data);
     const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
-    if ( data->wrap_enabled && measure_text_wrap_stop(data, container, 0) < text_size ) {
-        int32_t start = 0;
+    if ( data->wrap_enabled && measure_text_wrap_stop(data, container, 0) < (int32_t)text_size ) {
+        size_t start = 0;
 
         Vector_t *textures_vec = vec_init();
         int32_t max_w = 0, total_h = 0;
 
         do {
-            const int32_t end = measure_text_wrap_stop(data, container, start);
+            const size_t end = measure_text_wrap_stop(data, container, (int32_t)start);
             char *line_str = strndup(data->text + start, end - start);
             const int pt_size = render_measure_pt_from_em(data->em);
-            SDL_Texture *texture = render_make_text(line_str, pt_size, data->bold, &data->color, data->font_type);
+            etsuko_Texture_t *texture = render_make_text(line_str, pt_size, data->bold, &data->color, data->font_type);
             free(line_str);
 
             vec_add(textures_vec, texture);
 
-            int32_t w, h;
-            render_measure_texture(texture, &w, &h);
-            max_w = MAX(max_w, w);
+            max_w = MAX(max_w, texture->width);
             if ( total_h != 0 ) {
                 total_h += data->line_padding;
             }
-            total_h += h;
+            total_h += texture->height;
 
             start = end + 1;
         } while ( start < text_size - 1 );
@@ -546,22 +544,23 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
         const etsuko_RenderTarget_t *target = render_make_texture_target(max_w, total_h);
         final_texture = target->texture;
 
-        double x, y = 0;
-        for ( int32_t i = 0; i < textures_vec->size; i++ ) {
-            SDL_Texture *texture = textures_vec->data[i];
-            int32_t w, h;
-            render_measure_texture(texture, &w, &h);
+        double x, y = total_h;
+        for ( size_t i = 0; i < textures_vec->size; i++ ) {
+            etsuko_Texture_t *texture = textures_vec->data[i];
+            //int32_t w, h;
+            //render_measure_texture(texture, &w, &h);
             if ( data->alignment == ALIGN_LEFT ) {
                 x = 0;
             } else if ( data->alignment == ALIGN_RIGHT ) {
-                x = max_w - w;
+                x = max_w - texture->width;
             } else if ( data->alignment == ALIGN_CENTER ) {
-                x = max_w / 2.0 - w / 2.0;
+                x = max_w / 2.0 - texture->width / 2.0;
             } else {
                 error_abort("Invalid alignment mode");
             }
 
-            etsuko_Bounds_t destination = {.x = x, .y = y, .w = (float)w, .h = (float)h};
+            y -= texture->height - data->line_padding;
+            etsuko_Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
             // Disable blend on the texture so it doesn't lose alpha from blending multiple times
             // when rendering onto a target texture
             const etsuko_BlendMode_t blend_mode = render_get_blend_mode();
@@ -570,8 +569,6 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
             render_set_blend_mode(blend_mode);
 
             render_destroy_texture(texture);
-
-            y += h + data->line_padding;
         }
 
         vec_destroy(textures_vec);
@@ -585,10 +582,8 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
         error_abort("Failed to allocate drawable");
     }
 
-    int32_t final_w, final_h;
-    render_measure_texture(final_texture, &final_w, &final_h);
-
-    result->bounds = (etsuko_Bounds_t){.x = result->bounds.x, .y = result->bounds.y, .w = final_w, .h = final_h};
+    const double width = final_texture->width, height = final_texture->height;
+    result->bounds = (etsuko_Bounds_t){.x = result->bounds.x, .y = result->bounds.y, .w = width, .h = height};
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
@@ -607,14 +602,12 @@ etsuko_Drawable_t *ui_make_text(etsuko_Drawable_TextData_t *data, etsuko_Contain
 static void internal_make_image(etsuko_Drawable_t *result, etsuko_Drawable_ImageData_t *data, const etsuko_Layout_t *layout) {
     data = dup_image_data(data);
 
-    etsuko_Texture_t final_texture = render_make_image(data->file_path, data->corner_radius);
-    int32_t w, h;
-    render_measure_texture(final_texture, &w, &h);
-    result->bounds.w = w;
-    result->bounds.h = h;
+    etsuko_Texture_t *texture = render_make_image(data->file_path, data->corner_radius);
+    result->bounds.w = texture->width;
+    result->bounds.h = texture->height;
 
     result->custom_data = data;
-    result->texture = final_texture;
+    result->texture = texture;
     result->layout = *layout;
 
     ui_reposition_drawable(result);
@@ -642,7 +635,9 @@ etsuko_Drawable_t *ui_make_progressbar(const etsuko_Drawable_ProgressBarData_t *
 }
 
 void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
-    render_destroy_texture(drawable->texture);
+    if ( drawable->texture != NULL ) {
+        render_destroy_texture(drawable->texture);
+    }
     if ( drawable->custom_data != NULL ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
             etsuko_Drawable_TextData_t *text_data = drawable->custom_data;
@@ -686,12 +681,12 @@ etsuko_Container_t *ui_make_container(etsuko_Container_t *parent, const etsuko_L
 }
 
 void ui_destroy_container(etsuko_Container_t *container) {
-    for ( int i = 0; i < container->child_drawables->size; i++ ) {
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         ui_destroy_drawable(container->child_drawables->data[i]);
     }
     vec_destroy(container->child_drawables);
 
-    for ( int i = 0; i < container->child_containers->size; i++ ) {
+    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         ui_destroy_container(container->child_containers->data[i]);
     }
     vec_destroy(container->child_containers);
@@ -777,11 +772,11 @@ void ui_recompute_container(etsuko_Container_t *container) {
         position_layout(&container->layout, container->parent, &container->bounds);
     }
 
-    for ( int32_t i = 0; i < container->child_drawables->size; i++ ) {
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         ui_recompute_drawable(container->child_drawables->data[i]);
     }
 
-    for ( int32_t i = 0; i < container->child_containers->size; i++ ) {
+    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         if ( container->child_containers->data[i] != NULL ) {
             ui_recompute_container(container->child_containers->data[i]);
         }

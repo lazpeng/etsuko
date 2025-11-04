@@ -57,8 +57,8 @@ target_link_libraries(etsuko
         PRIVATE
         $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>)
 
-find_package(sdl2-gfx CONFIG REQUIRED)
-target_link_libraries(etsuko PRIVATE SDL2::SDL2_gfx)
+find_package(OpenGL REQUIRED)
+target_link_libraries(etsuko PRIVATE OpenGL::GL)
 
 target_compile_features(etsuko PRIVATE c_std_17)
 
@@ -74,6 +74,8 @@ if(EMSCRIPTEN)
             "SHELL:-dead_strip"
             "SHELL:-sASYNCIFY=1"
             "SHELL:-sFETCH=1"
+            "SHELL:-sMIN_WEBGL_VERSION=2"
+            "SHELL:-sMAX_WEBGL_VERSION=2"
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
             "SHELL:--use-preload-plugins"
             # Preload assets directory into virtual FS
@@ -82,6 +84,9 @@ if(EMSCRIPTEN)
 
 else()
     message(STATUS "Configuring regular desktop build")
+
+    find_package(GLEW REQUIRED)
+    target_link_libraries(etsuko PRIVATE GLEW::GLEW)
 
     target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_compile_options(etsuko PRIVATE "-g")
@@ -99,5 +104,19 @@ else()
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/assets_dbg
             $<TARGET_FILE_DIR:etsuko>/assets
+    )
+endif()
+
+target_include_directories(etsuko PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${SDL2_INCLUDE_DIRS}
+)
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(etsuko PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wno-unused-parameter
     )
 endif()
