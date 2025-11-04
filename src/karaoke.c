@@ -3,10 +3,10 @@
 #include "config.h"
 #include "error.h"
 #include "events.h"
-#include "renderer.h"
-#include "renderer_ex.h"
 #include "repository.h"
 #include "song.h"
+#include "ui.h"
+#include "ui_ex.h"
 #include <SDL2/SDL.h>
 #include <stdlib.h>
 
@@ -106,29 +106,29 @@ int karaoke_load_async(void) {
 
 void karaoke_init(void) {
     events_init();
-    renderer_init();
+    ui_init();
     audio_init();
 
     audio_load(song_get()->file_path);
 
-    renderer_load_font(FONT_UI, config_get()->ui_font);
-    renderer_load_font(FONT_LYRICS, config_get()->lyrics_font);
-    renderer_set_bg_color(song_get()->bg_color);
+    ui_load_font(FONT_UI, config_get()->ui_font);
+    ui_load_font(FONT_LYRICS, config_get()->lyrics_font);
+    ui_set_bg_color(song_get()->bg_color);
 
     char *window_title;
     asprintf(&window_title, "%s - %s", APP_NAME, song_get()->name);
-    renderer_set_window_title(window_title);
+    ui_set_window_title(window_title);
     free(window_title);
 
     const double vertical_padding = 20;
 
     // Make the left container
-    g_left_container = renderer_container_make(renderer_root_container(),
+    g_left_container = ui_make_container(ui_root_container(),
                                                &(etsuko_Layout_t){.width = 0.5, .height = 1.0, .flags = LAYOUT_PROPORTIONAL_SIZE},
                                                CONTAINER_VERTICAL_ALIGN_CONTENT);
 
     // Make the right container
-    g_right_container = renderer_container_make(renderer_root_container(),
+    g_right_container = ui_make_container(ui_root_container(),
                                                 &(etsuko_Layout_t){.width = 0.5,
                                                                    .height = 0.7,
                                                                    .offset_x = 0.5,
@@ -137,7 +137,7 @@ void karaoke_init(void) {
                                                 CONTAINER_NONE);
 
     // Version string
-    g_version_text = renderer_drawable_make_text(
+    g_version_text = ui_make_text(
         &(etsuko_Drawable_TextData_t){
             .text = "etsuko v" VERSION,
             .font_type = FONT_UI,
@@ -145,10 +145,10 @@ void karaoke_init(void) {
             .bold = false,
             .color = {255, 255, 255, 128},
         },
-        renderer_root_container(), &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
+        ui_root_container(), &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
 
     // Album art
-    g_album_image = renderer_drawable_make_image(
+    g_album_image = ui_make_image(
         &(etsuko_Drawable_ImageData_t){
             .file_path = song_get()->album_art_path,
             .corner_radius = 25,
@@ -158,7 +158,7 @@ void karaoke_init(void) {
                            .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
 
     // Song info container
-    g_song_info_container = renderer_container_make(
+    g_song_info_container = ui_make_container(
         g_left_container,
         &(etsuko_Layout_t){.height = 0.3,
                            .offset_y = vertical_padding,
@@ -169,7 +169,7 @@ void karaoke_init(void) {
         CONTAINER_NONE);
 
     // Elapsed time
-    g_elapsed_time_text = renderer_drawable_make_text(
+    g_elapsed_time_text = ui_make_text(
         &(etsuko_Drawable_TextData_t){
             .text = "00:00",
             .font_type = FONT_UI,
@@ -180,7 +180,7 @@ void karaoke_init(void) {
         g_song_info_container, &(etsuko_Layout_t){0});
 
     // Remaining time
-    g_remaining_time_text = renderer_drawable_make_text(
+    g_remaining_time_text = ui_make_text(
         &(etsuko_Drawable_TextData_t){
             .text = "-00:00",
             .font_type = FONT_UI,
@@ -191,8 +191,7 @@ void karaoke_init(void) {
         g_song_info_container, &(etsuko_Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
 
     // Progress bar
-    // TODO: Not recomputing correctly on y axis after screen resize
-    g_song_progressbar = renderer_drawable_make_progressbar(
+    g_song_progressbar = ui_make_progressbar(
         &(etsuko_Drawable_ProgressBarData_t){
             .progress = 0,
             .thickness = 10,
@@ -206,7 +205,7 @@ void karaoke_init(void) {
                            .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT});
 
     // Song name
-    g_song_name_text = renderer_drawable_make_text(
+    g_song_name_text = ui_make_text(
         &(etsuko_Drawable_TextData_t){
             .text = song_get()->name,
             .font_type = FONT_UI,
@@ -223,7 +222,7 @@ void karaoke_init(void) {
     char *artist_album_text;
     asprintf(&artist_album_text, "%s - %s", song_get()->artist, song_get()->album);
 
-    g_song_artist_album_text = renderer_drawable_make_text(
+    g_song_artist_album_text = ui_make_text(
         &(etsuko_Drawable_TextData_t){
             .text = artist_album_text,
             .font_type = FONT_UI,
@@ -239,7 +238,7 @@ void karaoke_init(void) {
 
     // Song controls container
     g_song_controls_container =
-        renderer_container_make(g_song_info_container,
+        ui_make_container(g_song_info_container,
                                 &(etsuko_Layout_t){.width = 1.0,
                                                    .height = 0.15,
                                                    .offset_y = vertical_padding,
@@ -249,16 +248,16 @@ void karaoke_init(void) {
                                 CONTAINER_NONE);
 
     // Play and pause buttons
-    g_play_button = renderer_drawable_make_image(
+    g_play_button = ui_make_image(
         &(etsuko_Drawable_ImageData_t){.file_path = "assets/play.png"}, g_song_controls_container,
         &(etsuko_Layout_t){.offset_x = 0, .offset_y = 0, .width = 36, .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER});
 
-    g_pause_button = renderer_drawable_make_image(
+    g_pause_button = ui_make_image(
         &(etsuko_Drawable_ImageData_t){.file_path = "assets/pause.png"}, g_song_controls_container,
         &(etsuko_Layout_t){.offset_x = 0, .offset_y = 0, .width = 36, .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER});
     g_pause_button->enabled = false;
 
-    g_lyrics_view = renderer_ex_make_lyrics_view(g_right_container, song_get());
+    g_lyrics_view = ui_ex_make_lyrics_view(g_right_container, song_get());
 }
 
 static void update_elapsed_text(void) {
@@ -273,7 +272,7 @@ static void update_elapsed_text(void) {
     if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
         free(custom_data->text);
         custom_data->text = time_str;
-        renderer_recompute_drawable(g_elapsed_time_text);
+        ui_recompute_drawable(g_elapsed_time_text);
     } else {
         free(time_str);
     }
@@ -290,7 +289,7 @@ static void update_remaining_text(void) {
     if ( strncmp(time_str, custom_data->text, MAX_TEXT_SIZE) != 0 ) {
         free(custom_data->text);
         custom_data->text = time_str;
-        renderer_recompute_drawable(g_remaining_time_text);
+        ui_recompute_drawable(g_remaining_time_text);
     } else {
         free(time_str);
     }
@@ -332,7 +331,7 @@ static void check_user_input(void) {
         // Check if the user clicked on the progress bar
         {
             double progress_bar_x, progress_bar_y;
-            renderer_drawable_get_canonical_pos(g_song_progressbar, &progress_bar_x, &progress_bar_y);
+            ui_get_drawable_canon_pos(g_song_progressbar, &progress_bar_x, &progress_bar_y);
 
             const int32_t padding_amount = 10;
             const double base_y = progress_bar_y - padding_amount;
@@ -349,7 +348,7 @@ static void check_user_input(void) {
         // Check if clicked on the play/pause button
         {
             double play_button_x, play_button_y;
-            renderer_drawable_get_canonical_pos(g_play_button, &play_button_x, &play_button_y);
+            ui_get_drawable_canon_pos(g_play_button, &play_button_x, &play_button_y);
             const int32_t width = (int32_t)g_play_button->bounds.w, height = (int32_t)g_play_button->bounds.h;
             if ( events_mouse_was_clicked_inside_area((int32_t)play_button_x, (int32_t)play_button_y, width, height) ) {
                 toggle_pause();
@@ -362,10 +361,10 @@ static void check_user_input(void) {
     {
         // Check if the mouse is inside the song name area
         double can_y;
-        renderer_drawable_get_canonical_pos(g_song_name_text, NULL, &can_y);
+        ui_get_drawable_canon_pos(g_song_name_text, NULL, &can_y);
 
         const double begin_x = g_song_info_container->bounds.x, begin_y = can_y;
-        renderer_drawable_get_canonical_pos(g_song_artist_album_text, NULL, &can_y);
+        ui_get_drawable_canon_pos(g_song_artist_album_text, NULL, &can_y);
         const double end_x = begin_x + g_song_info_container->bounds.w, end_y = can_y + g_song_artist_album_text->bounds.h;
 
         const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
@@ -377,12 +376,12 @@ static void check_user_input(void) {
     {
         // Check if the mouse is inside the lyric container
         double can_x, can_y;
-        renderer_container_get_canonical_pos(g_lyrics_view->container, &can_x, &can_y);
+        ui_get_container_canon_pos(g_lyrics_view->container, &can_x, &can_y);
 
         if ( mouse_x >= can_x && mouse_x <= can_x + g_lyrics_view->container->bounds.w && mouse_y >= can_y &&
              mouse_y <= can_y + g_lyrics_view->container->bounds.h ) {
             const double scrolled = events_get_mouse_scrolled();
-            renderer_ex_lyrics_view_scroll(g_lyrics_view, scrolled);
+            ui_ex_lyrics_view_on_scroll(g_lyrics_view, scrolled);
         }
     }
 }
@@ -399,7 +398,7 @@ int karaoke_loop(void) {
 
     if ( events_window_changed() ) {
         // Recalculate everything
-        renderer_on_window_changed();
+        ui_on_window_changed();
     }
 
     // Check for user inputs
@@ -411,11 +410,11 @@ int karaoke_loop(void) {
     update_song_progressbar();
     update_play_pause_state();
     // Update the lyrics view
-    renderer_ex_lyrics_view_loop(g_lyrics_view);
+    ui_ex_lyrics_view_loop(g_lyrics_view);
 
-    renderer_begin_loop(delta);
-    renderer_draw_all();
-    renderer_end_loop();
+    ui_begin_loop(delta);
+    ui_draw();
+    ui_end_loop();
 
 #ifndef __EMSCRIPTEN__
     const int target = 16;
@@ -428,6 +427,6 @@ int karaoke_loop(void) {
 
 void karaoke_finish(void) {
     events_finish();
-    renderer_finish();
+    ui_finish();
     audio_finish();
 }

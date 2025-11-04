@@ -13,8 +13,8 @@ add_executable(etsuko src/main.c
         src/repository.c
         src/song.h
         src/etsuko.c
-        src/renderer.h
-        src/renderer.c
+        src/ui.h
+        src/ui.c
         src/song.c
         src/str_utils.h
         src/str_utils.c
@@ -28,8 +28,10 @@ add_executable(etsuko src/main.c
         src/audio.c
         src/constants.h
         src/secret.h
-        src/renderer_ex.h
-        src/renderer_ex.c)
+        src/ui_ex.h
+        src/ui_ex.c
+        src/renderer.h
+        src/renderer.c)
 
 target_compile_options(etsuko PRIVATE -Wall -Wpedantic)
 

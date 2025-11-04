@@ -1,4 +1,4 @@
-#include "renderer_ex.h"
+#include "ui_ex.h"
 
 #include "audio.h"
 #include "error.h"
@@ -21,7 +21,7 @@ static bool is_line_intermission(const etsuko_LyricsView_t *view, const size_t i
     return strncmp(line->full_text, "", 1) == 0 && line->base_duration > 1.5;
 }
 
-etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, etsuko_Song_t *song) {
+etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const etsuko_Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is null");
     }
@@ -109,15 +109,15 @@ etsuko_LyricsView_t *renderer_ex_make_lyrics_view(etsuko_Container_t *parent, et
         if ( prev != NULL ) {
             layout.relative_to = prev;
         }
-        prev = renderer_drawable_make_text(&data, parent, &layout);
+        prev = ui_make_text(&data, parent, &layout);
         vec_add(view->line_drawables, prev);
     }
 
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         view->line_states[i] = LINE_INACTIVE;
-        renderer_animate_translation(view->line_drawables->data[i],
+        ui_animate_translation(view->line_drawables->data[i],
                                      &(etsuko_Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
-        renderer_animate_fade(view->line_drawables->data[i], &(etsuko_Animation_FadeInOutData_t){.duration = 1.0});
+        ui_animate_fade(view->line_drawables->data[i], &(etsuko_Animation_FadeInOutData_t){.duration = 1.0});
     }
 
     return view;
@@ -137,7 +137,7 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     const LineState_t new_state = LINE_ACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        renderer_recompute_drawable(drawable);
+        ui_recompute_drawable(drawable);
     }
 
     if ( prev_active >= 0 ) {
@@ -151,7 +151,7 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     }
     drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
-    renderer_reposition_drawable(drawable);
+    ui_reposition_drawable(drawable);
 }
 
 static int32_t calculate_alpha(const int32_t distance) {
@@ -191,15 +191,15 @@ static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, con
         drawable->alpha_mod = alpha;
     } else {
         // Maybe animate if our alpha changed while still being inactive
-        renderer_drawable_set_alpha(drawable, alpha);
+        ui_drawable_set_alpha(drawable, alpha);
     }
 
     const LineState_t new_state = LINE_INACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        renderer_recompute_drawable(drawable);
+        ui_recompute_drawable(drawable);
     } else {
-        renderer_reposition_drawable(drawable);
+        ui_reposition_drawable(drawable);
     }
 }
 
@@ -222,18 +222,18 @@ static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
         data->color = (etsuko_Color_t){.r = 100, .b = 100, .g = 100, .a = 255};
         data->bold = false;
 
-        renderer_recompute_drawable(drawable);
+        ui_recompute_drawable(drawable);
     }
 
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( view->container->viewport_y < -SCROLL_THRESHOLD ) {
-        renderer_drawable_set_alpha(drawable, 0);
+        ui_drawable_set_alpha(drawable, 0);
     } else {
         int32_t distance = abs(view->current_active_index - (int32_t)index);
         if ( is_line_intermission(view, view->current_active_index) ) {
             distance = LINE_FADE_MAX_DISTANCE;
         }
-        renderer_drawable_set_alpha(drawable, calculate_alpha(distance));
+        ui_drawable_set_alpha(drawable, calculate_alpha(distance));
     }
 }
 
@@ -245,7 +245,7 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
         if ( view->line_states[index] == LINE_ACTIVE ) {
             // Don't do anything, just fade into a low alpha
             const int32_t alpha = calculate_alpha(LINE_FADE_MAX_DISTANCE - 1);
-            renderer_drawable_set_alpha(drawable, alpha);
+            ui_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable
             drawable->layout.relative_to = NULL;
@@ -253,7 +253,7 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
             if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
                 drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
             }
-            renderer_reposition_drawable(drawable);
+            ui_reposition_drawable(drawable);
         }
         view->line_states[index] = new_state;
     }
@@ -278,12 +278,12 @@ static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t 
 
     etsuko_Drawable_t *drawable = view->line_drawables->data[idx];
     drawable->layout.relative_to = stack_hidden_line_recursive(view, idx + 1);
-    renderer_reposition_drawable(drawable);
+    ui_reposition_drawable(drawable);
 
     return drawable;
 }
 
-void renderer_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
+void ui_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is null");
     }
@@ -354,7 +354,7 @@ static double get_visible_height(const etsuko_LyricsView_t *view) {
     return -height + view->container->bounds.h * 0.5;
 }
 
-void renderer_ex_lyrics_view_scroll(const etsuko_LyricsView_t *view, const double delta_y) {
+void ui_ex_lyrics_view_on_scroll(const etsuko_LyricsView_t *view, const double delta_y) {
     if ( fabs(delta_y) < SCROLL_THRESHOLD )
         return;
 
@@ -365,7 +365,7 @@ void renderer_ex_lyrics_view_scroll(const etsuko_LyricsView_t *view, const doubl
     view->container->viewport_y = new_viewport_y;
 }
 
-void renderer_ex_lyrics_view_destroy(etsuko_LyricsView_t *view) {
+void ui_ex_destroy_lyrics_view(etsuko_LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("destroy: lyrics_view is null");
     }
