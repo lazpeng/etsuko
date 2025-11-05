@@ -6,6 +6,7 @@
 
 #include "constants.h"
 #include "container_utils.h"
+#include "contrib/incbin.h"
 #include "error.h"
 
 #include <SDL2/SDL.h>
@@ -26,6 +27,8 @@
 #define GLSL_PRECISION ""
 #endif
 
+#define MAX_SHADER_SIZE (1 * 1024 * 1024)
+
 typedef struct etsuko_Renderer_t {
     SDL_Window *window;
     SDL_GLContext gl_context;
@@ -43,12 +46,14 @@ typedef struct etsuko_Renderer_t {
     GLuint VAO, VBO;
     GLuint texture_shader;
     GLuint rect_shader;
-    GLuint rounded_corners_shader;
     float projection_matrix[16];
 
     // Shader uniform locations
     GLint tex_projection_loc;
     GLint tex_alpha_loc;
+    GLint tex_bounds_loc;
+    GLint tex_border_radius_loc;
+    GLint tex_rect_size_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -62,92 +67,11 @@ static etsuko_Renderer_t *g_renderer = NULL;
 // SHADERS
 // ============================================================================
 
-static const char *texture_vertex_shader =
-    GLSL_VERSION GLSL_PRECISION "layout (location = 0) in vec2 position;\n"
-                                "layout (location = 1) in vec2 texCoord;\n"
-                                "out vec2 TexCoord;\n"
-                                "uniform mat4 projection;\n"
-                                "void main() {\n"
-                                "    gl_Position = projection * vec4(position, 0.0, 1.0);\n"
-                                "    TexCoord = texCoord;\n"
-                                "}\n";
+INCBIN(texture_vertex_shader, "shaders/texture.vert.glsl")
+INCBIN(texture_fragment_shader, "shaders/texture.frag.glsl")
 
-static const char *texture_fragment_shader =
-    GLSL_VERSION GLSL_PRECISION "in vec2 TexCoord;\n"
-                                "out vec4 FragColor;\n"
-                                "uniform sampler2D tex;\n"
-                                "uniform float alpha;\n"
-                                "void main() {\n"
-                                "    vec4 texColor = texture(tex, TexCoord);\n"
-                                "    FragColor = vec4(texColor.rgb, texColor.a * alpha);\n"
-                                "}\n";
-
-static const char *rect_vertex_shader = GLSL_VERSION GLSL_PRECISION "layout (location = 0) in vec2 position;\n"
-                                                                    "layout (location = 1) in vec2 texCoord;\n"
-                                                                    "out vec2 FragPos;\n"
-                                                                    "uniform mat4 projection;\n"
-                                                                    "void main() {\n"
-                                                                    "    gl_Position = projection * vec4(position, 0.0, 1.0);\n"
-                                                                    "    FragPos = position;\n"
-                                                                    "}\n";
-
-static const char *rect_fragment_shader =
-    GLSL_VERSION GLSL_PRECISION "in vec2 FragPos;\n"
-                                "out vec4 FragColor;\n"
-                                "uniform vec4 color;\n"
-                                "uniform vec2 rectPos;\n"
-                                "uniform vec2 rectSize;\n"
-                                "uniform float cornerRadius;\n"
-                                "\n"
-                                "float roundedBoxSDF(vec2 centerPos, vec2 size, float radius) {\n"
-                                "    return length(max(abs(centerPos) - size + radius, 0.0)) - radius;\n"
-                                "}\n"
-                                "\n"
-                                "void main() {\n"
-                                "    vec2 center = rectPos + rectSize * 0.5;\n"
-                                "    vec2 pos = FragPos - center;\n"
-                                "    float dist = roundedBoxSDF(pos, rectSize * 0.5, cornerRadius);\n"
-                                "    float alpha = 1.0 - smoothstep(-1.0, 1.0, dist);\n"
-                                "    FragColor = vec4(color.rgb, color.a * alpha);\n"
-                                "}\n";
-
-static const char *rounded_corners_vertex_shader =
-    GLSL_VERSION GLSL_PRECISION "layout(location = 0) in vec2 aPos;\n"
-                                "layout(location = 1) in vec2 aTexCoord;\n"
-                                "out vec2 TexCoord;\n"
-                                "out vec2 FragPos;\n"
-                                "uniform mat4 uProjection;\n"
-                                "uniform vec4 uBounds;\n"
-                                "void main() {\n"
-                                "    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);\n"
-                                "    TexCoord = aTexCoord;\n"
-                                "    FragPos = aTexCoord * uBounds.zw;\n"
-                                "}\n";
-
-static const char *rounded_corners_fragment_shader =
-    GLSL_VERSION GLSL_PRECISION "in vec2 TexCoord;\n"
-                                "in vec2 FragPos;\n"
-                                "out vec4 FragColor;\n"
-                                "uniform sampler2D uTexture;\n"
-                                "uniform float uCornerRadius;\n"
-                                "uniform vec2 uRectSize; // width, height\n"
-                                "uniform int uRounded; // 0 or 1\n"
-                                "void main() {\n"
-                                "    vec4 texColor = texture(uTexture, TexCoord);\n"
-                                "    // Distance from edges\n"
-                                "    vec2 halfSize = uRectSize * 0.5;\n"
-                                "    vec2 pos = FragPos - halfSize;\n"
-                                "    // Distance to nearest corner (only outside the inner rectangle)\n"
-                                "    vec2 cornerDist = max(vec2(0.0), abs(pos) - (halfSize - uCornerRadius));\n"
-                                "    float dist = length(cornerDist);\n"
-                                "    if (dist > uCornerRadius) {\n"
-                                "        discard;\n"
-                                "    }\n"
-                                "    // Optional: smooth edges with anti-aliasing\n"
-                                "    float alpha = 1.0 - smoothstep(uCornerRadius - 1.0, uCornerRadius, dist);\n"
-                                "    texColor.a *= alpha;\n"
-                                "    FragColor = texColor;\n"
-                                "}\n";
+INCBIN(rect_vertex_shader, "shaders/rect.vert.glsl")
+INCBIN(rect_fragment_shader, "shaders/rect.frag.glsl")
 
 // ============================================================================
 // SHADER HELPERS
@@ -170,9 +94,25 @@ static GLuint compile_shader(const GLenum type, const char *source) {
     return shader;
 }
 
-static GLuint create_shader_program(const char *vert_src, const char *frag_src) {
-    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, vert_src);
-    const GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, frag_src);
+static char *begin_shader_compilation(void) {
+    char *buffer = calloc(1, MAX_SHADER_SIZE);
+    if ( buffer == NULL ) {
+        error_abort("Failed to allocate shader compilation buffer");
+    }
+    return buffer;
+}
+
+static const char *process_shader_file(char *buffer, const char *contents) {
+    buffer[0] = 0;
+    snprintf(buffer, MAX_SHADER_SIZE, "%s\n%s\n%s", GLSL_VERSION, GLSL_PRECISION, contents);
+    return buffer;
+}
+
+static void end_shader_compilation(char *buff) { free(buff); }
+
+static GLuint create_shader_program(char *buffer, const char *vert_src, const char *frag_src) {
+    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, process_shader_file(buffer, vert_src));
+    const GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, process_shader_file(buffer, frag_src));
 
     const GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
@@ -343,13 +283,17 @@ void render_init(void) {
     glBindVertexArray(0);
 
     // Compile shaders
-    g_renderer->texture_shader = create_shader_program(texture_vertex_shader, texture_fragment_shader);
-    g_renderer->rect_shader = create_shader_program(rect_vertex_shader, rect_fragment_shader);
-    g_renderer->rounded_corners_shader = create_shader_program(rounded_corners_vertex_shader, rounded_corners_fragment_shader);
+    char *buffer = begin_shader_compilation();
+    g_renderer->texture_shader = create_shader_program(buffer, incbin_texture_vertex_shader, incbin_texture_fragment_shader);
+    g_renderer->rect_shader = create_shader_program(buffer, incbin_rect_vertex_shader, incbin_rect_fragment_shader);
+    end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
     g_renderer->tex_projection_loc = glGetUniformLocation(g_renderer->texture_shader, "projection");
     g_renderer->tex_alpha_loc = glGetUniformLocation(g_renderer->texture_shader, "alpha");
+    g_renderer->tex_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "bounds");
+    g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
+    g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
@@ -357,8 +301,6 @@ void render_init(void) {
     g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "rectPos");
     g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "rectSize");
     g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "cornerRadius");
-
-    // Get uniform locations for rounded corners shader
 }
 
 void render_finish(void) {
@@ -688,7 +630,7 @@ etsuko_Texture_t *render_make_image(const char *file_path, const double border_r
     SDL_FreeSurface(converted);
 
     if ( border_radius_em > 0 ) {
-        final_texture->border_radius_em = border_radius_em;
+        final_texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
     }
 
     return final_texture;
@@ -698,14 +640,14 @@ etsuko_Texture_t *render_make_dummy_image(const double border_radius_em) {
     etsuko_Texture_t *texture = create_test_texture();
 
     if ( border_radius_em > 0 ) {
-        texture->border_radius_em = border_radius_em;
+        texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
     }
 
     return texture;
 }
 
-void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color) {
-    const double radius = bounds->h / 3.0;
+void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color, const float border_radius) {
+    //const double radius = bounds->h / 3.0;
 
     if ( bounds->w <= 0 ) {
         return;
@@ -717,10 +659,10 @@ void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_
                 (float)color->a / 255.0f);
     glUniform2f(g_renderer->rect_pos_loc, (float)bounds->x, (float)bounds->y);
     glUniform2f(g_renderer->rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->rect_radius_loc, (float)radius);
+    glUniform1f(g_renderer->rect_radius_loc, border_radius);
     glUniformMatrix4fv(g_renderer->rect_projection_loc, 1, GL_FALSE, g_renderer->projection_matrix);
 
-    const float padding = (float)radius;
+    const float padding = border_radius;
     const float vertices[] = {(float)bounds->x - padding,
                               (float)bounds->y - padding,
                               0.0f,
@@ -756,19 +698,11 @@ void render_draw_texture(const etsuko_Texture_t *texture, const etsuko_Bounds_t 
 
     glUseProgram(g_renderer->texture_shader);
 
+    glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
     glUniform1f(g_renderer->tex_alpha_loc, (float)alpha_mod / 255.0f);
+    glUniform2f(g_renderer->tex_rect_size_loc, (float)at->w, (float)at->h);
+    glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, (float)at->w, (float)at->h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, g_renderer->projection_matrix);
-
-    if ( texture->border_radius_em > 0 ) {
-        const int border_radius = render_measure_pt_from_em(texture->border_radius_em);
-        const GLuint program = g_renderer->rounded_corners_shader;
-        glUseProgram(program);
-
-        glUniform1f(glGetUniformLocation(program, "uCornerRadius"), (float)border_radius);
-        glUniform2f(glGetUniformLocation(program, "uRectSize"), (float)at->w, (float)at->h);
-        glUniform4f(glGetUniformLocation(program, "uBounds"), (float)at->x, (float)at->y, (float)at->w, (float)at->h);
-        glUniformMatrix4fv(glGetUniformLocation(program, "uProjection"), 1, GL_FALSE, g_renderer->projection_matrix);
-    }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 

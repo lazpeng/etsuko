@@ -31,7 +31,8 @@ add_executable(etsuko src/main.c
         src/ui_ex.h
         src/ui_ex.c
         src/renderer.h
-        src/renderer.c)
+        src/renderer.c
+        src/contrib/incbin.h)
 
 target_compile_options(etsuko PRIVATE -Wall -Wpedantic)
 

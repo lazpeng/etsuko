@@ -194,6 +194,7 @@ void karaoke_init(void) {
     g_song_progressbar = ui_make_progressbar(
         &(etsuko_Drawable_ProgressBarData_t){
             .progress = 0,
+            .border_radius_em = 0.4,
             .fg_color = (etsuko_Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
             .bg_color = (etsuko_Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
         },

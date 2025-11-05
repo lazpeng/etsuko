@@ -11,7 +11,7 @@
 typedef struct etsuko_Texture_t {
     unsigned int id;
     int32_t width, height;
-    double border_radius_em;
+    float border_radius;
 } etsuko_Texture_t;
 
 typedef struct etsuko_Color_t {
@@ -58,7 +58,7 @@ void render_destroy_texture(etsuko_Texture_t *texture);
 const etsuko_RenderTarget_t *render_make_texture_target(int32_t w, int32_t h);
 void render_restore_texture_target(void);
 
-void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color);
+void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color, float border_radius);
 void render_draw_texture(const etsuko_Texture_t *texture, const etsuko_Bounds_t *at, int32_t alpha_mod);
 
 #endif // ETSUKO_RENDERER_H

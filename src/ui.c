@@ -30,7 +30,7 @@ int ui_init(void) {
 
     g_ui = calloc(1, sizeof(*g_ui));
     if ( g_ui == NULL ) {
-        error_abort("Failed to allocate renderer");
+        error_abort("Failed to allocate UI");
     }
     render_init();
 
@@ -95,9 +95,10 @@ static void draw_dynamic_progressbar(const etsuko_Drawable_t *drawable, const et
     bounds.x += base_bounds->x;
     bounds.y += base_bounds->y;
 
-    render_draw_rounded_rect(&bounds, &data->bg_color);
+    const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+    render_draw_rounded_rect(&bounds, &data->bg_color, border_radius);
     bounds.w *= data->progress;
-    render_draw_rounded_rect(&bounds, &data->fg_color);
+    render_draw_rounded_rect(&bounds, &data->fg_color, border_radius);
 }
 
 static void measure_layout(const etsuko_Layout_t *layout, const etsuko_Container_t *parent, etsuko_Bounds_t *out_bounds) {
@@ -302,7 +303,7 @@ static void apply_animations(const etsuko_Drawable_t *drawable, struct Animation
     }
 }
 
-static void renderer_draw(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
+static void perform_draw(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
     if ( !drawable->enabled ) {
         return;
     }
@@ -337,7 +338,7 @@ static void draw_all_container(const etsuko_Container_t *container, etsuko_Bound
     base_bounds.y += container->bounds.y + container->align_content_offset_y + container->viewport_y;
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        renderer_draw(container->child_drawables->data[i], &base_bounds);
+        perform_draw(container->child_drawables->data[i], &base_bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
@@ -438,6 +439,7 @@ static etsuko_Drawable_ProgressBarData_t *dup_progressbar_data(const etsuko_Draw
         error_abort("Failed to allocate image data");
     }
     result->progress = data->progress;
+    result->border_radius_em = data->border_radius_em;
     result->fg_color = data->fg_color;
     result->bg_color = data->bg_color;
     return result;
@@ -544,8 +546,8 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
         double x, y = total_h;
         for ( size_t i = 0; i < textures_vec->size; i++ ) {
             etsuko_Texture_t *texture = textures_vec->data[i];
-            //int32_t w, h;
-            //render_measure_texture(texture, &w, &h);
+            // int32_t w, h;
+            // render_measure_texture(texture, &w, &h);
             if ( data->alignment == ALIGN_LEFT ) {
                 x = 0;
             } else if ( data->alignment == ALIGN_RIGHT ) {

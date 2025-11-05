@@ -121,6 +121,7 @@ typedef struct etsuko_Drawable_ImageData_t {
 
 typedef struct etsuko_Drawable_ProgressBarData_t {
     double progress;
+    double border_radius_em;
     etsuko_Color_t fg_color, bg_color;
 } etsuko_Drawable_ProgressBarData_t;
 
