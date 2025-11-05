@@ -67,11 +67,27 @@ static etsuko_Renderer_t *g_renderer = NULL;
 // SHADERS
 // ============================================================================
 
+#if defined __EMSCRIPTEN__
+static const char incbin_texture_vertex_shader[] = {
+#embed "shaders/texture.vert.glsl"
+};
+static const char incbin_texture_fragment_shader[] = {
+#embed "shaders/texture.frag.glsl"
+};
+
+static const char incbin_rect_vertex_shader[] = {
+#embed "shaders/rect.vert.glsl"
+};
+static const char incbin_rect_fragment_shader[] = {
+#embed "shaders/rect.frag.glsl"
+};
+#else
 INCBIN(texture_vertex_shader, "shaders/texture.vert.glsl")
 INCBIN(texture_fragment_shader, "shaders/texture.frag.glsl")
 
 INCBIN(rect_vertex_shader, "shaders/rect.vert.glsl")
 INCBIN(rect_fragment_shader, "shaders/rect.frag.glsl")
+#endif
 
 // ============================================================================
 // SHADER HELPERS
@@ -647,7 +663,7 @@ etsuko_Texture_t *render_make_dummy_image(const double border_radius_em) {
 }
 
 void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color, const float border_radius) {
-    //const double radius = bounds->h / 3.0;
+    // const double radius = bounds->h / 3.0;
 
     if ( bounds->w <= 0 ) {
         return;

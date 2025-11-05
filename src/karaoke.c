@@ -366,7 +366,6 @@ static void check_user_input(void) {
         }
     }
 
-    // TODO: Animate this fade-in/out
     events_get_mouse_position(&mouse_x, &mouse_y);
     {
         // Check if the mouse is inside the song name area

@@ -9,7 +9,7 @@ uniform vec2 rectSize;// width, height
 void main() {
     vec4 texColor = texture(tex, TexCoord);
     float finalAlpha = alpha;
-    if (borderRadius > 0) {
+    if (borderRadius > 0.0) {
         // Distance from edges
         vec2 halfSize = rectSize * 0.5;
         vec2 pos = FragPos - halfSize;
