@@ -1,7 +1,5 @@
 #include "repository.h"
 
-#include "constants.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +23,7 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
 
     printf("writing file to: %s\n", output_file);
     FILE *out = fopen(output_file, "wb");
-    if ( out == NULL ) {
+    if ( out == nullptr ) {
         error_abort("Failed to open file\n");
     }
     fwrite(fetch->data, 1, fetch->numBytes, out);
@@ -46,8 +44,8 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
 #endif
 
 void repository_get_resource(const char *src, const char *subdir, etsuko_Load_t *load) {
-    if ( load == NULL ) {
-        error_abort("Load job is null");
+    if ( load == nullptr ) {
+        error_abort("Load job is nullptr");
     }
 
     mkdir("assets", 0777);
@@ -57,14 +55,14 @@ void repository_get_resource(const char *src, const char *subdir, etsuko_Load_t 
     load->status = LOAD_IN_PROGRESS;
 
     FILE *existing = fopen(load->destination, "r");
-    if ( existing != NULL ) {
+    if ( existing != nullptr ) {
         fclose(existing);
         load->status = LOAD_DONE;
         return;
     }
 #ifdef __EMSCRIPTEN__
     char *full_path;
-    if ( subdir != NULL ) {
+    if ( subdir != nullptr ) {
         asprintf(&full_path, "%s/%s/%s", CDN_BASE_PATH, subdir, src);
     } else {
         asprintf(&full_path, "%s/%s", CDN_BASE_PATH, src);

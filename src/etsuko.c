@@ -9,7 +9,7 @@
 
 #include "error.h"
 
-int global_init(void) {
+int global_init() {
     // Init sdl
     if ( SDL_Init(SDL_INIT_VIDEO) != 0 ) {
         puts(SDL_GetError());
@@ -23,14 +23,14 @@ int global_init(void) {
     }
 
     // Init image
-    const int image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
+    constexpr int image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
     if ( IMG_Init(image_formats) != image_formats ) {
         puts(IMG_GetError());
         error_abort("IMG_Init failed");
     }
 
     // Init audio
-    const int flags = MIX_INIT_MP3;
+    constexpr int flags = MIX_INIT_MP3;
     if ( Mix_Init(flags) == 0 ) {
         puts(Mix_GetError());
         error_abort("Mix_Init failed");
@@ -44,7 +44,7 @@ int global_init(void) {
     return 0;
 }
 
-void global_finish(void) {
+void global_finish() {
     Mix_Quit();
     IMG_Quit();
     SDL_Quit();

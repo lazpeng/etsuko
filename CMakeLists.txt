@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 project(etsuko C)
 
-set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD 23)
 
 add_executable(etsuko src/main.c
         src/etsuko.h
@@ -61,7 +61,7 @@ target_link_libraries(etsuko
 find_package(OpenGL REQUIRED)
 target_link_libraries(etsuko PRIVATE OpenGL::GL)
 
-target_compile_features(etsuko PRIVATE c_std_17)
+target_compile_features(etsuko PRIVATE c_std_23)
 
 if(EMSCRIPTEN)
     message(STATUS "Configuring for Emscripten/WebAssembly")

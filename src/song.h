@@ -5,8 +5,6 @@
 #ifndef ETSUKO_SONG_H
 #define ETSUKO_SONG_H
 
-#include <stdint.h>
-
 #include "constants.h"
 #include "container_utils.h"
 
@@ -45,7 +43,7 @@ typedef struct {
 } etsuko_Song_t;
 
 void song_load(const char *src);
-etsuko_Song_t *song_get(void);
-void song_destroy(void);
+etsuko_Song_t *song_get();
+void song_destroy();
 
 #endif // ETSUKO_SONG_H

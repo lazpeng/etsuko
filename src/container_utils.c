@@ -1,19 +1,18 @@
 #include "container_utils.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include "constants.h"
 #include "error.h"
 
-Vector_t *vec_init(void) {
+Vector_t *vec_init() {
     Vector_t *v = calloc(1, sizeof(*v));
-    if ( v == NULL )
-        return NULL;
+    if ( v == nullptr )
+        return nullptr;
     v->data = calloc(DEFAULT_VEC_CAPACITY, sizeof(void *));
-    if ( v->data == NULL ) {
+    if ( v->data == nullptr ) {
         free(v);
-        return NULL;
+        return nullptr;
     }
     v->capacity = DEFAULT_VEC_CAPACITY;
     return v;
@@ -29,7 +28,7 @@ void vec_reserve(Vector_t *vec, const size_t capacity) {
         return;
 
     void *new_data = realloc(vec->data, capacity * sizeof(void *));
-    if ( new_data == NULL ) {
+    if ( new_data == nullptr ) {
         error_abort("Failed to reallocate vector");
     }
     memset((uintptr_t *)new_data + vec->capacity, 0, (capacity - vec->capacity) * sizeof(void *));
@@ -48,13 +47,13 @@ void vec_remove(Vector_t *vec, const size_t index) {
     if ( index == vec->size - 1 ) {
         // Just decrement and set to null
         vec->size--;
-        vec->data[index] = NULL;
+        vec->data[index] = nullptr;
     } else {
         // Copy all items over from the right to the left
         for ( size_t i = index; i < vec->size - 1; i++ ) {
             vec->data[i] = vec->data[i + 1];
         }
-        vec->data[--vec->size] = NULL;
+        vec->data[--vec->size] = nullptr;
     }
 }
 

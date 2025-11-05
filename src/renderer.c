@@ -13,7 +13,6 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <math.h>
-#include <stdbool.h>
 
 #ifdef __EMSCRIPTEN__
 #include <GLES3/gl3.h>
@@ -61,7 +60,7 @@ typedef struct etsuko_Renderer_t {
     GLint rect_radius_loc;
 } etsuko_Renderer_t;
 
-static etsuko_Renderer_t *g_renderer = NULL;
+static etsuko_Renderer_t *g_renderer = nullptr;
 
 // ============================================================================
 // SHADERS
@@ -95,14 +94,14 @@ INCBIN(rect_fragment_shader, "shaders/rect.frag.glsl")
 
 static GLuint compile_shader(const GLenum type, const char *source) {
     const GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, NULL);
+    glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
 
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if ( !success ) {
         char log[512];
-        glGetShaderInfoLog(shader, 512, NULL, log);
+        glGetShaderInfoLog(shader, 512, nullptr, log);
         printf("Shader compilation failed:\n%s\n", log);
         error_abort("Shader compilation failed");
     }
@@ -112,14 +111,13 @@ static GLuint compile_shader(const GLenum type, const char *source) {
 
 static char *begin_shader_compilation(void) {
     char *buffer = calloc(1, MAX_SHADER_SIZE);
-    if ( buffer == NULL ) {
+    if ( buffer == nullptr ) {
         error_abort("Failed to allocate shader compilation buffer");
     }
     return buffer;
 }
 
 static const char *process_shader_file(char *buffer, const char *contents) {
-    buffer[0] = 0;
     snprintf(buffer, MAX_SHADER_SIZE, "%s\n%s\n%s", GLSL_VERSION, GLSL_PRECISION, contents);
     return buffer;
 }
@@ -139,7 +137,7 @@ static GLuint create_shader_program(char *buffer, const char *vert_src, const ch
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if ( !success ) {
         char log[512];
-        glGetProgramInfoLog(program, 512, NULL, log);
+        glGetProgramInfoLog(program, 512, nullptr, log);
         printf("Shader linking failed:\n%s\n", log);
         error_abort("Shader linking failed");
     }
@@ -183,12 +181,12 @@ static void update_projection_matrix(void) {
 
 static etsuko_Texture_t *create_texture_from_surface(SDL_Surface *surface) {
     SDL_Surface *rgba_surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
-    if ( rgba_surface == NULL ) {
+    if ( rgba_surface == nullptr ) {
         error_abort("Failed to convert surface to ABGR8888");
     }
 
     etsuko_Texture_t *texture = calloc(1, sizeof(*texture));
-    if ( texture == NULL ) {
+    if ( texture == nullptr ) {
         error_abort("Failed to allocate texture");
     }
 
@@ -213,13 +211,13 @@ static etsuko_Texture_t *create_texture_from_surface(SDL_Surface *surface) {
 }
 
 void render_init(void) {
-    if ( g_renderer != NULL ) {
+    if ( g_renderer != nullptr ) {
         render_finish();
-        g_renderer = NULL;
+        g_renderer = nullptr;
     }
 
     g_renderer = calloc(1, sizeof(*g_renderer));
-    if ( g_renderer == NULL ) {
+    if ( g_renderer == nullptr ) {
         error_abort("Failed to allocate renderer");
     }
 
@@ -235,15 +233,15 @@ void render_init(void) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-    const int pos = SDL_WINDOWPOS_CENTERED;
-    const int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
+    constexpr int pos = SDL_WINDOWPOS_CENTERED;
+    constexpr int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
     g_renderer->window = SDL_CreateWindow(DEFAULT_TITLE, pos, pos, DEFAULT_WIDTH, DEFAULT_HEIGHT, flags);
-    if ( g_renderer->window == NULL ) {
+    if ( g_renderer->window == nullptr ) {
         error_abort("Failed to create window");
     }
 
     g_renderer->gl_context = SDL_GL_CreateContext(g_renderer->window);
-    if ( g_renderer->gl_context == NULL ) {
+    if ( g_renderer->gl_context == nullptr ) {
         printf("SDL Error: %s\n", SDL_GetError());
 
         error_abort("Failed to create OpenGL context");
@@ -286,11 +284,11 @@ void render_init(void) {
     glBindBuffer(GL_ARRAY_BUFFER, g_renderer->VBO);
 
     // Allocate buffer (4 vertices * 4 floats per vertex: x, y, u, v)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4, nullptr, GL_DYNAMIC_DRAW);
 
     // Position attribute (location 0)
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
 
     // TexCoord attribute (location 1)
     glEnableVertexAttribArray(1);
@@ -320,14 +318,14 @@ void render_init(void) {
 }
 
 void render_finish(void) {
-    if ( g_renderer == NULL ) {
+    if ( g_renderer == nullptr ) {
         return;
     }
 
     // Unload fonts
-    if ( g_renderer->ui_font != NULL )
+    if ( g_renderer->ui_font != nullptr )
         TTF_CloseFont(g_renderer->ui_font);
-    if ( g_renderer->lyrics_font != NULL )
+    if ( g_renderer->lyrics_font != nullptr )
         TTF_CloseFont(g_renderer->lyrics_font);
 
     // Delete OpenGL objects
@@ -342,7 +340,7 @@ void render_finish(void) {
 
     // Cleanup
     free(g_renderer);
-    g_renderer = NULL;
+    g_renderer = nullptr;
 }
 
 void render_on_window_changed(void) {
@@ -351,7 +349,7 @@ void render_on_window_changed(void) {
 
 #ifdef __APPLE__
     int32_t window_w;
-    SDL_GetWindowSize(g_renderer->window, &window_w, NULL);
+    SDL_GetWindowSize(g_renderer->window, &window_w, nullptr);
 
     g_renderer->window_pixel_scale = (double)outW / (double)window_w;
 #else
@@ -359,7 +357,7 @@ void render_on_window_changed(void) {
 #endif
 
     float hdpi_temp, v_dpi_temp;
-    if ( SDL_GetDisplayDPI(0, NULL, &hdpi_temp, &v_dpi_temp) != 0 ) {
+    if ( SDL_GetDisplayDPI(0, nullptr, &hdpi_temp, &v_dpi_temp) != 0 ) {
         puts(SDL_GetError());
         error_abort("Failed to get DPI");
     }
@@ -387,7 +385,7 @@ double render_get_pixel_scale(void) { return g_renderer->window_pixel_scale; }
 void render_load_font(const char *path, const etsuko_FontType_t type) {
     TTF_Font *font = TTF_OpenFontDPI(path, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
 
-    if ( font == NULL ) {
+    if ( font == nullptr ) {
         puts(TTF_GetError());
         error_abort("Could not load font");
     }
@@ -427,12 +425,12 @@ int32_t render_measure_pt_from_em(const double em) {
 
 const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const int32_t h) {
     etsuko_RenderTarget_t *target = calloc(1, sizeof(*target));
-    if ( target == NULL ) {
+    if ( target == nullptr ) {
         error_abort("Failed to allocate render target");
     }
 
     target->texture = calloc(1, sizeof(*target->texture));
-    if ( target->texture == NULL ) {
+    if ( target->texture == nullptr ) {
         error_abort("Failed to allocate texture for render target");
     }
 
@@ -442,7 +440,7 @@ const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const i
     GLuint texture_id;
     glGenTextures(1, &texture_id);
     glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -498,7 +496,7 @@ const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const i
 }
 
 void render_restore_texture_target(void) {
-    if ( g_renderer->render_target == NULL ) {
+    if ( g_renderer->render_target == nullptr ) {
         error_abort("No render target to restore");
     }
 
@@ -519,14 +517,14 @@ void render_restore_texture_target(void) {
     glUniformMatrix4fv(g_renderer->rect_projection_loc, 1, GL_FALSE, g_renderer->projection_matrix);
 
     // Bind appropriate framebuffer
-    if ( g_renderer->render_target == NULL ) {
+    if ( g_renderer->render_target == nullptr ) {
         // Restore default framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     } else {
         // Bind previous FBO
         glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->render_target->fbo);
     }
-    g_renderer->rendering_to_fbo = g_renderer->render_target != NULL;
+    g_renderer->rendering_to_fbo = g_renderer->render_target != nullptr;
 }
 
 void render_destroy_texture(etsuko_Texture_t *texture) {
@@ -565,7 +563,7 @@ etsuko_BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; 
 etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool bold, const etsuko_Color_t *color,
                                    const etsuko_FontType_t font_type) {
     TTF_Font *font = font_type == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
-    if ( font == NULL ) {
+    if ( font == nullptr ) {
         error_abort("Font not loaded");
     }
     if ( strnlen(text, MAX_TEXT_SIZE) == 0 ) {
@@ -581,7 +579,7 @@ etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, cons
 
     const SDL_Color sdl_color = (SDL_Color){color->r, color->g, color->b, color->a};
     SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, sdl_color);
-    if ( surface == NULL ) {
+    if ( surface == nullptr ) {
         puts(TTF_GetError());
         error_abort("Failed to render to surface");
     }
@@ -593,7 +591,7 @@ etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, cons
 }
 
 static etsuko_Texture_t *create_test_texture(void) {
-    const int size = 256;
+    constexpr int size = 256;
     unsigned char *pixels = malloc(size * size * 4);
 
     // Create a checkerboard pattern
@@ -631,13 +629,13 @@ static etsuko_Texture_t *create_test_texture(void) {
 
 etsuko_Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
     SDL_Surface *loaded = IMG_Load(file_path);
-    if ( loaded == NULL ) {
+    if ( loaded == nullptr ) {
         printf("IMG_GetError: %s\n", IMG_GetError());
         error_abort("Failed to load image");
     }
 
     SDL_Surface *converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA8888, 0);
-    if ( converted == NULL ) {
+    if ( converted == nullptr ) {
         error_abort("Failed to convert image surface to appropriate pixel format");
     }
     SDL_FreeSurface(loaded);
@@ -704,7 +702,7 @@ void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_
 }
 
 void render_draw_texture(const etsuko_Texture_t *texture, const etsuko_Bounds_t *at, const int32_t alpha_mod) {
-    if ( texture == NULL || texture->id == 0 ) {
+    if ( texture == nullptr || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
 

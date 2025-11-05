@@ -22,12 +22,12 @@ static bool is_line_intermission(const etsuko_LyricsView_t *view, const size_t i
 }
 
 etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const etsuko_Song_t *song) {
-    if ( parent == NULL ) {
-        error_abort("Parent container is null");
+    if ( parent == nullptr ) {
+        error_abort("Parent container is nullptr");
     }
 
-    if ( song == NULL ) {
-        error_abort("Song is null");
+    if ( song == nullptr ) {
+        error_abort("Song is nullptr");
     }
 
     etsuko_LyricsView_t *view = calloc(1, sizeof(*view));
@@ -53,12 +53,12 @@ etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const et
         base_offset_x = -0.3;
     }
 
-    etsuko_Drawable_t *prev = NULL;
+    etsuko_Drawable_t *prev = nullptr;
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         const etsuko_SongLine_t *line = song->lyrics_lines->data[i];
 
         char *line_text = line->full_text;
-        if ( line_text == NULL ) {
+        if ( line_text == nullptr ) {
             printf("Warn: line was not initialized properly. idx: %lu\n", i);
             continue;
         }
@@ -106,7 +106,7 @@ etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const et
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
         };
-        if ( prev != NULL ) {
+        if ( prev != nullptr ) {
             layout.relative_to = prev;
         }
         prev = ui_make_text(&data, parent, &layout);
@@ -134,7 +134,7 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     data->color = (etsuko_Color_t){.r = 255, .b = 255, .g = 255, .a = 255};
     data->bold = false;
 
-    const LineState_t new_state = LINE_ACTIVE;
+    constexpr LineState_t new_state = LINE_ACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
         ui_recompute_drawable(drawable);
@@ -143,7 +143,7 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     if ( prev_active >= 0 ) {
         drawable->layout.relative_to = view->line_drawables->data[prev_active];
     } else {
-        drawable->layout.relative_to = NULL;
+        drawable->layout.relative_to = nullptr;
     }
     drawable->layout.offset_y = 0;
     if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
@@ -194,7 +194,7 @@ static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, con
         ui_drawable_set_alpha(drawable, alpha);
     }
 
-    const LineState_t new_state = LINE_INACTIVE;
+    constexpr LineState_t new_state = LINE_INACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
         ui_recompute_drawable(drawable);
@@ -206,10 +206,10 @@ static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, con
 static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
-    const LineState_t new_state = LINE_HIDDEN;
+    constexpr LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        drawable->layout.relative_to = NULL;
+        drawable->layout.relative_to = nullptr;
         drawable->layout.offset_y = -LINE_VERTICAL_PADDING;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
@@ -240,7 +240,7 @@ static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
 static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
-    const LineState_t new_state = LINE_ALMOST_HIDDEN;
+    constexpr LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
             // Don't do anything, just fade into a low alpha
@@ -248,7 +248,7 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
             ui_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable
-            drawable->layout.relative_to = NULL;
+            drawable->layout.relative_to = nullptr;
             drawable->layout.offset_y = 0;
             if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
                 drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
@@ -261,7 +261,7 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
 
 static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t *view, size_t idx) {
     if ( idx >= view->line_drawables->size - 1 )
-        return NULL;
+        return nullptr;
 
     if ( view->line_states[idx] != LINE_HIDDEN ) {
         int32_t next_hidden = -1;
@@ -272,7 +272,7 @@ static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t 
             break;
         }
         if ( next_hidden < 0 )
-            return NULL;
+            return nullptr;
         idx = next_hidden;
     }
 
@@ -284,8 +284,8 @@ static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t 
 }
 
 void ui_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
-    if ( view == NULL ) {
-        error_abort("loop: lyrics_view is null");
+    if ( view == nullptr ) {
+        error_abort("loop: lyrics_view is nullptr");
     }
 
     view->active_changed = false;
@@ -366,8 +366,8 @@ void ui_ex_lyrics_view_on_scroll(const etsuko_LyricsView_t *view, const double d
 }
 
 void ui_ex_destroy_lyrics_view(etsuko_LyricsView_t *view) {
-    if ( view == NULL ) {
-        error_abort("destroy: lyrics_view is null");
+    if ( view == nullptr ) {
+        error_abort("destroy: lyrics_view is nullptr");
     }
     // No need to free the drawables individually
     vec_destroy(view->line_drawables);

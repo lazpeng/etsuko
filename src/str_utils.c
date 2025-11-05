@@ -24,7 +24,7 @@ int32_t str_find(const char *src, const char c, const int32_t start, int32_t max
 
 char *str_get_filename(const char *path) {
     const char *last_slash = strrchr(path, '/');
-    if ( last_slash == NULL ) {
+    if ( last_slash == nullptr ) {
         last_slash = path;
     } else
         last_slash++;
@@ -33,13 +33,13 @@ char *str_get_filename(const char *path) {
 
 char *str_get_filename_no_ext(const char *path) {
     const char *last_slash = strrchr(path, '/');
-    if ( last_slash == NULL ) {
+    if ( last_slash == nullptr ) {
         last_slash = path;
     } else
         last_slash++;
     const char *last_dot = strrchr(last_slash, '.');
-    if ( last_dot == NULL ) {
-        return NULL;
+    if ( last_dot == nullptr ) {
+        return nullptr;
     }
     return strndup(last_slash, last_dot - last_slash);
 }
@@ -52,7 +52,7 @@ void str_replace_char(char *str, const char old_c, const char new_c) {
 }
 
 bool str_is_empty(const char *str) {
-    if ( str == NULL )
+    if ( str == nullptr )
         return true;
     return strncmp(str, "", 1) == 0;
 }

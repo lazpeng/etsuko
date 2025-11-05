@@ -11,7 +11,7 @@ typedef struct Vector_t {
     size_t size, capacity;
 } Vector_t;
 
-Vector_t *vec_init(void);
+Vector_t *vec_init();
 void vec_destroy(Vector_t *v);
 void vec_reserve(Vector_t *vec, size_t capacity);
 void vec_add(Vector_t *vec, void *data);

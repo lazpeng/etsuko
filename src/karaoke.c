@@ -20,24 +20,24 @@ static bool g_loaded_override = false;
 
 static uint64_t g_prev_ticks = 0;
 
-static etsuko_Drawable_t *g_version_text = NULL;
-static etsuko_Drawable_t *g_song_name_text = NULL;
-static etsuko_Drawable_t *g_song_artist_album_text = NULL;
-static etsuko_Drawable_t *g_elapsed_time_text = NULL;
-static etsuko_Drawable_t *g_remaining_time_text = NULL;
-static etsuko_Drawable_t *g_album_image = NULL;
-static etsuko_Drawable_t *g_song_progressbar = NULL;
-static etsuko_Drawable_t *g_play_button = NULL;
-static etsuko_Drawable_t *g_pause_button = NULL;
+static etsuko_Drawable_t *g_version_text = nullptr;
+static etsuko_Drawable_t *g_song_name_text = nullptr;
+static etsuko_Drawable_t *g_song_artist_album_text = nullptr;
+static etsuko_Drawable_t *g_elapsed_time_text = nullptr;
+static etsuko_Drawable_t *g_remaining_time_text = nullptr;
+static etsuko_Drawable_t *g_album_image = nullptr;
+static etsuko_Drawable_t *g_song_progressbar = nullptr;
+static etsuko_Drawable_t *g_play_button = nullptr;
+static etsuko_Drawable_t *g_pause_button = nullptr;
 
-static etsuko_Container_t *g_left_container = NULL;
-static etsuko_Container_t *g_right_container = NULL;
-static etsuko_Container_t *g_song_info_container = NULL;
-static etsuko_Container_t *g_song_controls_container = NULL;
+static etsuko_Container_t *g_left_container = nullptr;
+static etsuko_Container_t *g_right_container = nullptr;
+static etsuko_Container_t *g_song_info_container = nullptr;
+static etsuko_Container_t *g_song_controls_container = nullptr;
 
-static etsuko_LyricsView_t *g_lyrics_view = NULL;
+static etsuko_LyricsView_t *g_lyrics_view = nullptr;
 
-int karaoke_load_async(void) {
+int karaoke_load_async() {
     etsuko_Config_t *config = config_get();
     // UI Font
     if ( g_load_ui_font.status == LOAD_NOT_STARTED ) {
@@ -59,14 +59,14 @@ int karaoke_load_async(void) {
     }
     // Song
     if ( g_load_song.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->song_file, NULL, &g_load_song);
+        repository_get_resource(config->song_file, nullptr, &g_load_song);
     }
     if ( g_load_song.status == LOAD_DONE ) {
         free(config->song_file);
         config->song_file = g_load_song.destination;
 
         song_load(config->song_file);
-        if ( song_get() == NULL )
+        if ( song_get() == nullptr )
             error_abort("Failed to load song");
         g_load_song.status = LOAD_FINISHED;
     } else if ( g_load_song.status != LOAD_FINISHED ) {
@@ -74,7 +74,7 @@ int karaoke_load_async(void) {
     }
     // Finish loading the song before we load the rest
 
-    if ( song_get()->font_override != NULL && !g_loaded_override ) {
+    if ( song_get()->font_override != nullptr && !g_loaded_override ) {
         config->lyrics_font = strdup(song_get()->font_override);
         g_loaded_override = true;
         repository_get_resource(config->lyrics_font, "files", &g_load_lyrics_font);
@@ -82,7 +82,7 @@ int karaoke_load_async(void) {
 
     // Song audio file
     if ( g_load_audio.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->file_path, NULL, &g_load_audio);
+        repository_get_resource(song_get()->file_path, nullptr, &g_load_audio);
     }
     if ( g_load_audio.status == LOAD_DONE ) {
         free(song_get()->file_path);
@@ -91,7 +91,7 @@ int karaoke_load_async(void) {
     }
     // Album art
     if ( g_load_album_art.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->album_art_path, NULL, &g_load_album_art);
+        repository_get_resource(song_get()->album_art_path, nullptr, &g_load_album_art);
     }
     if ( g_load_album_art.status == LOAD_DONE ) {
         free(song_get()->album_art_path);
@@ -104,7 +104,7 @@ int karaoke_load_async(void) {
            g_load_album_art.status == LOAD_FINISHED;
 }
 
-void karaoke_init(void) {
+void karaoke_init() {
     events_init();
     ui_init();
     audio_init();
@@ -120,7 +120,7 @@ void karaoke_init(void) {
     ui_set_window_title(window_title);
     free(window_title);
 
-    const double vertical_padding = 0.01;
+    constexpr double vertical_padding = 0.01;
 
     // Make the left container
     g_left_container =
@@ -270,7 +270,7 @@ void karaoke_init(void) {
     g_lyrics_view = ui_ex_make_lyrics_view(g_right_container, song_get());
 }
 
-static void update_elapsed_text(void) {
+static void update_elapsed_text() {
     const double elapsed = audio_elapsed_time();
     const int32_t minutes = (int32_t)(elapsed / 60);
     const int32_t seconds = (int32_t)elapsed % 60;
@@ -288,7 +288,7 @@ static void update_elapsed_text(void) {
     }
 }
 
-static void update_remaining_text(void) {
+static void update_remaining_text() {
     const double remaining = audio_total_time() - audio_elapsed_time();
     const int32_t minutes = (int32_t)(remaining / 60);
     const int32_t seconds = (int32_t)remaining % 60;
@@ -305,14 +305,14 @@ static void update_remaining_text(void) {
     }
 }
 
-static void update_song_progressbar(void) {
-    if ( g_song_progressbar != NULL ) {
+static void update_song_progressbar() {
+    if ( g_song_progressbar != nullptr ) {
         const double progress = audio_elapsed_time() / audio_total_time();
         ((etsuko_Drawable_ProgressBarData_t *)g_song_progressbar->custom_data)->progress = (float)progress;
     }
 }
 
-static void toggle_pause(void) {
+static void toggle_pause() {
     if ( audio_is_paused() ) {
         audio_resume();
         g_lyrics_view->container->viewport_y = 0;
@@ -320,13 +320,13 @@ static void toggle_pause(void) {
         audio_pause();
 }
 
-static void update_play_pause_state(void) {
+static void update_play_pause_state() {
     const bool paused = audio_is_paused();
     g_play_button->enabled = paused;
     g_pause_button->enabled = !paused;
 }
 
-static void check_user_input(void) {
+static void check_user_input() {
     if ( events_key_was_pressed(KEY_SPACE) ) {
         toggle_pause();
     }
@@ -343,7 +343,7 @@ static void check_user_input(void) {
             double progress_bar_x, progress_bar_y;
             ui_get_drawable_canon_pos(g_song_progressbar, &progress_bar_x, &progress_bar_y);
 
-            const int32_t padding_amount = 10;
+            constexpr int32_t padding_amount = 10;
             const double base_y = progress_bar_y - padding_amount;
             const double base_h = g_song_progressbar->bounds.h + padding_amount;
 
@@ -370,10 +370,10 @@ static void check_user_input(void) {
     {
         // Check if the mouse is inside the song name area
         double can_y;
-        ui_get_drawable_canon_pos(g_song_name_text, NULL, &can_y);
+        ui_get_drawable_canon_pos(g_song_name_text, nullptr, &can_y);
 
         const double begin_x = g_song_info_container->bounds.x, begin_y = can_y;
-        ui_get_drawable_canon_pos(g_song_artist_album_text, NULL, &can_y);
+        ui_get_drawable_canon_pos(g_song_artist_album_text, nullptr, &can_y);
         const double end_x = begin_x + g_song_info_container->bounds.w, end_y = can_y + g_song_artist_album_text->bounds.h;
 
         const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
@@ -396,7 +396,7 @@ static void check_user_input(void) {
     }
 }
 
-int karaoke_loop(void) {
+int karaoke_loop() {
     const uint64_t ticks = SDL_GetTicks64();
     const double delta = g_prev_ticks != 0 ? (double)(ticks - g_prev_ticks) / 1000.0 : 0;
     g_prev_ticks = ticks;
@@ -429,7 +429,7 @@ int karaoke_loop(void) {
     return 0;
 }
 
-void karaoke_finish(void) {
+void karaoke_finish() {
     events_finish();
     ui_finish();
     audio_finish();

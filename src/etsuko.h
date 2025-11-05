@@ -5,7 +5,7 @@
 #ifndef ETSUKO_ETSUKO_H
 #define ETSUKO_ETSUKO_H
 
-int global_init(void);
-void global_finish(void);
+int global_init();
+void global_finish();
 
 #endif // ETSUKO_ETSUKO_H

@@ -1,18 +1,18 @@
 #include "config.h"
 
-#include "constants.h"
-#include "error.h"
 #include "str_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static etsuko_Config_t *g_config = NULL;
+static etsuko_Config_t *g_config = nullptr;
 
 #ifdef __EMSCRIPTEN__
 
 #include <emscripten.h>
+
+#include "constants.h"
 
 EM_JS(const char *, get_song_param, (void), {
     const params = new URLSearchParams(window.location.search);
@@ -25,7 +25,7 @@ static void try_load_config_web(etsuko_Config_t *config) {
     if ( strnlen(song, MAX_TEXT_SIZE) > 0 ) {
         printf("song: %s\n", song);
 
-        if ( config->song_file != NULL ) {
+        if ( config->song_file != nullptr ) {
             free(config->song_file);
         }
 
@@ -36,15 +36,15 @@ static void try_load_config_web(etsuko_Config_t *config) {
 
 #endif
 
-static etsuko_Config_t *get_default_config(void) {
+static etsuko_Config_t *get_default_config() {
     etsuko_Config_t *config = malloc(sizeof(*config));
-    if ( config == NULL ) {
-        return NULL;
+    if ( config == nullptr ) {
+        return nullptr;
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
     // config->song_file = strdup("stop crying your heart out.txt");
-    config->song_file = strdup("fukashigi no karte.txt");
+    config->song_file = strdup("inori.txt");
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);
@@ -53,8 +53,8 @@ static etsuko_Config_t *get_default_config(void) {
     return config;
 }
 
-etsuko_Config_t *config_get(void) {
-    if ( g_config == NULL ) {
+etsuko_Config_t *config_get() {
+    if ( g_config == nullptr ) {
         g_config = get_default_config();
     }
     return g_config;

@@ -13,7 +13,7 @@ static int32_t g_mouse_click_x, g_mouse_click_y;
 static Vector_t *g_key_presses;
 static double g_window_pixel_scale = 1.0;
 
-static void clear_key_presses(void) {
+static void clear_key_presses() {
     // Remove one by one from right to left
     while ( g_key_presses->size > 0 ) {
         const size_t idx = g_key_presses->size - 1;
@@ -35,7 +35,7 @@ static etsuko_Key_t *key_from_event(const SDL_Event *e) {
         key = KEY_ARROW_RIGHT;
         break;
     default:
-        return NULL;
+        return nullptr;
     }
 
     etsuko_Key_t *result = calloc(1, sizeof(etsuko_Key_t));
@@ -43,11 +43,11 @@ static etsuko_Key_t *key_from_event(const SDL_Event *e) {
     return result;
 }
 
-void events_init(void) { g_key_presses = vec_init(); }
+void events_init() { g_key_presses = vec_init(); }
 
-void events_finish(void) { vec_destroy(g_key_presses); }
+void events_finish() { vec_destroy(g_key_presses); }
 
-void events_loop(void) {
+void events_loop() {
     // Reset
     g_window_resized = false;
     g_mouse_scroll = 0;
@@ -56,7 +56,7 @@ void events_loop(void) {
     // Don't clear mouse_x and mouse_y
     clear_key_presses();
 
-    etsuko_Key_t *key = NULL;
+    etsuko_Key_t *key;
 
     SDL_Event event;
     while ( SDL_PollEvent(&event) ) {
@@ -82,7 +82,7 @@ void events_loop(void) {
             g_mouse_scroll += event.wheel.y;
             break;
         case SDL_KEYDOWN:
-            if ( (key = key_from_event(&event)) != NULL ) {
+            if ( (key = key_from_event(&event)) != nullptr ) {
                 vec_add(g_key_presses, key);
             }
             break;
@@ -93,9 +93,9 @@ void events_loop(void) {
 }
 
 void events_get_mouse_position(int32_t *x, int32_t *y) {
-    if ( x != NULL )
+    if ( x != nullptr )
         *x = g_mouse_x;
-    if ( y != NULL )
+    if ( y != nullptr )
         *y = g_mouse_y;
 }
 
@@ -115,7 +115,7 @@ bool events_get_mouse_click(int32_t *x, int32_t *y) {
     return g_mouse_clicked;
 }
 
-double events_get_mouse_scrolled(void) { return g_mouse_scroll; }
+double events_get_mouse_scrolled() { return g_mouse_scroll; }
 
 bool events_key_was_pressed(const etsuko_Key_t key) {
     for ( size_t i = 0; i < g_key_presses->size; i++ ) {
@@ -126,10 +126,8 @@ bool events_key_was_pressed(const etsuko_Key_t key) {
     return false;
 }
 
-bool events_has_quit(void) { return g_quit; }
+bool events_has_quit() { return g_quit; }
 
-bool events_window_changed(void) { return g_window_resized; }
+bool events_window_changed() { return g_window_resized; }
 
-void events_set_window_pixel_scale(const double scale) {
-    g_window_pixel_scale = scale;
-}
+void events_set_window_pixel_scale(const double scale) { g_window_pixel_scale = scale; }

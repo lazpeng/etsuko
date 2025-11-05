@@ -22,14 +22,14 @@ typedef struct {
 
 static etsuko_UiState_t *g_ui;
 
-int ui_init(void) {
-    if ( g_ui != NULL ) {
+int ui_init() {
+    if ( g_ui != nullptr ) {
         ui_finish();
-        g_ui = NULL;
+        g_ui = nullptr;
     }
 
     g_ui = calloc(1, sizeof(*g_ui));
-    if ( g_ui == NULL ) {
+    if ( g_ui == nullptr ) {
         error_abort("Failed to allocate UI");
     }
     render_init();
@@ -49,7 +49,7 @@ static void animation_translation_data_destroy(etsuko_Animation_EaseTranslationD
 static void animation_fade_data_destroy(etsuko_Animation_FadeInOutData_t *data) { free(data); }
 
 static void animation_destroy(etsuko_Animation_t *animation) {
-    if ( animation->custom_data != NULL ) {
+    if ( animation->custom_data != nullptr ) {
         if ( animation->type == ANIM_EASE_TRANSLATION ) {
             animation_translation_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_FADE_IN_OUT ) {
@@ -133,7 +133,7 @@ static void measure_layout(const etsuko_Layout_t *layout, const etsuko_Container
         out_bounds->h = h;
     }
 
-    if ( layout->relative_to_size != NULL ) {
+    if ( layout->relative_to_size != nullptr ) {
         if ( layout->relative_to_size->parent != parent ) {
             error_abort("Relative layout's parent is not the same as the container");
         }
@@ -159,7 +159,7 @@ static void measure_container_size(const etsuko_Container_t *container, etsuko_B
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const etsuko_Drawable_t *drawable = container->child_drawables->data[i];
         double draw_y;
-        ui_get_drawable_canon_pos(drawable, NULL, &draw_y);
+        ui_get_drawable_canon_pos(drawable, nullptr, &draw_y);
 
         max_y = fmax(max_y, draw_y + drawable->bounds.h);
         min_y = fmin(min_y, draw_y);
@@ -177,7 +177,7 @@ static void measure_container_size(const etsuko_Container_t *container, etsuko_B
 }
 
 static void recalculate_container_alignment(etsuko_Container_t *container) {
-    if ( container->parent != NULL )
+    if ( container->parent != nullptr )
         recalculate_container_alignment(container->parent);
 
     if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
@@ -219,7 +219,7 @@ static void position_layout(const etsuko_Layout_t *layout, etsuko_Container_t *p
     }
     y -= calc_h;
 
-    if ( layout->relative_to != NULL ) {
+    if ( layout->relative_to != nullptr ) {
         if ( layout->relative_to->parent != parent ) {
             error_abort("Relative layout's parent is not the same as the container");
         }
@@ -346,57 +346,57 @@ static void draw_all_container(const etsuko_Container_t *container, etsuko_Bound
     }
 }
 
-void ui_draw(void) {
+void ui_draw() {
     const etsuko_Bounds_t bounds = {0};
     draw_all_container(&g_ui->root_container, bounds);
 }
 
-void ui_end_loop(void) { render_present(); }
+void ui_end_loop() { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
 
-void ui_finish(void) {
+void ui_finish() {
     // Free stored textures and drawables
     ui_destroy_container(&g_ui->root_container);
     // Finish renderer
     render_finish();
     // Cleanup
     free(g_ui);
-    g_ui = NULL;
+    g_ui = nullptr;
 }
 
 void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
 
-etsuko_Container_t *ui_root_container(void) { return &g_ui->root_container; }
+etsuko_Container_t *ui_root_container() { return &g_ui->root_container; }
 
 void ui_get_drawable_canon_pos(const etsuko_Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
     ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y);
 
-    if ( x != NULL )
+    if ( x != nullptr )
         *x = parent_x + drawable->bounds.x;
-    if ( y != NULL )
+    if ( y != nullptr )
         *y = parent_y + drawable->bounds.y;
 }
 
 void ui_get_container_canon_pos(const etsuko_Container_t *container, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
     const etsuko_Container_t *parent = container;
-    while ( parent != NULL ) {
+    while ( parent != nullptr ) {
         parent_x += parent->bounds.x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
         parent = parent->parent;
     }
 
-    if ( x != NULL )
+    if ( x != nullptr )
         *x = parent_x;
-    if ( y != NULL )
+    if ( y != nullptr )
         *y = parent_y;
 }
 
 static etsuko_Drawable_TextData_t *dup_text_data(const etsuko_Drawable_TextData_t *data) {
     etsuko_Drawable_TextData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate text data");
     }
     result->text = strdup(data->text);
@@ -420,7 +420,7 @@ static void free_text_data(etsuko_Drawable_TextData_t *data) {
 
 static etsuko_Drawable_ImageData_t *dup_image_data(const etsuko_Drawable_ImageData_t *data) {
     etsuko_Drawable_ImageData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate image data");
     }
     result->file_path = strdup(data->file_path);
@@ -435,7 +435,7 @@ static void free_image_data(etsuko_Drawable_ImageData_t *data) {
 
 static etsuko_Drawable_ProgressBarData_t *dup_progressbar_data(const etsuko_Drawable_ProgressBarData_t *data) {
     etsuko_Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate image data");
     }
     result->progress = data->progress;
@@ -496,7 +496,7 @@ static int32_t measure_text_wrap_stop(const etsuko_Drawable_TextData_t *data, co
 
 static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko_DrawableType_t type, const bool dynamic) {
     etsuko_Drawable_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate drawable");
     }
 
@@ -512,7 +512,7 @@ static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko
 
 static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_Drawable_TextData_t *data,
                                              const etsuko_Container_t *container, const etsuko_Layout_t *layout) {
-    etsuko_Texture_t *final_texture = NULL;
+    etsuko_Texture_t *final_texture;
 
     data = dup_text_data(data);
     const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
@@ -577,7 +577,7 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
         final_texture = render_make_text(data->text, pt_size, data->bold, &data->color, data->font_type);
     }
 
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate drawable");
     }
 
@@ -633,10 +633,10 @@ etsuko_Drawable_t *ui_make_progressbar(const etsuko_Drawable_ProgressBarData_t *
 }
 
 void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
-    if ( drawable->texture != NULL ) {
+    if ( drawable->texture != nullptr ) {
         render_destroy_texture(drawable->texture);
     }
-    if ( drawable->custom_data != NULL ) {
+    if ( drawable->custom_data != nullptr ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
             etsuko_Drawable_TextData_t *text_data = drawable->custom_data;
             free_text_data(text_data);
@@ -659,7 +659,7 @@ void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
 etsuko_Container_t *ui_make_container(etsuko_Container_t *parent, const etsuko_Layout_t *layout,
                                       const etsuko_ContainerFlags_t flags) {
     etsuko_Container_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate container");
     }
 
@@ -725,7 +725,7 @@ void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
         return;
     }
 
-    etsuko_Animation_t *fade_animation = NULL;
+    etsuko_Animation_t *fade_animation = nullptr;
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
         etsuko_Animation_t *animation = drawable->animations->data[i];
         if ( animation->type == ANIM_FADE_IN_OUT ) {
@@ -734,7 +734,7 @@ void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
         }
     }
 
-    if ( fade_animation != NULL ) {
+    if ( fade_animation != nullptr ) {
         etsuko_Animation_FadeInOutData_t *data = fade_animation->custom_data;
 
         fade_animation->elapsed = 0.0;
@@ -765,7 +765,7 @@ void ui_recompute_drawable(etsuko_Drawable_t *drawable) {
 }
 
 void ui_recompute_container(etsuko_Container_t *container) {
-    if ( container->parent != NULL ) {
+    if ( container->parent != nullptr ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
         position_layout(&container->layout, container->parent, &container->bounds);
     }
@@ -775,13 +775,13 @@ void ui_recompute_container(etsuko_Container_t *container) {
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        if ( container->child_containers->data[i] != NULL ) {
+        if ( container->child_containers->data[i] != nullptr ) {
             ui_recompute_container(container->child_containers->data[i]);
         }
     }
 }
 
-void ui_on_window_changed(void) {
+void ui_on_window_changed() {
     render_on_window_changed();
     g_ui->root_container.bounds = *render_get_viewport();
     ui_recompute_container(&g_ui->root_container);
@@ -789,7 +789,7 @@ void ui_on_window_changed(void) {
 
 static etsuko_Animation_EaseTranslationData_t *dup_anim_translate_data(const etsuko_Animation_EaseTranslationData_t *data) {
     etsuko_Animation_EaseTranslationData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate animation ease translation data");
     }
 
@@ -805,7 +805,7 @@ static etsuko_Animation_EaseTranslationData_t *dup_anim_translate_data(const ets
 
 static etsuko_Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const etsuko_Animation_FadeInOutData_t *data) {
     etsuko_Animation_FadeInOutData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate animation fade in out data");
     }
     result->from_alpha = data->from_alpha;
@@ -816,12 +816,12 @@ static etsuko_Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const etsuko_
 }
 
 void ui_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_EaseTranslationData_t *data) {
-    if ( target == NULL ) {
-        error_abort("Target drawable is NULL");
+    if ( target == nullptr ) {
+        error_abort("Target drawable is nullptr");
     }
 
     etsuko_Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate animation");
     }
 
@@ -835,12 +835,12 @@ void ui_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_Ea
 }
 
 void ui_animate_fade(etsuko_Drawable_t *target, const etsuko_Animation_FadeInOutData_t *data) {
-    if ( target == NULL ) {
-        error_abort("Target drawable is NULL");
+    if ( target == nullptr ) {
+        error_abort("Target drawable is nullptr");
     }
 
     etsuko_Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
+    if ( result == nullptr ) {
         error_abort("Failed to allocate animation");
     }
 

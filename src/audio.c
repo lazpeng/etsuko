@@ -1,18 +1,16 @@
 #include "audio.h"
 
-#include <stdbool.h>
-
 #include <SDL_mixer.h>
 
 #include "error.h"
 
-static Mix_Music *g_music = NULL;
+static Mix_Music *g_music = nullptr;
 static double g_music_total_time = 0;
 static bool g_paused = true;
 static bool g_stopped = true;
 
-void audio_init(void) {
-    const int32_t flags = MIX_INIT_MP3;
+void audio_init() {
+    constexpr int32_t flags = MIX_INIT_MP3;
     if ( Mix_Init(flags) == 0 ) {
         puts(Mix_GetError());
         error_abort("Mix_Init failed");
@@ -24,22 +22,22 @@ void audio_init(void) {
     }
 }
 
-void audio_finish(void) {
-    if ( g_music != NULL ) {
+void audio_finish() {
+    if ( g_music != nullptr ) {
         Mix_FreeMusic(g_music);
-        g_music = NULL;
+        g_music = nullptr;
     }
     Mix_Quit();
 }
 
-static void reset(void) {
+static void reset() {
     audio_resume();
     audio_pause();
 }
 
 void audio_load(const char *file) {
     g_music = Mix_LoadMUS(file);
-    if ( g_music == NULL ) {
+    if ( g_music == nullptr ) {
         puts(Mix_GetError());
         error_abort("Failed to load song");
     }
@@ -47,7 +45,7 @@ void audio_load(const char *file) {
     reset();
 }
 
-void audio_resume(void) {
+void audio_resume() {
     if ( g_stopped ) {
         Mix_PlayMusic(g_music, 0);
         g_stopped = g_paused = false;
@@ -61,7 +59,7 @@ void audio_resume(void) {
     }
 }
 
-void audio_pause(void) {
+void audio_pause() {
     if ( g_paused )
         return;
 
@@ -81,13 +79,13 @@ void audio_seek_relative(const double diff) {
     audio_seek(new_time);
 }
 
-double audio_elapsed_time(void) { return Mix_GetMusicPosition(g_music); }
+double audio_elapsed_time() { return Mix_GetMusicPosition(g_music); }
 
-double audio_total_time(void) { return g_music_total_time; }
+double audio_total_time() { return g_music_total_time; }
 
-bool audio_is_paused(void) { return g_paused || g_stopped; }
+bool audio_is_paused() { return g_paused || g_stopped; }
 
-void audio_loop(void) {
+void audio_loop() {
     if ( audio_elapsed_time() >= audio_total_time() && !g_stopped ) {
         g_stopped = true;
     }

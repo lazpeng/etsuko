@@ -9,7 +9,7 @@
 
 static int g_initialized = 0;
 
-static void web_entrypoint(void) {
+static void web_entrypoint() {
     if ( !g_initialized ) {
         if ( global_init() != 0 ) {
             printf("Failed to initialize global");
@@ -25,7 +25,7 @@ static void web_entrypoint(void) {
 }
 #endif
 
-int main(void) {
+int main() {
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(web_entrypoint, 0, 1);
 #else
