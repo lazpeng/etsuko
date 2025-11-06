@@ -38,16 +38,14 @@ etsuko_Karaoke_t *karaoke_init() {
     etsuko_Karaoke_t *karaoke = calloc(1, sizeof (*karaoke));
     if ( karaoke == nullptr )
         error_abort("Failed to allocate memory for karaoke.");
+
+    karaoke->ui = ui_init();
+    if ( karaoke->ui == nullptr )
+        error_abort("Failed to initialize UI.");
     return karaoke;
 }
 
 int karaoke_load_async(etsuko_Karaoke_t *state) {
-    if ( state->ui == nullptr ) {
-        state->ui = ui_init();
-        if ( state->ui == nullptr )
-            error_abort("Failed to initialize UI.");
-    }
-
     etsuko_Config_t *config = config_get();
     // UI Font
     if ( state->load_ui_font.status == LOAD_NOT_STARTED ) {
