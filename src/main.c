@@ -17,14 +17,15 @@ typedef struct {
 static void web_entrypoint(void *em_arg) {
     EntryPointArgs_t *args = em_arg;
     if ( !args->initialized ) {
-        if ( global_init() != 0 ) {
-            printf("Failed to initialize global");
-            return;
-        }
-        if ( args->karaoke == nullptr )
+        if ( args->karaoke == nullptr ) {
+            if ( global_init() != 0 ) {
+                printf("Failed to initialize global");
+                return;
+            }
             args->karaoke = karaoke_init();
+        }
 
-        args->initialized = karaoke_load_async(args->karaoke);
+        args->initialized = karaoke_load_loop(args->karaoke);
         if ( args->initialized )
             karaoke_setup(args->karaoke);
         return;
@@ -55,7 +56,7 @@ int main() {
     }
     Karaoke_t *karaoke = karaoke_init();
     do {
-    } while ( karaoke_load_async(karaoke) == 0 );
+    } while ( karaoke_load_loop(karaoke) == 0 );
 
     karaoke_setup(karaoke);
     do {

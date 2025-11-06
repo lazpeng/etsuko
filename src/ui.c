@@ -96,7 +96,7 @@ static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t 
 
     const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
     render_draw_rounded_rect(&bounds, &data->bg_color, border_radius);
-    bounds.w *= data->progress;
+    bounds.w *= MIN(1.0, data->progress);
     render_draw_rounded_rect(&bounds, &data->fg_color, border_radius);
 }
 
@@ -366,7 +366,7 @@ void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_pa
 
 void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary) {
     const auto primary_color = render_color_parse(primary);
-    const auto secondary_color = secondary == 0 ? render_color_darken(primary_color) : render_color_parse(secondary);
+    const auto secondary_color = render_color_parse(secondary);
     render_set_bg_gradient(primary_color, secondary_color);
 }
 

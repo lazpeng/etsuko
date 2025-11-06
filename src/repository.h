@@ -6,6 +6,8 @@
 #ifndef ETSUKO_REPOSITORY_H
 #define ETSUKO_REPOSITORY_H
 
+#include <stdint.h>
+
 typedef enum LoadStatus_t {
     LOAD_NOT_STARTED = 0,
     LOAD_IN_PROGRESS,
@@ -16,6 +18,9 @@ typedef enum LoadStatus_t {
 typedef struct Load_t {
     LoadStatus_t status;
     char *destination;
+    char *filename;
+    uint64_t downloaded;
+    uint64_t total_size;
 } Load_t;
 
 void repository_get_resource(const char *src, const char *subdir, Load_t *load);

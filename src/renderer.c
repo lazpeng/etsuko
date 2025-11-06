@@ -228,8 +228,8 @@ static Texture_t *create_texture_from_surface(SDL_Surface *surface) {
 
 void render_init(void) {
     if ( g_renderer != nullptr ) {
-        render_finish();
-        g_renderer = nullptr;
+        printf("Warning: renderer already initialized\n");
+        return;
     }
 
     g_renderer = calloc(1, sizeof(*g_renderer));

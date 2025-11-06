@@ -32,6 +32,9 @@ struct Karaoke_t {
     Container_t *song_info_container;
     Container_t *song_controls_container;
     LyricsView_t *lyrics_view;
+    // Only exists during init
+    Drawable_t *loading_progress_bar;
+    Drawable_t *loading_text;
 };
 
 Karaoke_t *karaoke_init() {
@@ -40,12 +43,53 @@ Karaoke_t *karaoke_init() {
         error_abort("Failed to allocate memory for karaoke.");
 
     karaoke->ui = ui_init();
-    if ( karaoke->ui == nullptr )
-        error_abort("Failed to initialize UI.");
+    events_init();
+    audio_init();
+
     return karaoke;
 }
 
-int karaoke_load_async(Karaoke_t *state) {
+static char *append_file_to_loading_text(char *buffer, const char *file, const bool first, const char *buffer_end) {
+    const char *format = first ? "%s" : ", %s";
+    buffer += snprintf(buffer, buffer_end - buffer, format, file);
+    return buffer;
+}
+
+static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
+    return state->load_ui_font.downloaded + state->load_album_art.downloaded + state->load_lyrics_font.downloaded +
+           state->load_audio.downloaded;
+}
+
+static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
+    return state->load_ui_font.total_size + state->load_lyrics_font.total_size + state->load_audio.total_size +
+           state->load_album_art.total_size;
+}
+
+static char *get_loading_files_names(const Karaoke_t *state) {
+    char *buffer = calloc(MAX_TEXT_SIZE, sizeof(*buffer));
+    char *original_buffer = buffer;
+    const char *const loading_text = "Loading ";
+    memcpy(buffer, loading_text, strlen(loading_text));
+    buffer += strlen(loading_text);
+
+    bool first = true;
+    if ( state->load_lyrics_font.status != LOAD_FINISHED ) {
+        buffer = append_file_to_loading_text(buffer, state->load_lyrics_font.filename, first, original_buffer + MAX_TEXT_SIZE);
+        first = false;
+    }
+    if ( state->load_album_art.status != LOAD_FINISHED ) {
+        buffer = append_file_to_loading_text(buffer, state->load_album_art.filename, first, original_buffer + MAX_TEXT_SIZE);
+        first = false;
+    }
+    if ( state->load_audio.status != LOAD_FINISHED ) {
+        buffer = append_file_to_loading_text(buffer, state->load_audio.filename, first, original_buffer + MAX_TEXT_SIZE);
+    }
+
+    snprintf(buffer, MAX_TEXT_SIZE - (buffer - original_buffer), "...");
+    return original_buffer;
+}
+
+static int load_async(Karaoke_t *state) {
     Config_t *config = config_get();
     // UI Font
     if ( state->load_ui_font.status == LOAD_NOT_STARTED ) {
@@ -92,6 +136,25 @@ int karaoke_load_async(Karaoke_t *state) {
     }
     // Finish loading the song before we load the rest
 
+    // Display progress
+    if ( state->loading_progress_bar != nullptr ) {
+        const uint64_t total_size = get_total_loading_files_size(state);
+        const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
+        Drawable_ProgressBarData_t *loading_progress = state->loading_progress_bar->custom_data;
+        loading_progress->progress = (double)downloaded / (double)total_size;
+    }
+    // Update progress text
+    if ( state->loading_text != nullptr ) {
+        char *current_loading_text = get_loading_files_names(state);
+        Drawable_TextData_t *text_data = state->loading_text->custom_data;
+
+        if ( strcmp(current_loading_text, text_data->text) != 0 ) {
+            free(text_data->text);
+            text_data->text = current_loading_text;
+            ui_recompute_drawable(state->ui, state->loading_text);
+        }
+    }
+
     if ( song_get()->font_override != nullptr && !state->loaded_override ) {
         config->lyrics_font = strdup(song_get()->font_override);
         state->loaded_override = true;
@@ -122,10 +185,60 @@ int karaoke_load_async(Karaoke_t *state) {
            state->load_album_art.status == LOAD_FINISHED;
 }
 
+int karaoke_load_loop(Karaoke_t *state) {
+    events_loop();
+    if ( events_has_quit() )
+        return -1;
+
+    if ( state->load_ui_font.status == LOAD_FINISHED ) {
+        if ( state->loading_progress_bar == nullptr ) {
+            state->loading_progress_bar = ui_make_progressbar(state->ui,
+                                                              &(Drawable_ProgressBarData_t){
+                                                                  .progress = 0,
+                                                                  .border_radius_em = 1.0,
+                                                                  .fg_color = (Color_t){.r = 200, .g = 200, .b = 200, .a = 255},
+                                                                  .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
+                                                              },
+                                                              ui_root_container(state->ui),
+                                                              &(Layout_t){
+                                                                  .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
+                                                                  .width = 0.75,
+                                                                  .height = 0.02,
+                                                              });
+        }
+
+        if ( state->loading_text == nullptr ) {
+            state->loading_text =
+                ui_make_text(state->ui,
+                             &(Drawable_TextData_t){.text = "Loading...",
+                                                    .bold = false,
+                                                    .em = 1.5,
+                                                    .color = {.r = 200, .g = 200, .b = 200, .a = 255},
+                                                    .font_type = FONT_UI},
+                             ui_root_container(state->ui),
+                             &(Layout_t){.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y |
+                                                  LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
+                                         .offset_y = -0.035,
+                                         .relative_to = state->loading_progress_bar});
+        }
+    }
+
+    ui_begin_loop(state->ui);
+    // Recalculate dynamic elements
+    const int initialized = load_async(state);
+
+    ui_draw(state->ui);
+    ui_end_loop();
+
+    return initialized;
+}
+
 void karaoke_setup(Karaoke_t *state) {
-    events_init();
-    ui_init();
-    audio_init();
+    if ( state->ui != nullptr ) {
+        ui_finish(state->ui);
+        state->loading_progress_bar = state->loading_text = nullptr;
+    }
+    state->ui = ui_init();
 
     audio_load(song_get()->file_path);
 
@@ -440,6 +553,5 @@ int karaoke_loop(const Karaoke_t *state) {
 void karaoke_finish(const Karaoke_t *state) {
     events_finish();
     ui_finish(state->ui);
-    render_finish();
     audio_finish();
 }

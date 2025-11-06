@@ -31,14 +31,21 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
     fclose(out);
 
     job->status = LOAD_DONE;
-    //job->destination = output_file;
     emscripten_fetch_close(fetch);
+
+    printf("Finished. total: %llu num: %llu\n", fetch->totalBytes, fetch->numBytes);
 }
 
 static void on_fetch_failure(emscripten_fetch_t *fetch) {
     puts(fetch->statusText);
     emscripten_fetch_close(fetch);
     error_abort("Failed to fetch resource");
+}
+
+static void on_fetch_ready(emscripten_fetch_t *fetch) {
+    Load_t *job = fetch->userData;
+    job->downloaded = fetch->dataOffset;
+    job->total_size = fetch->totalBytes;
 }
 
 #endif
@@ -49,9 +56,8 @@ void repository_get_resource(const char *src, const char *subdir, Load_t *load) 
     }
 
     mkdir("assets", 0777);
-    char *filename = str_get_filename(src);
-    asprintf(&load->destination, "assets/%s", filename);
-    free(filename);
+    load->filename = str_get_filename(src);
+    asprintf(&load->destination, "assets/%s", load->filename);
     load->status = LOAD_IN_PROGRESS;
 
     FILE *existing = fopen(load->destination, "r");
@@ -74,6 +80,7 @@ void repository_get_resource(const char *src, const char *subdir, Load_t *load) 
     attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
     attr.onsuccess = on_fetch_success;
     attr.onerror = on_fetch_failure;
+    attr.onreadystatechange = on_fetch_ready;
     attr.userData = load;
 
     emscripten_fetch(&attr, full_path);
