@@ -1,3 +1,5 @@
+#include "error.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7,41 +9,61 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 
-static int g_initialized = 0;
+typedef struct {
+    etsuko_Karaoke_t *karaoke;
+    bool initialized;
+} EntryPointArgs_t;
 
-static void web_entrypoint() {
-    if ( !g_initialized ) {
+static void web_entrypoint(void *em_arg) {
+    EntryPointArgs_t *args = em_arg;
+    if ( !args->initialized ) {
         if ( global_init() != 0 ) {
             printf("Failed to initialize global");
             return;
         }
-        g_initialized = karaoke_load_async();
-        if ( g_initialized )
-            karaoke_init();
+        if ( args->karaoke == nullptr )
+            args->karaoke = karaoke_init();
+
+        args->initialized = karaoke_load_async(args->karaoke);
+        if ( args->initialized )
+            karaoke_setup(args->karaoke);
         return;
     }
 
-    karaoke_loop();
+    karaoke_loop(args->karaoke);
 }
 #endif
 
 int main() {
 #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(web_entrypoint, 0, 1);
+    EntryPointArgs_t *args = calloc(1, sizeof(*args));
+    if ( args == nullptr ) {
+        error_abort("Failed to allocate args for emscripten");
+    }
+    args->initialized = false;
+    args->karaoke = nullptr;
+
+    emscripten_set_main_loop_arg(web_entrypoint, args, 0, 1);
+    if ( args->karaoke != nullptr ) {
+        karaoke_finish(args->karaoke);
+    }
+    free(args);
 #else
     if ( global_init() != 0 ) {
         printf("Failed to initialize global");
         return EXIT_FAILURE;
     }
+    etsuko_Karaoke_t *karaoke = karaoke_init();
     do {
-    } while ( karaoke_load_async() == 0 );
+    } while ( karaoke_load_async(karaoke) == 0 );
 
-    karaoke_init();
+    karaoke_setup(karaoke);
     do {
-    } while ( karaoke_loop() == 0 );
+    } while ( karaoke_loop(karaoke) == 0 );
+
+    karaoke_finish(karaoke);
 #endif
 
-    karaoke_finish();
     global_finish();
     return EXIT_SUCCESS;
 }
