@@ -32,8 +32,6 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
 
     job->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
-
-    printf("Finished. total: %llu num: %llu\n", fetch->totalBytes, fetch->numBytes);
 }
 
 static void on_fetch_failure(emscripten_fetch_t *fetch) {
