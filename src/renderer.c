@@ -5,9 +5,9 @@
 #include "renderer.h"
 
 #include "constants.h"
-#include "container_utils.h"
 #include "contrib/incbin.h"
 #include "error.h"
+#include "events.h"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -35,6 +35,8 @@ typedef struct etsuko_Renderer_t {
     TTF_Font *ui_font, *lyrics_font;
     double h_dpi, v_dpi;
     etsuko_Color_t bg_color;
+    etsuko_Color_t bg_gradient_top, bg_gradient_bottom;
+    bool use_gradient;
     etsuko_Color_t draw_color;
     etsuko_RenderTarget_t *render_target;
     etsuko_BlendMode_t blend_mode;
@@ -45,6 +47,7 @@ typedef struct etsuko_Renderer_t {
     GLuint VAO, VBO;
     GLuint texture_shader;
     GLuint rect_shader;
+    GLuint gradient_shader;
     float projection_matrix[16];
 
     // Shader uniform locations
@@ -58,6 +61,9 @@ typedef struct etsuko_Renderer_t {
     GLint rect_pos_loc;
     GLint rect_size_loc;
     GLint rect_radius_loc;
+    GLint grad_projection_loc;
+    GLint grad_top_color_loc;
+    GLint grad_bottom_color_loc;
 } etsuko_Renderer_t;
 
 static etsuko_Renderer_t *g_renderer = nullptr;
@@ -80,12 +86,22 @@ static const char incbin_rect_vertex_shader[] = {
 static const char incbin_rect_fragment_shader[] = {
 #embed "shaders/rect.frag.glsl"
 };
+
+static const char incbin_gradient_vertex_shader[] = {
+#embed "shaders/gradient.vert.glsl"
+};
+static const char incbin_gradient_fragment_shader[] = {
+#embed "shaders/gradient.frag.glsl"
+};
 #else
 INCBIN(texture_vertex_shader, "shaders/texture.vert.glsl")
 INCBIN(texture_fragment_shader, "shaders/texture.frag.glsl")
 
 INCBIN(rect_vertex_shader, "shaders/rect.vert.glsl")
 INCBIN(rect_fragment_shader, "shaders/rect.frag.glsl")
+
+INCBIN(gradient_vertex_shader, "shaders/gradient.vert.glsl")
+INCBIN(gradient_fragment_shader, "shaders/gradient.frag.glsl")
 #endif
 
 // ============================================================================
@@ -260,6 +276,7 @@ void render_init(void) {
 
     g_renderer->bg_color = (etsuko_Color_t){0, 0, 0, 255};
     g_renderer->draw_color = (etsuko_Color_t){255, 255, 255, 255};
+    g_renderer->use_gradient = false;
 
 #ifdef __EMSCRIPTEN__
     double cssWidth, cssHeight;
@@ -300,6 +317,7 @@ void render_init(void) {
     char *buffer = begin_shader_compilation();
     g_renderer->texture_shader = create_shader_program(buffer, incbin_texture_vertex_shader, incbin_texture_fragment_shader);
     g_renderer->rect_shader = create_shader_program(buffer, incbin_rect_vertex_shader, incbin_rect_fragment_shader);
+    g_renderer->gradient_shader = create_shader_program(buffer, incbin_gradient_vertex_shader, incbin_gradient_fragment_shader);
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
@@ -315,6 +333,11 @@ void render_init(void) {
     g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "rectPos");
     g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "rectSize");
     g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "cornerRadius");
+
+    // Get uniform locations for gradient shader
+    g_renderer->grad_projection_loc = glGetUniformLocation(g_renderer->gradient_shader, "projection");
+    g_renderer->grad_top_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "topColor");
+    g_renderer->grad_bottom_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "bottomColor");
 }
 
 void render_finish(void) {
@@ -331,6 +354,7 @@ void render_finish(void) {
     // Delete OpenGL objects
     glDeleteProgram(g_renderer->texture_shader);
     glDeleteProgram(g_renderer->rect_shader);
+    glDeleteProgram(g_renderer->gradient_shader);
     glDeleteBuffers(1, &g_renderer->VBO);
     glDeleteVertexArrays(1, &g_renderer->VAO);
 
@@ -356,6 +380,8 @@ void render_on_window_changed(void) {
     g_renderer->window_pixel_scale = 1.0;
 #endif
 
+    events_set_window_pixel_scale(g_renderer->window_pixel_scale);
+
     float hdpi_temp, v_dpi_temp;
     if ( SDL_GetDisplayDPI(0, nullptr, &hdpi_temp, &v_dpi_temp) != 0 ) {
         puts(SDL_GetError());
@@ -371,9 +397,42 @@ void render_on_window_changed(void) {
 }
 
 void render_clear(void) {
-    glClearColor((float)g_renderer->bg_color.r / 255.0f, (float)g_renderer->bg_color.g / 255.0f,
-                 (float)g_renderer->bg_color.b / 255.0f, (float)g_renderer->bg_color.a / 255.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    if ( g_renderer->use_gradient ) {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        const etsuko_BlendMode_t saved_blend = g_renderer->blend_mode;
+        render_set_blend_mode(BLEND_MODE_NONE);
+
+        glUseProgram(g_renderer->gradient_shader);
+
+        const etsuko_Color_t *top = &g_renderer->bg_gradient_top;
+        const etsuko_Color_t *bottom = &g_renderer->bg_gradient_bottom;
+
+        glUniform4f(g_renderer->grad_top_color_loc, (float)top->r / 255.0f, (float)top->g / 255.0f, (float)top->b / 255.0f,
+                    (float)top->a / 255.0f);
+        glUniform4f(g_renderer->grad_bottom_color_loc, (float)bottom->r / 255.0f, (float)bottom->g / 255.0f,
+                    (float)bottom->b / 255.0f, (float)bottom->a / 255.0f);
+        glUniformMatrix4fv(g_renderer->grad_projection_loc, 1, GL_FALSE, g_renderer->projection_matrix);
+
+        const float w = (float)g_renderer->viewport.w;
+        const float h = (float)g_renderer->viewport.h;
+        const float vertices[] = {0.0f, 0.0f, 0.0f, 0.0f, w, 0.0f, 1.0f, 0.0f, w, h, 1.0f, 1.0f, 0.0f, h, 0.0f, 1.0f};
+
+        glBindVertexArray(g_renderer->VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, g_renderer->VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        glBindVertexArray(0);
+
+        // Restore blend mode
+        render_set_blend_mode(saved_blend);
+    } else {
+        // Use solid color
+        glClearColor((float)g_renderer->bg_color.r / 255.0f, (float)g_renderer->bg_color.g / 255.0f,
+                     (float)g_renderer->bg_color.b / 255.0f, (float)g_renderer->bg_color.a / 255.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
 }
 
 void render_present(void) { SDL_GL_SwapWindow(g_renderer->window); }
@@ -473,7 +532,7 @@ const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const i
     fbo_projection[13] = 1.0f;
     fbo_projection[15] = 1.0f;
 
-    // Update global projection matrix (used by drawing functions)
+    // Update global projection matrix
     memcpy(g_renderer->projection_matrix, fbo_projection, sizeof(float) * 16);
 
     // Update projection in shaders
@@ -540,7 +599,24 @@ etsuko_Color_t render_color_parse(const uint32_t color) {
     return (etsuko_Color_t){.r = r, .g = g, .b = b, .a = a};
 }
 
-void render_set_bg_color(const etsuko_Color_t color) { g_renderer->bg_color = color; }
+etsuko_Color_t render_color_darken(etsuko_Color_t color) {
+    constexpr double amount = 0.8;
+    color.r = (uint8_t)fmax(0, color.r * amount);
+    color.g = (uint8_t)fmax(0, color.g * amount);
+    color.b = (uint8_t)fmax(0, color.b * amount);
+    return color;
+}
+
+void render_set_bg_color(const etsuko_Color_t color) {
+    g_renderer->bg_color = color;
+    g_renderer->use_gradient = false;
+}
+
+void render_set_bg_gradient(const etsuko_Color_t top_color, const etsuko_Color_t bottom_color) {
+    g_renderer->bg_gradient_top = top_color;
+    g_renderer->bg_gradient_bottom = bottom_color;
+    g_renderer->use_gradient = true;
+}
 
 void render_set_blend_mode(const etsuko_BlendMode_t mode) {
     g_renderer->blend_mode = mode;
