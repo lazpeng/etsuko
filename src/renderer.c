@@ -371,14 +371,10 @@ void render_on_window_changed(void) {
     int32_t outW, outH;
     SDL_GL_GetDrawableSize(g_renderer->window, &outW, &outH);
 
-#ifdef __APPLE__
     int32_t window_w;
     SDL_GetWindowSize(g_renderer->window, &window_w, nullptr);
 
     g_renderer->window_pixel_scale = (double)outW / (double)window_w;
-#else
-    g_renderer->window_pixel_scale = 1.0;
-#endif
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
