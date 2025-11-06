@@ -1,5 +1,5 @@
 # etsuko
-****
+
 *Notice:*\
 **This repository is unlicensed on purpose. You may not use, copy, modify, or
 distribute this code without permission.**\
