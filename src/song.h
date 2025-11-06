@@ -8,31 +8,31 @@
 #include "constants.h"
 #include "container_utils.h"
 
-typedef struct etsuko_SongLineTiming_t {
+typedef struct Song_LineTiming_t {
     int32_t end_idx;
     double start_time, duration;
-} etsuko_SongLineTiming_t;
+} Song_LineTiming_t;
 
-typedef enum etsuko_Song_LineAlignment_t {
+typedef enum Song_LineAlignment_t {
     SONG_LINE_LEFT = 0,
     SONG_LINE_CENTER,
     SONG_LINE_RIGHT
-} etsuko_Song_LineAlignment_t;
+} Song_LineAlignment_t;
 
-typedef enum etsuko_Song_BgType_t {
-    SONGBG_SIMPLE_GRADIENT = 0,
-    SONGBG_SOLID
-} etsuko_Song_BgType_t;
+typedef enum Song_BgType_t {
+    BG_SIMPLE_GRADIENT = 0,
+    BG_SOLID
+} Song_BgType_t;
 
-typedef struct etsuko_SongLine_t {
+typedef struct Song_Line_t {
     char *full_text;
     double base_start_time, base_duration;
-    etsuko_SongLineTiming_t timings[MAX_TIMINGS_PER_LINE];
+    Song_LineTiming_t timings[MAX_TIMINGS_PER_LINE];
     int32_t num_timings;
-    etsuko_Song_LineAlignment_t alignment;
-} etsuko_SongLine_t;
+    Song_LineAlignment_t alignment;
+} Song_Line_t;
 
-typedef struct {
+typedef struct Song_t {
     // Data about the song
     char *name, *translated_name, *artist, *album;
     int year;
@@ -41,16 +41,16 @@ typedef struct {
     char *id;
     char *file_path, *album_art_path;
     char *karaoke, *language, *hidden;
-    etsuko_Song_LineAlignment_t line_alignment;
+    Song_LineAlignment_t line_alignment;
     uint32_t bg_color;
     uint32_t bg_color_secondary;
     double time_offset;
     char *font_override;
-    enum etsuko_Song_BgType_t bg_type;
-} etsuko_Song_t;
+    Song_BgType_t bg_type;
+} Song_t;
 
 void song_load(const char *src);
-etsuko_Song_t *song_get();
+Song_t *song_get();
 void song_destroy();
 
 #endif // ETSUKO_SONG_H

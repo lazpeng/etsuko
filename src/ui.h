@@ -12,11 +12,11 @@
 #include "renderer.h"
 
 // Fw declarations
-typedef struct etsuko_UiState_t etsuko_UiState_t;
-typedef struct etsuko_Drawable_t etsuko_Drawable_t;
+typedef struct Ui_t Ui_t;
+typedef struct Drawable_t Drawable_t;
 
 // Primitives
-typedef enum etsuko_LayoutFlags_t {
+typedef enum LayoutFlags_t {
     LAYOUT_NONE = 0,
     LAYOUT_CENTER_X = 1 << 0,
     LAYOUT_CENTER_Y = 1 << 1,
@@ -42,134 +42,130 @@ typedef enum etsuko_LayoutFlags_t {
     LAYOUT_WRAP_AROUND_X = 1 << 15,
     LAYOUT_WRAP_AROUND_Y = 1 << 16,
     LAYOUT_WRAP_AROUND = LAYOUT_WRAP_AROUND_X | LAYOUT_WRAP_AROUND_Y,
-} etsuko_LayoutFlags_t;
+} LayoutFlags_t;
 
-typedef struct etsuko_Layout_t {
-    etsuko_LayoutFlags_t flags;
+typedef struct Layout_t {
+    LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
-    etsuko_Drawable_t *relative_to_size;
-    etsuko_Drawable_t *relative_to;
-} etsuko_Layout_t;
+    Drawable_t *relative_to_size;
+    Drawable_t *relative_to;
+} Layout_t;
 
-typedef enum etsuko_DrawableType_t { DRAW_TYPE_TEXT = 0, DRAW_TYPE_IMAGE, DRAW_TYPE_PROGRESS_BAR } etsuko_DrawableType_t;
+typedef enum DrawableType_t { DRAW_TYPE_TEXT = 0, DRAW_TYPE_IMAGE, DRAW_TYPE_PROGRESS_BAR } DrawableType_t;
 
-typedef enum etsuko_ContainerFlags_t {
+typedef enum ContainerFlags_t {
     CONTAINER_NONE = 0,
     CONTAINER_VERTICAL_ALIGN_CONTENT = 1,
-} etsuko_ContainerFlags_t;
+} ContainerFlags_t;
 
-typedef struct etsuko_Container_t {
-    etsuko_Bounds_t bounds;
-    struct etsuko_Container_t *parent;
+typedef struct Container_t {
+    Bounds_t bounds;
+    struct Container_t *parent;
     Vector_t *child_drawables;
     Vector_t *child_containers;
-    etsuko_Layout_t layout;
+    Layout_t layout;
     bool enabled;
-    etsuko_ContainerFlags_t flags;
+    ContainerFlags_t flags;
     double align_content_offset_y;
     double viewport_y;
-} etsuko_Container_t;
+} Container_t;
 
-typedef struct etsuko_Drawable_t {
-    etsuko_DrawableType_t type;
-    etsuko_Texture_t *texture;
-    etsuko_Bounds_t bounds;
+typedef struct Drawable_t {
+    DrawableType_t type;
+    Texture_t *texture;
+    Bounds_t bounds;
     void *custom_data;
-    etsuko_Container_t *parent;
+    Container_t *parent;
     bool enabled, dynamic;
-    etsuko_Layout_t layout;
+    Layout_t layout;
     uint8_t alpha_mod;
     Vector_t *animations;
-} etsuko_Drawable_t;
+} Drawable_t;
 
-typedef enum etsuko_AnimationType_t {
+typedef enum AnimationType_t {
     ANIM_EASE_TRANSLATION = 0,
     ANIM_FADE_IN_OUT,
-} etsuko_AnimationType_t;
+} AnimationType_t;
 
-typedef struct etsuko_Animation_t {
+typedef struct Animation_t {
     double duration, elapsed;
-    etsuko_AnimationType_t type;
+    AnimationType_t type;
     void *custom_data;
-    etsuko_Drawable_t *target;
+    Drawable_t *target;
     bool active;
-} etsuko_Animation_t;
+} Animation_t;
 
 // Options and custom data
-typedef enum etsuko_DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } etsuko_DrawableAlignment_t;
+typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } DrawableAlignment_t;
 
-typedef struct etsuko_Drawable_TextData_t {
+typedef struct Drawable_TextData_t {
     // Regular options
     char *text;
-    etsuko_FontType_t font_type;
+    FontType_t font_type;
     double em;
-    etsuko_Color_t color;
+    Color_t color;
     bool bold;
     // Wrap options
     int wrap_enabled;
     double wrap_width_threshold;
     double measure_at_em;
     int32_t line_padding;
-    etsuko_DrawableAlignment_t alignment;
-} etsuko_Drawable_TextData_t;
+    DrawableAlignment_t alignment;
+} Drawable_TextData_t;
 
-typedef struct etsuko_Drawable_ImageData_t {
+typedef struct Drawable_ImageData_t {
     char *file_path;
     double border_radius_em;
-} etsuko_Drawable_ImageData_t;
+} Drawable_ImageData_t;
 
-typedef struct etsuko_Drawable_ProgressBarData_t {
+typedef struct Drawable_ProgressBarData_t {
     double progress;
     double border_radius_em;
-    etsuko_Color_t fg_color, bg_color;
-} etsuko_Drawable_ProgressBarData_t;
+    Color_t fg_color, bg_color;
+} Drawable_ProgressBarData_t;
 
-typedef struct etsuko_Animation_EaseTranslationData_t {
+typedef struct Animation_EaseTranslationData_t {
     double from_x, from_y;
     double to_x, to_y;
     double duration;
     bool ease;
-} etsuko_Animation_EaseTranslationData_t;
+} Animation_EaseTranslationData_t;
 
-typedef struct etsuko_Animation_FadeInOutData_t {
+typedef struct Animation_FadeInOutData_t {
     int32_t from_alpha, to_alpha;
     double duration;
-} etsuko_Animation_FadeInOutData_t;
+} Animation_FadeInOutData_t;
 
 // Init and lifetime functions
-etsuko_UiState_t *ui_init();
-void ui_finish(etsuko_UiState_t *ui);
-void ui_begin_loop(etsuko_UiState_t *ui);
+Ui_t *ui_init();
+void ui_finish(Ui_t *ui);
+void ui_begin_loop(Ui_t *ui);
 void ui_end_loop();
-void ui_load_font(etsuko_FontType_t type, const char *path);
-void ui_draw(const etsuko_UiState_t *ui);
+void ui_load_font(FontType_t type, const char *path);
+void ui_draw(const Ui_t *ui);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
 void ui_set_bg_gradient(uint32_t primary, uint32_t secondary);
-void ui_on_window_changed(etsuko_UiState_t *ui);
-etsuko_Container_t *ui_root_container(etsuko_UiState_t *ui);
-void ui_get_drawable_canon_pos(etsuko_UiState_t *ui, const etsuko_Drawable_t *drawable, double *x, double *y);
-void ui_get_container_canon_pos(etsuko_UiState_t *ui, const etsuko_Container_t *container, double *x, double *y);
+void ui_on_window_changed(Ui_t *ui);
+Container_t *ui_root_container(Ui_t *ui);
+void ui_get_drawable_canon_pos(Ui_t *ui, const Drawable_t *drawable, double *x, double *y);
+void ui_get_container_canon_pos(Ui_t *ui, const Container_t *container, double *x, double *y);
 // Drawables
-etsuko_Drawable_t *ui_make_text(etsuko_UiState_t *ui, etsuko_Drawable_TextData_t *data, etsuko_Container_t *container,
-                                const etsuko_Layout_t *layout);
-etsuko_Drawable_t *ui_make_image(etsuko_UiState_t *ui, etsuko_Drawable_ImageData_t *data, etsuko_Container_t *container,
-                                 const etsuko_Layout_t *layout);
-etsuko_Drawable_t *ui_make_progressbar(etsuko_UiState_t *ui, const etsuko_Drawable_ProgressBarData_t *data,
-                                       etsuko_Container_t *container, const etsuko_Layout_t *layout);
-void ui_recompute_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable);
-void ui_reposition_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable);
-void ui_destroy_drawable(etsuko_Drawable_t *drawable);
-void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, int32_t alpha);
+Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
+void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
+void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
+void ui_destroy_drawable(Drawable_t *drawable);
+void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 // Containers
-etsuko_Container_t *ui_make_container(etsuko_UiState_t *ui, etsuko_Container_t *parent, const etsuko_Layout_t *layout,
-                                      etsuko_ContainerFlags_t flags);
-void ui_recompute_container(etsuko_UiState_t *ui, etsuko_Container_t *container);
-void ui_destroy_container(etsuko_UiState_t *ui, etsuko_Container_t *container);
+Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
+void ui_recompute_container(Ui_t *ui, Container_t *container);
+void ui_destroy_container(Ui_t *ui, Container_t *container);
 // Animations
-void ui_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_EaseTranslationData_t *data);
-void ui_animate_fade(etsuko_Drawable_t *target, const etsuko_Animation_FadeInOutData_t *data);
+void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data);
+void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data);
 
 #endif // ETSUKO_UI_H

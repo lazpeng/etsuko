@@ -17,12 +17,12 @@
 #include "constants.h"
 #include "container_utils.h"
 
-struct etsuko_UiState_t {
-    etsuko_Container_t root_container;
+struct Ui_t {
+    Container_t root_container;
 };
 
-etsuko_UiState_t *ui_init() {
-    etsuko_UiState_t *ui = calloc(1, sizeof(*ui));
+Ui_t *ui_init() {
+    Ui_t *ui = calloc(1, sizeof(*ui));
     if ( ui == nullptr ) {
         error_abort("Failed to allocate UI");
     }
@@ -36,12 +36,12 @@ etsuko_UiState_t *ui_init() {
     return ui;
 }
 
-void ui_load_font(const etsuko_FontType_t type, const char *path) { render_load_font(path, type); }
+void ui_load_font(const FontType_t type, const char *path) { render_load_font(path, type); }
 
-static void animation_translation_data_destroy(etsuko_Animation_EaseTranslationData_t *data) { free(data); }
-static void animation_fade_data_destroy(etsuko_Animation_FadeInOutData_t *data) { free(data); }
+static void animation_translation_data_destroy(Animation_EaseTranslationData_t *data) { free(data); }
+static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(data); }
 
-static void animation_destroy(etsuko_Animation_t *animation) {
+static void animation_destroy(Animation_t *animation) {
     if ( animation->custom_data != nullptr ) {
         if ( animation->type == ANIM_EASE_TRANSLATION ) {
             animation_translation_data_destroy(animation->custom_data);
@@ -55,12 +55,12 @@ static void animation_destroy(etsuko_Animation_t *animation) {
     free(animation);
 }
 
-static void container_update_animations(const etsuko_Container_t *container, const double delta_time) {
+static void container_update_animations(const Container_t *container, const double delta_time) {
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        const etsuko_Drawable_t *drawable = container->child_drawables->data[i];
+        const Drawable_t *drawable = container->child_drawables->data[i];
 
         for ( size_t j = 0; j < drawable->animations->size; j++ ) {
-            etsuko_Animation_t *anim = drawable->animations->data[j];
+            Animation_t *anim = drawable->animations->data[j];
 
             if ( anim->elapsed < anim->duration ) {
                 anim->elapsed += delta_time;
@@ -69,16 +69,16 @@ static void container_update_animations(const etsuko_Container_t *container, con
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        const etsuko_Container_t *child = container->child_containers->data[i];
+        const Container_t *child = container->child_containers->data[i];
         container_update_animations(child, delta_time);
     }
 }
 
-static void update_animations(const etsuko_UiState_t *ui, const double delta_time) {
+static void update_animations(const Ui_t *ui, const double delta_time) {
     container_update_animations(&ui->root_container, delta_time);
 }
 
-void ui_begin_loop(etsuko_UiState_t *ui) {
+void ui_begin_loop(Ui_t *ui) {
     if ( events_window_changed() )
         ui_on_window_changed(ui);
 
@@ -87,10 +87,10 @@ void ui_begin_loop(etsuko_UiState_t *ui) {
     update_animations(ui, delta_time);
 }
 
-static void draw_dynamic_progressbar(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
-    const etsuko_Drawable_ProgressBarData_t *data = drawable->custom_data;
+static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t *base_bounds) {
+    const Drawable_ProgressBarData_t *data = drawable->custom_data;
 
-    etsuko_Bounds_t bounds = drawable->bounds;
+    Bounds_t bounds = drawable->bounds;
     bounds.x += base_bounds->x;
     bounds.y += base_bounds->y;
 
@@ -100,7 +100,7 @@ static void draw_dynamic_progressbar(const etsuko_Drawable_t *drawable, const et
     render_draw_rounded_rect(&bounds, &data->fg_color, border_radius);
 }
 
-static void measure_layout(const etsuko_Layout_t *layout, const etsuko_Container_t *parent, etsuko_Bounds_t *out_bounds) {
+static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
     double w = layout->width, h = layout->height;
     if ( layout->width > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
@@ -152,11 +152,11 @@ static void measure_layout(const etsuko_Layout_t *layout, const etsuko_Container
     }
 }
 
-static void measure_container_size(etsuko_UiState_t *ui, const etsuko_Container_t *container, etsuko_Bounds_t *out_bounds) {
+static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
     // Only measure height for now
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        const etsuko_Drawable_t *drawable = container->child_drawables->data[i];
+        const Drawable_t *drawable = container->child_drawables->data[i];
         double draw_y;
         ui_get_drawable_canon_pos(ui, drawable, nullptr, &draw_y);
 
@@ -165,8 +165,8 @@ static void measure_container_size(etsuko_UiState_t *ui, const etsuko_Container_
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        const etsuko_Container_t *child = container->child_containers->data[i];
-        etsuko_Bounds_t child_bounds = {0};
+        const Container_t *child = container->child_containers->data[i];
+        Bounds_t child_bounds = {0};
         measure_container_size(ui, child, &child_bounds);
         max_y = fmax(max_y, child_bounds.y + child_bounds.h);
         min_y = fmin(min_y, child_bounds.y);
@@ -175,20 +175,20 @@ static void measure_container_size(etsuko_UiState_t *ui, const etsuko_Container_
     out_bounds->h = fmax(out_bounds->h, max_y - min_y);
 }
 
-static void recalculate_container_alignment(etsuko_UiState_t *ui, etsuko_Container_t *container) {
+static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
     if ( container->parent != nullptr )
         recalculate_container_alignment(ui, container->parent);
 
     if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
         container->align_content_offset_y = 0;
-        etsuko_Bounds_t bounds = {0};
+        Bounds_t bounds = {0};
         measure_container_size(ui, container, &bounds);
         container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
     }
 }
 
-static void position_layout(etsuko_UiState_t *ui, const etsuko_Layout_t *layout, etsuko_Container_t *parent,
-                            etsuko_Bounds_t *out_bounds) {
+static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent,
+                            Bounds_t *out_bounds) {
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
@@ -252,8 +252,8 @@ static void position_layout(etsuko_UiState_t *ui, const etsuko_Layout_t *layout,
 
 static double ease_out_cubic(const double t) { return 1 - pow(1 - t, 3); }
 
-static void apply_translation_animation(etsuko_Animation_t *animation, etsuko_Bounds_t *final_bounds) {
-    const etsuko_Animation_EaseTranslationData_t *data = animation->custom_data;
+static void apply_translation_animation(Animation_t *animation, Bounds_t *final_bounds) {
+    const Animation_EaseTranslationData_t *data = animation->custom_data;
 
     double progress = animation->elapsed / animation->duration;
 
@@ -269,8 +269,8 @@ static void apply_translation_animation(etsuko_Animation_t *animation, etsuko_Bo
     }
 }
 
-static void apply_fade_animation(etsuko_Animation_t *animation, int32_t *final_alpha) {
-    const etsuko_Animation_FadeInOutData_t *data = animation->custom_data;
+static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
+    const Animation_FadeInOutData_t *data = animation->custom_data;
 
     double progress = animation->elapsed / animation->duration;
 
@@ -286,13 +286,13 @@ static void apply_fade_animation(etsuko_Animation_t *animation, int32_t *final_a
 }
 
 struct AnimationDelta {
-    etsuko_Bounds_t final_bounds;
+    Bounds_t final_bounds;
     int32_t final_alpha;
 };
 
-static void apply_animations(const etsuko_Drawable_t *drawable, struct AnimationDelta *animation_delta) {
+static void apply_animations(const Drawable_t *drawable, struct AnimationDelta *animation_delta) {
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-        etsuko_Animation_t *animation = drawable->animations->data[i];
+        Animation_t *animation = drawable->animations->data[i];
         if ( animation->active ) {
             if ( animation->type == ANIM_EASE_TRANSLATION ) {
                 apply_translation_animation(animation, &animation_delta->final_bounds);
@@ -303,7 +303,7 @@ static void apply_animations(const etsuko_Drawable_t *drawable, struct Animation
     }
 }
 
-static void perform_draw(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
+static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds) {
     if ( !drawable->enabled ) {
         return;
     }
@@ -323,14 +323,14 @@ static void perform_draw(const etsuko_Drawable_t *drawable, const etsuko_Bounds_
     };
     apply_animations(drawable, &delta);
 
-    etsuko_Bounds_t rect = delta.final_bounds;
+    Bounds_t rect = delta.final_bounds;
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
 
     render_draw_texture(drawable->texture, &rect, delta.final_alpha);
 }
 
-static void draw_all_container(const etsuko_Container_t *container, etsuko_Bounds_t base_bounds) {
+static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
     if ( !container->enabled )
         return;
 
@@ -346,8 +346,8 @@ static void draw_all_container(const etsuko_Container_t *container, etsuko_Bound
     }
 }
 
-void ui_draw(const etsuko_UiState_t *ui) {
-    const etsuko_Bounds_t bounds = {0};
+void ui_draw(const Ui_t *ui) {
+    const Bounds_t bounds = {0};
     draw_all_container(&ui->root_container, bounds);
 }
 
@@ -355,7 +355,7 @@ void ui_end_loop() { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
 
-void ui_finish(etsuko_UiState_t *ui) {
+void ui_finish(Ui_t *ui) {
     // Free stored textures and drawables
     ui_destroy_container(ui, &ui->root_container);
     // Cleanup
@@ -370,9 +370,9 @@ void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary) {
     render_set_bg_gradient(primary_color, secondary_color);
 }
 
-etsuko_Container_t *ui_root_container(etsuko_UiState_t *ui) { return &ui->root_container; }
+Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
-void ui_get_drawable_canon_pos(etsuko_UiState_t *ui, const etsuko_Drawable_t *drawable, double *x, double *y) {
+void ui_get_drawable_canon_pos(Ui_t *ui, const Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
     ui_get_container_canon_pos(ui, drawable->parent, &parent_x, &parent_y);
 
@@ -382,9 +382,9 @@ void ui_get_drawable_canon_pos(etsuko_UiState_t *ui, const etsuko_Drawable_t *dr
         *y = parent_y + drawable->bounds.y;
 }
 
-void ui_get_container_canon_pos(etsuko_UiState_t *ui, const etsuko_Container_t *container, double *x, double *y) {
+void ui_get_container_canon_pos(Ui_t *ui, const Container_t *container, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    const etsuko_Container_t *parent = container;
+    const Container_t *parent = container;
     while ( parent != nullptr ) {
         parent_x += parent->bounds.x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
@@ -397,8 +397,8 @@ void ui_get_container_canon_pos(etsuko_UiState_t *ui, const etsuko_Container_t *
         *y = parent_y;
 }
 
-static etsuko_Drawable_TextData_t *dup_text_data(const etsuko_Drawable_TextData_t *data) {
-    etsuko_Drawable_TextData_t *result = calloc(1, sizeof(*result));
+static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
+    Drawable_TextData_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate text data");
     }
@@ -416,13 +416,13 @@ static etsuko_Drawable_TextData_t *dup_text_data(const etsuko_Drawable_TextData_
     return result;
 }
 
-static void free_text_data(etsuko_Drawable_TextData_t *data) {
+static void free_text_data(Drawable_TextData_t *data) {
     free(data->text);
     free(data);
 }
 
-static etsuko_Drawable_ImageData_t *dup_image_data(const etsuko_Drawable_ImageData_t *data) {
-    etsuko_Drawable_ImageData_t *result = calloc(1, sizeof(*result));
+static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
+    Drawable_ImageData_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate image data");
     }
@@ -431,13 +431,13 @@ static etsuko_Drawable_ImageData_t *dup_image_data(const etsuko_Drawable_ImageDa
     return result;
 }
 
-static void free_image_data(etsuko_Drawable_ImageData_t *data) {
+static void free_image_data(Drawable_ImageData_t *data) {
     free(data->file_path);
     free(data);
 }
 
-static etsuko_Drawable_ProgressBarData_t *dup_progressbar_data(const etsuko_Drawable_ProgressBarData_t *data) {
-    etsuko_Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
+static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressBarData_t *data) {
+    Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate image data");
     }
@@ -448,9 +448,9 @@ static etsuko_Drawable_ProgressBarData_t *dup_progressbar_data(const etsuko_Draw
     return result;
 }
 
-static void free_progressbar_data(etsuko_Drawable_ProgressBarData_t *data) { free(data); }
+static void free_progressbar_data(Drawable_ProgressBarData_t *data) { free(data); }
 
-static int32_t measure_text_wrap_stop(const etsuko_Drawable_TextData_t *data, const etsuko_Container_t *container,
+static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container,
                                       const int32_t start) {
     const double m_current_width = container->bounds.w;
     const double calculated_max_width = m_current_width * data->wrap_width_threshold;
@@ -497,8 +497,8 @@ static int32_t measure_text_wrap_stop(const etsuko_Drawable_TextData_t *data, co
     return end_idx;
 }
 
-static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko_DrawableType_t type, const bool dynamic) {
-    etsuko_Drawable_t *result = calloc(1, sizeof(*result));
+static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type, const bool dynamic) {
+    Drawable_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate drawable");
     }
@@ -513,9 +513,9 @@ static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko
     return result;
 }
 
-static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawable_t *result, etsuko_Drawable_TextData_t *data,
-                                             const etsuko_Container_t *container, const etsuko_Layout_t *layout) {
-    etsuko_Texture_t *final_texture;
+static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_TextData_t *data,
+                                             const Container_t *container, const Layout_t *layout) {
+    Texture_t *final_texture;
 
     data = dup_text_data(data);
     const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
@@ -529,7 +529,7 @@ static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawab
             const size_t end = measure_text_wrap_stop(data, container, (int32_t)start);
             char *line_str = strndup(data->text + start, end - start);
             const int pt_size = render_measure_pt_from_em(data->em);
-            etsuko_Texture_t *texture = render_make_text(line_str, pt_size, data->bold, &data->color, data->font_type);
+            Texture_t *texture = render_make_text(line_str, pt_size, data->bold, &data->color, data->font_type);
             free(line_str);
 
             vec_add(textures_vec, texture);
@@ -543,12 +543,12 @@ static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawab
             start = end + 1;
         } while ( start < text_size - 1 );
 
-        const etsuko_RenderTarget_t *target = render_make_texture_target(max_w, total_h);
+        const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
         final_texture = target->texture;
 
         double x, y = total_h;
         for ( size_t i = 0; i < textures_vec->size; i++ ) {
-            etsuko_Texture_t *texture = textures_vec->data[i];
+            Texture_t *texture = textures_vec->data[i];
             // int32_t w, h;
             // render_measure_texture(texture, &w, &h);
             if ( data->alignment == ALIGN_LEFT ) {
@@ -562,10 +562,10 @@ static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawab
             }
 
             y -= texture->height - data->line_padding;
-            etsuko_Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
+            Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
             // Disable blend on the texture so it doesn't lose alpha from blending multiple times
             // when rendering onto a target texture
-            const etsuko_BlendMode_t blend_mode = render_get_blend_mode();
+            const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
             render_draw_texture(texture, &destination, 0xFF);
             render_set_blend_mode(blend_mode);
@@ -585,7 +585,7 @@ static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawab
     }
 
     const double width = final_texture->width, height = final_texture->height;
-    result->bounds = (etsuko_Bounds_t){.x = result->bounds.x, .y = result->bounds.y, .w = width, .h = height};
+    result->bounds = (Bounds_t){.x = result->bounds.x, .y = result->bounds.y, .w = width, .h = height};
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
@@ -594,19 +594,19 @@ static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawab
     return result;
 }
 
-etsuko_Drawable_t *ui_make_text(etsuko_UiState_t *ui, etsuko_Drawable_TextData_t *data, etsuko_Container_t *container,
-                                const etsuko_Layout_t *layout) {
-    etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
+Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container,
+                                const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
     internal_make_text(ui, result, data, container, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-static void internal_make_image(etsuko_UiState_t *ui, etsuko_Drawable_t *result, etsuko_Drawable_ImageData_t *data,
-                                const etsuko_Layout_t *layout) {
+static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData_t *data,
+                                const Layout_t *layout) {
     data = dup_image_data(data);
 
-    etsuko_Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
+    Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
     result->bounds.w = texture->width;
     result->bounds.h = texture->height;
 
@@ -617,17 +617,17 @@ static void internal_make_image(etsuko_UiState_t *ui, etsuko_Drawable_t *result,
     ui_reposition_drawable(ui, result);
 }
 
-etsuko_Drawable_t *ui_make_image(etsuko_UiState_t *ui, etsuko_Drawable_ImageData_t *data, etsuko_Container_t *container,
-                                 const etsuko_Layout_t *layout) {
-    etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
+Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container,
+                                 const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
     internal_make_image(ui, result, data, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-etsuko_Drawable_t *ui_make_progressbar(etsuko_UiState_t *ui, const etsuko_Drawable_ProgressBarData_t *data,
-                                       etsuko_Container_t *container, const etsuko_Layout_t *layout) {
-    etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
+Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data,
+                                       Container_t *container, const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
 
     result->custom_data = dup_progressbar_data(data);
     result->layout = *layout;
@@ -637,19 +637,19 @@ etsuko_Drawable_t *ui_make_progressbar(etsuko_UiState_t *ui, const etsuko_Drawab
     return result;
 }
 
-void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
+void ui_destroy_drawable(Drawable_t *drawable) {
     if ( drawable->texture != nullptr ) {
         render_destroy_texture(drawable->texture);
     }
     if ( drawable->custom_data != nullptr ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
-            etsuko_Drawable_TextData_t *text_data = drawable->custom_data;
+            Drawable_TextData_t *text_data = drawable->custom_data;
             free_text_data(text_data);
         } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
-            etsuko_Drawable_ImageData_t *image_data = drawable->custom_data;
+            Drawable_ImageData_t *image_data = drawable->custom_data;
             free_image_data(image_data);
         } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
-            etsuko_Drawable_ProgressBarData_t *progress_bar_data = drawable->custom_data;
+            Drawable_ProgressBarData_t *progress_bar_data = drawable->custom_data;
             free_progressbar_data(progress_bar_data);
         } else {
             free(drawable->custom_data);
@@ -661,9 +661,9 @@ void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
     free(drawable);
 }
 
-etsuko_Container_t *ui_make_container(etsuko_UiState_t *ui, etsuko_Container_t *parent, const etsuko_Layout_t *layout,
-                                      const etsuko_ContainerFlags_t flags) {
-    etsuko_Container_t *result = calloc(1, sizeof(*result));
+Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout,
+                                      const ContainerFlags_t flags) {
+    Container_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate container");
     }
@@ -683,7 +683,7 @@ etsuko_Container_t *ui_make_container(etsuko_UiState_t *ui, etsuko_Container_t *
     return result;
 }
 
-void ui_destroy_container(etsuko_UiState_t *ui, etsuko_Container_t *container) {
+void ui_destroy_container(Ui_t *ui, Container_t *container) {
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         ui_destroy_drawable(container->child_drawables->data[i]);
     }
@@ -698,8 +698,8 @@ void ui_destroy_container(etsuko_UiState_t *ui, etsuko_Container_t *container) {
         free(container);
 }
 
-static void reapply_translate_animation(etsuko_Animation_t *animation, const double old_x, const double old_y) {
-    etsuko_Animation_EaseTranslationData_t *data = animation->custom_data;
+static void reapply_translate_animation(Animation_t *animation, const double old_x, const double old_y) {
+    Animation_EaseTranslationData_t *data = animation->custom_data;
     data->from_x = old_x;
     data->from_y = old_y;
     data->to_x = animation->target->bounds.x;
@@ -709,7 +709,7 @@ static void reapply_translate_animation(etsuko_Animation_t *animation, const dou
     animation->active = true;
 }
 
-void ui_reposition_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
+void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
@@ -717,7 +717,7 @@ void ui_reposition_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
         for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-            etsuko_Animation_t *animation = drawable->animations->data[i];
+            Animation_t *animation = drawable->animations->data[i];
             if ( animation->target == drawable && animation->type == ANIM_EASE_TRANSLATION ) {
                 reapply_translate_animation(animation, old_x, old_y);
             }
@@ -725,14 +725,14 @@ void ui_reposition_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
     }
 }
 
-void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
+void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
     if ( alpha == drawable->alpha_mod ) {
         return;
     }
 
-    etsuko_Animation_t *fade_animation = nullptr;
+    Animation_t *fade_animation = nullptr;
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-        etsuko_Animation_t *animation = drawable->animations->data[i];
+        Animation_t *animation = drawable->animations->data[i];
         if ( animation->type == ANIM_FADE_IN_OUT ) {
             fade_animation = animation;
             break;
@@ -740,7 +740,7 @@ void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
     }
 
     if ( fade_animation != nullptr ) {
-        etsuko_Animation_FadeInOutData_t *data = fade_animation->custom_data;
+        Animation_FadeInOutData_t *data = fade_animation->custom_data;
 
         fade_animation->elapsed = 0.0;
         fade_animation->active = true;
@@ -751,8 +751,8 @@ void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
     drawable->alpha_mod = alpha;
 }
 
-void ui_recompute_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
-    const etsuko_Container_t *container = drawable->parent;
+void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
+    const Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
         void *old_custom_data = drawable->custom_data;
         internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
@@ -769,7 +769,7 @@ void ui_recompute_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
     }
 }
 
-void ui_recompute_container(etsuko_UiState_t *ui, etsuko_Container_t *container) {
+void ui_recompute_container(Ui_t *ui, Container_t *container) {
     if ( container->parent != nullptr ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
         position_layout(ui, &container->layout, container->parent, &container->bounds);
@@ -786,14 +786,14 @@ void ui_recompute_container(etsuko_UiState_t *ui, etsuko_Container_t *container)
     }
 }
 
-void ui_on_window_changed(etsuko_UiState_t *ui) {
+void ui_on_window_changed(Ui_t *ui) {
     render_on_window_changed();
     ui->root_container.bounds = *render_get_viewport();
     ui_recompute_container(ui, &ui->root_container);
 }
 
-static etsuko_Animation_EaseTranslationData_t *dup_anim_translate_data(const etsuko_Animation_EaseTranslationData_t *data) {
-    etsuko_Animation_EaseTranslationData_t *result = calloc(1, sizeof(*result));
+static Animation_EaseTranslationData_t *dup_anim_translate_data(const Animation_EaseTranslationData_t *data) {
+    Animation_EaseTranslationData_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate animation ease translation data");
     }
@@ -808,8 +808,8 @@ static etsuko_Animation_EaseTranslationData_t *dup_anim_translate_data(const ets
     return result;
 }
 
-static etsuko_Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const etsuko_Animation_FadeInOutData_t *data) {
-    etsuko_Animation_FadeInOutData_t *result = calloc(1, sizeof(*result));
+static Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const Animation_FadeInOutData_t *data) {
+    Animation_FadeInOutData_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate animation fade in out data");
     }
@@ -820,12 +820,12 @@ static etsuko_Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const etsuko_
     return result;
 }
 
-void ui_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_EaseTranslationData_t *data) {
+void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
     if ( target == nullptr ) {
         error_abort("Target drawable is nullptr");
     }
 
-    etsuko_Animation_t *result = calloc(1, sizeof(*result));
+    Animation_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate animation");
     }
@@ -839,12 +839,12 @@ void ui_animate_translation(etsuko_Drawable_t *target, const etsuko_Animation_Ea
     vec_add(target->animations, result);
 }
 
-void ui_animate_fade(etsuko_Drawable_t *target, const etsuko_Animation_FadeInOutData_t *data) {
+void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) {
     if ( target == nullptr ) {
         error_abort("Target drawable is nullptr");
     }
 
-    etsuko_Animation_t *result = calloc(1, sizeof(*result));
+    Animation_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate animation");
     }

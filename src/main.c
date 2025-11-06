@@ -10,7 +10,7 @@
 #include <emscripten.h>
 
 typedef struct {
-    etsuko_Karaoke_t *karaoke;
+    Karaoke_t *karaoke;
     bool initialized;
 } EntryPointArgs_t;
 
@@ -53,7 +53,7 @@ int main() {
         printf("Failed to initialize global");
         return EXIT_FAILURE;
     }
-    etsuko_Karaoke_t *karaoke = karaoke_init();
+    Karaoke_t *karaoke = karaoke_init();
     do {
     } while ( karaoke_load_async(karaoke) == 0 );
 

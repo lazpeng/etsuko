@@ -31,15 +31,15 @@
 typedef struct etsuko_Renderer_t {
     SDL_Window *window;
     SDL_GLContext gl_context;
-    etsuko_Bounds_t viewport;
+    Bounds_t viewport;
     TTF_Font *ui_font, *lyrics_font;
     double h_dpi, v_dpi;
-    etsuko_Color_t bg_color;
-    etsuko_Color_t bg_gradient_top, bg_gradient_bottom;
+    Color_t bg_color;
+    Color_t bg_gradient_top, bg_gradient_bottom;
     bool use_gradient;
-    etsuko_Color_t draw_color;
-    etsuko_RenderTarget_t *render_target;
-    etsuko_BlendMode_t blend_mode;
+    Color_t draw_color;
+    RenderTarget_t *render_target;
+    BlendMode_t blend_mode;
     bool rendering_to_fbo;
     double window_pixel_scale;
 
@@ -195,13 +195,13 @@ static void update_projection_matrix(void) {
     g_renderer->projection_matrix[15] = 1.0f;
 }
 
-static etsuko_Texture_t *create_texture_from_surface(SDL_Surface *surface) {
+static Texture_t *create_texture_from_surface(SDL_Surface *surface) {
     SDL_Surface *rgba_surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
     if ( rgba_surface == nullptr ) {
         error_abort("Failed to convert surface to ABGR8888");
     }
 
-    etsuko_Texture_t *texture = calloc(1, sizeof(*texture));
+    Texture_t *texture = calloc(1, sizeof(*texture));
     if ( texture == nullptr ) {
         error_abort("Failed to allocate texture");
     }
@@ -274,8 +274,8 @@ void render_init(void) {
     SDL_GL_SetSwapInterval(1);
 #endif
 
-    g_renderer->bg_color = (etsuko_Color_t){0, 0, 0, 255};
-    g_renderer->draw_color = (etsuko_Color_t){255, 255, 255, 255};
+    g_renderer->bg_color = (Color_t){0, 0, 0, 255};
+    g_renderer->draw_color = (Color_t){255, 255, 255, 255};
     g_renderer->use_gradient = false;
 
 #ifdef __EMSCRIPTEN__
@@ -390,7 +390,7 @@ void render_on_window_changed(void) {
     g_renderer->h_dpi = hdpi_temp;
     g_renderer->v_dpi = v_dpi_temp;
 
-    g_renderer->viewport = (etsuko_Bounds_t){.x = 0, .y = 0, .w = (double)outW, .h = (double)outH};
+    g_renderer->viewport = (Bounds_t){.x = 0, .y = 0, .w = (double)outW, .h = (double)outH};
 
     glViewport(0, 0, outW, outH);
     update_projection_matrix();
@@ -401,13 +401,13 @@ void render_clear(void) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        const etsuko_BlendMode_t saved_blend = g_renderer->blend_mode;
+        const BlendMode_t saved_blend = g_renderer->blend_mode;
         render_set_blend_mode(BLEND_MODE_NONE);
 
         glUseProgram(g_renderer->gradient_shader);
 
-        const etsuko_Color_t *top = &g_renderer->bg_gradient_top;
-        const etsuko_Color_t *bottom = &g_renderer->bg_gradient_bottom;
+        const Color_t *top = &g_renderer->bg_gradient_top;
+        const Color_t *bottom = &g_renderer->bg_gradient_bottom;
 
         glUniform4f(g_renderer->grad_top_color_loc, (float)top->r / 255.0f, (float)top->g / 255.0f, (float)top->b / 255.0f,
                     (float)top->a / 255.0f);
@@ -437,11 +437,11 @@ void render_clear(void) {
 
 void render_present(void) { SDL_GL_SwapWindow(g_renderer->window); }
 
-const etsuko_Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
+const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 
 double render_get_pixel_scale(void) { return g_renderer->window_pixel_scale; }
 
-void render_load_font(const char *path, const etsuko_FontType_t type) {
+void render_load_font(const char *path, const FontType_t type) {
     TTF_Font *font = TTF_OpenFontDPI(path, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
 
     if ( font == nullptr ) {
@@ -463,7 +463,7 @@ void render_load_font(const char *path, const etsuko_FontType_t type) {
 
 void render_set_window_title(const char *title) { SDL_SetWindowTitle(g_renderer->window, title); }
 
-void render_measure_text_size(const char *text, const int32_t pt, int32_t *w, int32_t *h, const etsuko_FontType_t kind) {
+void render_measure_text_size(const char *text, const int32_t pt, int32_t *w, int32_t *h, const FontType_t kind) {
     TTF_Font *font = kind == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
     if ( TTF_SetFontSizeDPI(font, pt, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->v_dpi) != 0 ) {
         error_abort("Failed to set font size/DPI");
@@ -482,8 +482,8 @@ int32_t render_measure_pt_from_em(const double em) {
     return pt_size;
 }
 
-const etsuko_RenderTarget_t *render_make_texture_target(const int32_t w, const int32_t h) {
-    etsuko_RenderTarget_t *target = calloc(1, sizeof(*target));
+const RenderTarget_t *render_make_texture_target(const int32_t w, const int32_t h) {
+    RenderTarget_t *target = calloc(1, sizeof(*target));
     if ( target == nullptr ) {
         error_abort("Failed to allocate render target");
     }
@@ -559,7 +559,7 @@ void render_restore_texture_target(void) {
         error_abort("No render target to restore");
     }
 
-    const etsuko_RenderTarget_t *current = g_renderer->render_target;
+    const RenderTarget_t *current = g_renderer->render_target;
     g_renderer->render_target = current->prev_target;
 
     // Restore viewport
@@ -586,20 +586,20 @@ void render_restore_texture_target(void) {
     g_renderer->rendering_to_fbo = g_renderer->render_target != nullptr;
 }
 
-void render_destroy_texture(etsuko_Texture_t *texture) {
+void render_destroy_texture(Texture_t *texture) {
     glDeleteTextures(1, &texture->id);
     free(texture);
 }
 
-etsuko_Color_t render_color_parse(const uint32_t color) {
+Color_t render_color_parse(const uint32_t color) {
     const uint8_t a = color >> 24;
     const uint8_t r = color >> 16;
     const uint8_t g = color >> 8;
     const uint8_t b = color & 0xFF;
-    return (etsuko_Color_t){.r = r, .g = g, .b = b, .a = a};
+    return (Color_t){.r = r, .g = g, .b = b, .a = a};
 }
 
-etsuko_Color_t render_color_darken(etsuko_Color_t color) {
+Color_t render_color_darken(Color_t color) {
     constexpr double amount = 0.8;
     color.r = (uint8_t)fmax(0, color.r * amount);
     color.g = (uint8_t)fmax(0, color.g * amount);
@@ -607,18 +607,18 @@ etsuko_Color_t render_color_darken(etsuko_Color_t color) {
     return color;
 }
 
-void render_set_bg_color(const etsuko_Color_t color) {
+void render_set_bg_color(const Color_t color) {
     g_renderer->bg_color = color;
     g_renderer->use_gradient = false;
 }
 
-void render_set_bg_gradient(const etsuko_Color_t top_color, const etsuko_Color_t bottom_color) {
+void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color) {
     g_renderer->bg_gradient_top = top_color;
     g_renderer->bg_gradient_bottom = bottom_color;
     g_renderer->use_gradient = true;
 }
 
-void render_set_blend_mode(const etsuko_BlendMode_t mode) {
+void render_set_blend_mode(const BlendMode_t mode) {
     g_renderer->blend_mode = mode;
 
     switch ( mode ) {
@@ -634,10 +634,10 @@ void render_set_blend_mode(const etsuko_BlendMode_t mode) {
     }
 }
 
-etsuko_BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; }
+BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; }
 
-etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool bold, const etsuko_Color_t *color,
-                                   const etsuko_FontType_t font_type) {
+Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool bold, const Color_t *color,
+                            const FontType_t font_type) {
     TTF_Font *font = font_type == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
     if ( font == nullptr ) {
         error_abort("Font not loaded");
@@ -660,13 +660,13 @@ etsuko_Texture_t *render_make_text(const char *text, const int32_t pt_size, cons
         error_abort("Failed to render to surface");
     }
 
-    etsuko_Texture_t *texture = create_texture_from_surface(surface);
+    Texture_t *texture = create_texture_from_surface(surface);
     SDL_FreeSurface(surface);
 
     return texture;
 }
 
-static etsuko_Texture_t *create_test_texture(void) {
+static Texture_t *create_test_texture(void) {
     constexpr int size = 256;
     unsigned char *pixels = malloc(size * size * 4);
 
@@ -684,7 +684,7 @@ static etsuko_Texture_t *create_test_texture(void) {
         }
     }
 
-    etsuko_Texture_t *texture = calloc(1, sizeof(*texture));
+    Texture_t *texture = calloc(1, sizeof(*texture));
     texture->width = size;
     texture->height = size;
 
@@ -703,7 +703,7 @@ static etsuko_Texture_t *create_test_texture(void) {
     return texture;
 }
 
-etsuko_Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
+Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
     SDL_Surface *loaded = IMG_Load(file_path);
     if ( loaded == nullptr ) {
         printf("IMG_GetError: %s\n", IMG_GetError());
@@ -716,7 +716,7 @@ etsuko_Texture_t *render_make_image(const char *file_path, const double border_r
     }
     SDL_FreeSurface(loaded);
 
-    etsuko_Texture_t *final_texture = create_texture_from_surface(converted);
+    Texture_t *final_texture = create_texture_from_surface(converted);
     SDL_FreeSurface(converted);
 
     if ( border_radius_em > 0 ) {
@@ -726,8 +726,8 @@ etsuko_Texture_t *render_make_image(const char *file_path, const double border_r
     return final_texture;
 }
 
-etsuko_Texture_t *render_make_dummy_image(const double border_radius_em) {
-    etsuko_Texture_t *texture = create_test_texture();
+Texture_t *render_make_dummy_image(const double border_radius_em) {
+    Texture_t *texture = create_test_texture();
 
     if ( border_radius_em > 0 ) {
         texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
@@ -736,7 +736,7 @@ etsuko_Texture_t *render_make_dummy_image(const double border_radius_em) {
     return texture;
 }
 
-void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_t *color, const float border_radius) {
+void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, const float border_radius) {
     // const double radius = bounds->h / 3.0;
 
     if ( bounds->w <= 0 ) {
@@ -777,7 +777,7 @@ void render_draw_rounded_rect(const etsuko_Bounds_t *bounds, const etsuko_Color_
     glBindVertexArray(0);
 }
 
-void render_draw_texture(const etsuko_Texture_t *texture, const etsuko_Bounds_t *at, const int32_t alpha_mod) {
+void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod) {
     if ( texture == nullptr || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }

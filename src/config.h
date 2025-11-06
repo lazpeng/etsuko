@@ -7,14 +7,14 @@
 
 typedef enum etsuko_Config_OpMode_t {
     APP_MODE_KARAOKE = 0,
-} etsuko_Config_OpMode_t;
+} Config_OpMode_t;
 
 typedef struct {
     char *ui_font, *lyrics_font;
     char *song_file;
-    etsuko_Config_OpMode_t op_mode;
-} etsuko_Config_t;
+    Config_OpMode_t op_mode;
+} Config_t;
 
-etsuko_Config_t *config_get();
+Config_t *config_get();
 
 #endif // ETSUKO_CONFIG_H

@@ -8,11 +8,11 @@
 #include "error.h"
 #include "str_utils.h"
 
-static etsuko_Song_t *g_song;
+static Song_t *g_song;
 
 typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS } BlockType;
 
-static void read_header(etsuko_Song_t *song, const char *buffer, const size_t length) {
+static void read_header(Song_t *song, const char *buffer, const size_t length) {
     const size_t equals = strcspn(buffer, "=");
     if ( equals >= length )
         return;
@@ -62,16 +62,16 @@ static void read_header(etsuko_Song_t *song, const char *buffer, const size_t le
         song->font_override = value;
     } else if ( strncmp(buffer, "bgType", equals) == 0 ) {
         if ( strncmp(value, "simpleGradient", 14) == 0 ) {
-            song->bg_type = SONGBG_SIMPLE_GRADIENT;
+            song->bg_type = BG_SIMPLE_GRADIENT;
         } else if ( strncmp(value, "solid", 5) == 0 ) {
-            song->bg_type = SONGBG_SOLID;
+            song->bg_type = BG_SOLID;
         } else {
             error_abort("Invalid background type for the song");
         }
     }
 }
 
-static void read_lyrics_opts(etsuko_SongLine_t *line, const char *opts) {
+static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
     const char *comma = strchr(opts, ',');
     const size_t end = comma == nullptr ? strlen(opts) : comma - opts;
 
@@ -98,14 +98,14 @@ static void read_lyrics_opts(etsuko_SongLine_t *line, const char *opts) {
     }
 }
 
-static void read_lyrics(const etsuko_Song_t *song, const char *buffer) {
+static void read_lyrics(const Song_t *song, const char *buffer) {
     if ( song->lyrics_lines->size == 0 ) {
         error_abort("Lyrics were placed before the timings");
     }
 
     // Find the first that full_text is nullptr
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
-        etsuko_SongLine_t *line = song->lyrics_lines->data[i];
+        Song_Line_t *line = song->lyrics_lines->data[i];
         if ( line->full_text == nullptr ) {
             const char *hash = strchr(buffer, '#');
             const size_t end = hash == nullptr ? strlen(buffer) : (hash - buffer);
@@ -130,15 +130,15 @@ static double convert_timing(const char *str, const size_t len) {
     return minutes * 60.0 + seconds;
 }
 
-static void read_timings(const etsuko_Song_t *song, const char *buffer) {
-    etsuko_SongLine_t *line = calloc(1, sizeof(*line));
+static void read_timings(const Song_t *song, const char *buffer) {
+    Song_Line_t *line = calloc(1, sizeof(*line));
 
     const char *comma = strchr(buffer, ',');
     const size_t start_len = comma == nullptr ? strlen(buffer) : (comma - buffer);
 
     line->base_start_time = convert_timing(buffer, start_len);
     if ( song->lyrics_lines->size > 0 ) {
-        etsuko_SongLine_t *last_line = song->lyrics_lines->data[song->lyrics_lines->size - 1];
+        Song_Line_t *last_line = song->lyrics_lines->data[song->lyrics_lines->size - 1];
         if ( last_line->base_duration == 0.0 ) {
             last_line->base_duration = line->base_start_time - last_line->base_start_time;
         }
@@ -198,17 +198,17 @@ void song_load(const char *src) {
 
     if ( g_song->lyrics_lines->size > 0 ) {
         // Since the last line will have a 0 duration, set it here to a reasonable number so we can see the last line
-        ((etsuko_SongLine_t *)g_song->lyrics_lines->data[g_song->lyrics_lines->size - 1])->base_duration = 100.0;
+        ((Song_Line_t *)g_song->lyrics_lines->data[g_song->lyrics_lines->size - 1])->base_duration = 100.0;
     }
 }
 
-etsuko_Song_t *song_get() { return g_song; }
+Song_t *song_get() { return g_song; }
 
 void song_destroy() {
     if ( g_song != nullptr ) {
         // Free lyrics lines
         for ( size_t i = 0; i < g_song->lyrics_lines->size; i++ ) {
-            free(((etsuko_SongLine_t *)g_song->lyrics_lines->data[i])->full_text);
+            free(((Song_Line_t *)g_song->lyrics_lines->data[i])->full_text);
             free(g_song->lyrics_lines->data[i]);
         }
         vec_destroy(g_song->lyrics_lines);

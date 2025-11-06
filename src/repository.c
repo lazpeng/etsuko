@@ -18,7 +18,7 @@
 #endif
 
 static void on_fetch_success(emscripten_fetch_t *fetch) {
-    etsuko_Load_t *job = fetch->userData;
+    Load_t *job = fetch->userData;
     const char *output_file = job->destination;
 
     printf("writing file to: %s\n", output_file);
@@ -43,7 +43,7 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
 
 #endif
 
-void repository_get_resource(const char *src, const char *subdir, etsuko_Load_t *load) {
+void repository_get_resource(const char *src, const char *subdir, Load_t *load) {
     if ( load == nullptr ) {
         error_abort("Load job is nullptr");
     }

@@ -6,6 +6,10 @@
 #define ETSUKO_CONTAINER_UTILS_H
 #include <stdlib.h>
 
+#ifdef __EMSCRIPTEN__
+#include <stdint.h>
+#endif
+
 typedef struct Vector_t {
     void **data;
     size_t size, capacity;

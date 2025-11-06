@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static etsuko_Config_t *g_config = nullptr;
+static Config_t *g_config = nullptr;
 
 #ifdef __EMSCRIPTEN__
 
@@ -20,7 +20,7 @@ EM_JS(const char *, get_song_param, (void), {
     return stringToNewUTF8(song);
 })
 
-static void try_load_config_web(etsuko_Config_t *config) {
+static void try_load_config_web(Config_t *config) {
     const char *song = get_song_param();
     if ( strnlen(song, MAX_TEXT_SIZE) > 0 ) {
         printf("song: %s\n", song);
@@ -36,15 +36,15 @@ static void try_load_config_web(etsuko_Config_t *config) {
 
 #endif
 
-static etsuko_Config_t *get_default_config() {
-    etsuko_Config_t *config = malloc(sizeof(*config));
+static Config_t *get_default_config() {
+    Config_t *config = malloc(sizeof(*config));
     if ( config == nullptr ) {
         return nullptr;
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
     // config->song_file = strdup("stop crying your heart out.txt");
-    config->song_file = strdup("Sayonara invader.txt");
+    config->song_file = strdup("yoake.txt");
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);
@@ -53,7 +53,7 @@ static etsuko_Config_t *get_default_config() {
     return config;
 }
 
-etsuko_Config_t *config_get() {
+Config_t *config_get() {
     if ( g_config == nullptr ) {
         g_config = get_default_config();
     }
