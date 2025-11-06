@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "error.h"
+#include "events.h"
 #include "str_utils.h"
 
 #ifdef __EMSCRIPTEN__
@@ -16,31 +17,23 @@
 #include "constants.h"
 #include "container_utils.h"
 
-typedef struct {
+struct etsuko_UiState_t {
     etsuko_Container_t root_container;
-} etsuko_UiState_t;
+};
 
-static etsuko_UiState_t *g_ui;
-
-int ui_init() {
-    if ( g_ui != nullptr ) {
-        ui_finish();
-        g_ui = nullptr;
-    }
-
-    g_ui = calloc(1, sizeof(*g_ui));
-    if ( g_ui == nullptr ) {
+etsuko_UiState_t *ui_init() {
+    etsuko_UiState_t *ui = calloc(1, sizeof(*ui));
+    if ( ui == nullptr ) {
         error_abort("Failed to allocate UI");
     }
-    render_init();
 
-    g_ui->root_container.child_containers = vec_init();
-    g_ui->root_container.child_drawables = vec_init();
-    g_ui->root_container.enabled = true;
+    ui->root_container.child_containers = vec_init();
+    ui->root_container.child_drawables = vec_init();
+    ui->root_container.enabled = true;
 
-    ui_on_window_changed();
+    ui_on_window_changed(ui);
 
-    return 0;
+    return ui;
 }
 
 void ui_load_font(const etsuko_FontType_t type, const char *path) { render_load_font(path, type); }
@@ -81,11 +74,17 @@ static void container_update_animations(const etsuko_Container_t *container, con
     }
 }
 
-static void update_animations(const double delta_time) { container_update_animations(&g_ui->root_container, delta_time); }
+static void update_animations(const etsuko_UiState_t *ui, const double delta_time) {
+    container_update_animations(&ui->root_container, delta_time);
+}
 
-void ui_begin_loop(const double delta_time) {
+void ui_begin_loop(etsuko_UiState_t *ui) {
+    if ( events_window_changed() )
+        ui_on_window_changed(ui);
+
+    const double delta_time = events_get_delta_time();
     render_clear();
-    update_animations(delta_time);
+    update_animations(ui, delta_time);
 }
 
 static void draw_dynamic_progressbar(const etsuko_Drawable_t *drawable, const etsuko_Bounds_t *base_bounds) {
@@ -153,13 +152,13 @@ static void measure_layout(const etsuko_Layout_t *layout, const etsuko_Container
     }
 }
 
-static void measure_container_size(const etsuko_Container_t *container, etsuko_Bounds_t *out_bounds) {
+static void measure_container_size(etsuko_UiState_t *ui, const etsuko_Container_t *container, etsuko_Bounds_t *out_bounds) {
     // Only measure height for now
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const etsuko_Drawable_t *drawable = container->child_drawables->data[i];
         double draw_y;
-        ui_get_drawable_canon_pos(drawable, nullptr, &draw_y);
+        ui_get_drawable_canon_pos(ui, drawable, nullptr, &draw_y);
 
         max_y = fmax(max_y, draw_y + drawable->bounds.h);
         min_y = fmin(min_y, draw_y);
@@ -168,7 +167,7 @@ static void measure_container_size(const etsuko_Container_t *container, etsuko_B
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         const etsuko_Container_t *child = container->child_containers->data[i];
         etsuko_Bounds_t child_bounds = {0};
-        measure_container_size(child, &child_bounds);
+        measure_container_size(ui, child, &child_bounds);
         max_y = fmax(max_y, child_bounds.y + child_bounds.h);
         min_y = fmin(min_y, child_bounds.y);
     }
@@ -176,19 +175,20 @@ static void measure_container_size(const etsuko_Container_t *container, etsuko_B
     out_bounds->h = fmax(out_bounds->h, max_y - min_y);
 }
 
-static void recalculate_container_alignment(etsuko_Container_t *container) {
+static void recalculate_container_alignment(etsuko_UiState_t *ui, etsuko_Container_t *container) {
     if ( container->parent != nullptr )
-        recalculate_container_alignment(container->parent);
+        recalculate_container_alignment(ui, container->parent);
 
     if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
         container->align_content_offset_y = 0;
         etsuko_Bounds_t bounds = {0};
-        measure_container_size(container, &bounds);
+        measure_container_size(ui, container, &bounds);
         container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
     }
 }
 
-static void position_layout(const etsuko_Layout_t *layout, etsuko_Container_t *parent, etsuko_Bounds_t *out_bounds) {
+static void position_layout(etsuko_UiState_t *ui, const etsuko_Layout_t *layout, etsuko_Container_t *parent,
+                            etsuko_Bounds_t *out_bounds) {
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
@@ -247,7 +247,7 @@ static void position_layout(const etsuko_Layout_t *layout, etsuko_Container_t *p
     out_bounds->x = x;
     out_bounds->y = y;
 
-    recalculate_container_alignment(parent);
+    recalculate_container_alignment(ui, parent);
 }
 
 static double ease_out_cubic(const double t) { return 1 - pow(1 - t, 3); }
@@ -346,32 +346,35 @@ static void draw_all_container(const etsuko_Container_t *container, etsuko_Bound
     }
 }
 
-void ui_draw() {
+void ui_draw(const etsuko_UiState_t *ui) {
     const etsuko_Bounds_t bounds = {0};
-    draw_all_container(&g_ui->root_container, bounds);
+    draw_all_container(&ui->root_container, bounds);
 }
 
 void ui_end_loop() { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
 
-void ui_finish() {
+void ui_finish(etsuko_UiState_t *ui) {
     // Free stored textures and drawables
-    ui_destroy_container(&g_ui->root_container);
-    // Finish renderer
-    render_finish();
+    ui_destroy_container(ui, &ui->root_container);
     // Cleanup
-    free(g_ui);
-    g_ui = nullptr;
+    free(ui);
 }
 
 void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
 
-etsuko_Container_t *ui_root_container() { return &g_ui->root_container; }
+void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary) {
+    const auto primary_color = render_color_parse(primary);
+    const auto secondary_color = secondary == 0 ? render_color_darken(primary_color) : render_color_parse(secondary);
+    render_set_bg_gradient(primary_color, secondary_color);
+}
 
-void ui_get_drawable_canon_pos(const etsuko_Drawable_t *drawable, double *x, double *y) {
+etsuko_Container_t *ui_root_container(etsuko_UiState_t *ui) { return &ui->root_container; }
+
+void ui_get_drawable_canon_pos(etsuko_UiState_t *ui, const etsuko_Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y);
+    ui_get_container_canon_pos(ui, drawable->parent, &parent_x, &parent_y);
 
     if ( x != nullptr )
         *x = parent_x + drawable->bounds.x;
@@ -379,7 +382,7 @@ void ui_get_drawable_canon_pos(const etsuko_Drawable_t *drawable, double *x, dou
         *y = parent_y + drawable->bounds.y;
 }
 
-void ui_get_container_canon_pos(const etsuko_Container_t *container, double *x, double *y) {
+void ui_get_container_canon_pos(etsuko_UiState_t *ui, const etsuko_Container_t *container, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
     const etsuko_Container_t *parent = container;
     while ( parent != nullptr ) {
@@ -510,7 +513,7 @@ static etsuko_Drawable_t *make_drawable(etsuko_Container_t *parent, const etsuko
     return result;
 }
 
-static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_Drawable_TextData_t *data,
+static etsuko_Drawable_t *internal_make_text(etsuko_UiState_t *ui, etsuko_Drawable_t *result, etsuko_Drawable_TextData_t *data,
                                              const etsuko_Container_t *container, const etsuko_Layout_t *layout) {
     etsuko_Texture_t *final_texture;
 
@@ -586,19 +589,21 @@ static etsuko_Drawable_t *internal_make_text(etsuko_Drawable_t *result, etsuko_D
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
-    ui_reposition_drawable(result);
+    ui_reposition_drawable(ui, result);
 
     return result;
 }
 
-etsuko_Drawable_t *ui_make_text(etsuko_Drawable_TextData_t *data, etsuko_Container_t *container, const etsuko_Layout_t *layout) {
+etsuko_Drawable_t *ui_make_text(etsuko_UiState_t *ui, etsuko_Drawable_TextData_t *data, etsuko_Container_t *container,
+                                const etsuko_Layout_t *layout) {
     etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
-    internal_make_text(result, data, container, layout);
+    internal_make_text(ui, result, data, container, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-static void internal_make_image(etsuko_Drawable_t *result, etsuko_Drawable_ImageData_t *data, const etsuko_Layout_t *layout) {
+static void internal_make_image(etsuko_UiState_t *ui, etsuko_Drawable_t *result, etsuko_Drawable_ImageData_t *data,
+                                const etsuko_Layout_t *layout) {
     data = dup_image_data(data);
 
     etsuko_Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
@@ -609,25 +614,25 @@ static void internal_make_image(etsuko_Drawable_t *result, etsuko_Drawable_Image
     result->texture = texture;
     result->layout = *layout;
 
-    ui_reposition_drawable(result);
+    ui_reposition_drawable(ui, result);
 }
 
-etsuko_Drawable_t *ui_make_image(etsuko_Drawable_ImageData_t *data, etsuko_Container_t *container,
+etsuko_Drawable_t *ui_make_image(etsuko_UiState_t *ui, etsuko_Drawable_ImageData_t *data, etsuko_Container_t *container,
                                  const etsuko_Layout_t *layout) {
     etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
-    internal_make_image(result, data, layout);
+    internal_make_image(ui, result, data, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-etsuko_Drawable_t *ui_make_progressbar(const etsuko_Drawable_ProgressBarData_t *data, etsuko_Container_t *container,
-                                       const etsuko_Layout_t *layout) {
+etsuko_Drawable_t *ui_make_progressbar(etsuko_UiState_t *ui, const etsuko_Drawable_ProgressBarData_t *data,
+                                       etsuko_Container_t *container, const etsuko_Layout_t *layout) {
     etsuko_Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
 
     result->custom_data = dup_progressbar_data(data);
     result->layout = *layout;
 
-    ui_reposition_drawable(result);
+    ui_reposition_drawable(ui, result);
     vec_add(container->child_drawables, result);
     return result;
 }
@@ -656,7 +661,7 @@ void ui_destroy_drawable(etsuko_Drawable_t *drawable) {
     free(drawable);
 }
 
-etsuko_Container_t *ui_make_container(etsuko_Container_t *parent, const etsuko_Layout_t *layout,
+etsuko_Container_t *ui_make_container(etsuko_UiState_t *ui, etsuko_Container_t *parent, const etsuko_Layout_t *layout,
                                       const etsuko_ContainerFlags_t flags) {
     etsuko_Container_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
@@ -671,25 +676,25 @@ etsuko_Container_t *ui_make_container(etsuko_Container_t *parent, const etsuko_L
     result->enabled = true;
     result->flags = flags;
     measure_layout(layout, parent, &result->bounds);
-    position_layout(layout, parent, &result->bounds);
+    position_layout(ui, layout, parent, &result->bounds);
 
     vec_add(parent->child_containers, result);
 
     return result;
 }
 
-void ui_destroy_container(etsuko_Container_t *container) {
+void ui_destroy_container(etsuko_UiState_t *ui, etsuko_Container_t *container) {
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         ui_destroy_drawable(container->child_drawables->data[i]);
     }
     vec_destroy(container->child_drawables);
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        ui_destroy_container(container->child_containers->data[i]);
+        ui_destroy_container(ui, container->child_containers->data[i]);
     }
     vec_destroy(container->child_containers);
 
-    if ( container != &g_ui->root_container )
+    if ( container != &ui->root_container )
         free(container);
 }
 
@@ -704,11 +709,11 @@ static void reapply_translate_animation(etsuko_Animation_t *animation, const dou
     animation->active = true;
 }
 
-void ui_reposition_drawable(etsuko_Drawable_t *drawable) {
+void ui_reposition_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
-    position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
+    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
         for ( size_t i = 0; i < drawable->animations->size; i++ ) {
@@ -746,45 +751,45 @@ void ui_drawable_set_alpha(etsuko_Drawable_t *drawable, const int32_t alpha) {
     drawable->alpha_mod = alpha;
 }
 
-void ui_recompute_drawable(etsuko_Drawable_t *drawable) {
-    etsuko_Container_t *container = drawable->parent;
+void ui_recompute_drawable(etsuko_UiState_t *ui, etsuko_Drawable_t *drawable) {
+    const etsuko_Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
         void *old_custom_data = drawable->custom_data;
-        internal_make_text(drawable, old_custom_data, container, &drawable->layout);
+        internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
         void *old_custom_data = drawable->custom_data;
-        internal_make_image(drawable, old_custom_data, &drawable->layout);
+        internal_make_image(ui, drawable, old_custom_data, &drawable->layout);
         free_image_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
         // There's nothing to do in this case
-        ui_reposition_drawable(drawable);
+        ui_reposition_drawable(ui, drawable);
     } else {
         error_abort("Invalid drawable type");
     }
 }
 
-void ui_recompute_container(etsuko_Container_t *container) {
+void ui_recompute_container(etsuko_UiState_t *ui, etsuko_Container_t *container) {
     if ( container->parent != nullptr ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
-        position_layout(&container->layout, container->parent, &container->bounds);
+        position_layout(ui, &container->layout, container->parent, &container->bounds);
     }
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        ui_recompute_drawable(container->child_drawables->data[i]);
+        ui_recompute_drawable(ui, container->child_drawables->data[i]);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         if ( container->child_containers->data[i] != nullptr ) {
-            ui_recompute_container(container->child_containers->data[i]);
+            ui_recompute_container(ui, container->child_containers->data[i]);
         }
     }
 }
 
-void ui_on_window_changed() {
+void ui_on_window_changed(etsuko_UiState_t *ui) {
     render_on_window_changed();
-    g_ui->root_container.bounds = *render_get_viewport();
-    ui_recompute_container(&g_ui->root_container);
+    ui->root_container.bounds = *render_get_viewport();
+    ui_recompute_container(ui, &ui->root_container);
 }
 
 static etsuko_Animation_EaseTranslationData_t *dup_anim_translate_data(const etsuko_Animation_EaseTranslationData_t *data) {

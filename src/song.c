@@ -42,6 +42,9 @@ static void read_header(etsuko_Song_t *song, const char *buffer, const size_t le
     } else if ( strncmp(buffer, "bgColor", equals) == 0 ) {
         song->bg_color = strtol(value, nullptr, 16);
         free(value);
+    } else if ( strncmp(buffer, "bgColorSecondary", equals) == 0 ) {
+        song->bg_color_secondary = strtol(value, nullptr, 16);
+        free(value);
     } else if ( strncmp(buffer, "alignment", equals) == 0 ) {
         if ( strncmp(value, "left", 4) == 0 ) {
             song->line_alignment = SONG_LINE_LEFT;
@@ -57,6 +60,14 @@ static void read_header(etsuko_Song_t *song, const char *buffer, const size_t le
         free(value);
     } else if ( strncmp(buffer, "fontOverride", equals) == 0 ) {
         song->font_override = value;
+    } else if ( strncmp(buffer, "bgType", equals) == 0 ) {
+        if ( strncmp(value, "simpleGradient", 14) == 0 ) {
+            song->bg_type = SONGBG_SIMPLE_GRADIENT;
+        } else if ( strncmp(value, "solid", 5) == 0 ) {
+            song->bg_type = SONGBG_SOLID;
+        } else {
+            error_abort("Invalid background type for the song");
+        }
     }
 }
 

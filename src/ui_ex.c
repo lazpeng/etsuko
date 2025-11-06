@@ -21,7 +21,7 @@ static bool is_line_intermission(const etsuko_LyricsView_t *view, const size_t i
     return strncmp(line->full_text, "", 1) == 0 && line->base_duration > 1.5;
 }
 
-etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const etsuko_Song_t *song) {
+etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_UiState_t *ui, etsuko_Container_t *parent, const etsuko_Song_t *song) {
     if ( parent == nullptr ) {
         error_abort("Parent container is nullptr");
     }
@@ -109,7 +109,7 @@ etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const et
         if ( prev != nullptr ) {
             layout.relative_to = prev;
         }
-        prev = ui_make_text(&data, parent, &layout);
+        prev = ui_make_text(ui, &data, parent, &layout);
         vec_add(view->line_drawables, prev);
     }
 
@@ -123,7 +123,7 @@ etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const et
     return view;
 }
 
-static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
+static void set_line_active(etsuko_UiState_t *ui, etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
     drawable->enabled = true;
@@ -137,7 +137,7 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     constexpr LineState_t new_state = LINE_ACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        ui_recompute_drawable(drawable);
+        ui_recompute_drawable(ui, drawable);
     }
 
     if ( prev_active >= 0 ) {
@@ -151,14 +151,14 @@ static void set_line_active(etsuko_LyricsView_t *view, const size_t index, const
     }
     drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
-    ui_reposition_drawable(drawable);
+    ui_reposition_drawable(ui, drawable);
 }
 
 static int32_t calculate_alpha(const int32_t distance) {
     return 225 - 200 / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
 }
 
-static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
+static void set_line_inactive(etsuko_UiState_t *ui, etsuko_LyricsView_t *view, const size_t index, const int32_t prev_active) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
     if ( index > 0 ) {
         etsuko_Drawable_t *prev = view->line_drawables->data[index - 1];
@@ -197,13 +197,13 @@ static void set_line_inactive(etsuko_LyricsView_t *view, const size_t index, con
     constexpr LineState_t new_state = LINE_INACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        ui_recompute_drawable(drawable);
+        ui_recompute_drawable(ui, drawable);
     } else {
-        ui_reposition_drawable(drawable);
+        ui_reposition_drawable(ui, drawable);
     }
 }
 
-static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
+static void set_line_hidden(etsuko_UiState_t *ui, etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
     constexpr LineState_t new_state = LINE_HIDDEN;
@@ -222,7 +222,7 @@ static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
         data->color = (etsuko_Color_t){.r = 100, .b = 100, .g = 100, .a = 255};
         data->bold = false;
 
-        ui_recompute_drawable(drawable);
+        ui_recompute_drawable(ui, drawable);
     }
 
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
@@ -237,7 +237,7 @@ static void set_line_hidden(etsuko_LyricsView_t *view, const size_t index) {
     }
 }
 
-static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index) {
+static void set_line_almost_hidden(etsuko_UiState_t *ui, etsuko_LyricsView_t *view, const size_t index) {
     etsuko_Drawable_t *drawable = view->line_drawables->data[index];
 
     constexpr LineState_t new_state = LINE_ALMOST_HIDDEN;
@@ -253,13 +253,13 @@ static void set_line_almost_hidden(etsuko_LyricsView_t *view, const size_t index
             if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
                 drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
             }
-            ui_reposition_drawable(drawable);
+            ui_reposition_drawable(ui, drawable);
         }
         view->line_states[index] = new_state;
     }
 }
 
-static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t *view, size_t idx) {
+static etsuko_Drawable_t *stack_hidden_line_recursive(etsuko_UiState_t *ui, const etsuko_LyricsView_t *view, size_t idx) {
     if ( idx >= view->line_drawables->size - 1 )
         return nullptr;
 
@@ -277,13 +277,13 @@ static etsuko_Drawable_t *stack_hidden_line_recursive(const etsuko_LyricsView_t 
     }
 
     etsuko_Drawable_t *drawable = view->line_drawables->data[idx];
-    drawable->layout.relative_to = stack_hidden_line_recursive(view, idx + 1);
-    ui_reposition_drawable(drawable);
+    drawable->layout.relative_to = stack_hidden_line_recursive(ui, view, idx + 1);
+    ui_reposition_drawable(ui, drawable);
 
     return drawable;
 }
 
-void ui_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
+void ui_ex_lyrics_view_loop(etsuko_UiState_t *ui, etsuko_LyricsView_t *view) {
     if ( view == nullptr ) {
         error_abort("loop: lyrics_view is nullptr");
     }
@@ -298,32 +298,32 @@ void ui_ex_lyrics_view_loop(etsuko_LyricsView_t *view) {
         const etsuko_SongLine_t *line = view->song->lyrics_lines->data[i];
         if ( elapsed_time < line->base_start_time + line->base_duration ) {
             if ( elapsed_time >= line->base_start_time ) {
-                set_line_active(view, i, prev_active);
+                set_line_active(ui, view, i, prev_active);
                 prev_active = (int32_t)i;
             } else {
                 if ( prev_active < 0 ) {
                     prev_active = view->current_active_index;
                 }
-                set_line_inactive(view, i, prev_active);
+                set_line_inactive(ui, view, i, prev_active);
             }
         } else {
             // If the next line still hasn't reached its start time, don't completely vanish the line just yet
             if ( i + 1 < view->song->lyrics_lines->size ) {
                 const etsuko_SongLine_t *next_line = view->song->lyrics_lines->data[i + 1];
                 if ( elapsed_time < next_line->base_start_time ) {
-                    set_line_almost_hidden(view, i);
+                    set_line_almost_hidden(ui, view, i);
                     continue;
                 }
             }
             // else just set it hidden (or afterward when it finally should disappear)
-            set_line_hidden(view, i);
+            set_line_hidden(ui, view, i);
         }
     }
 
     view->current_active_index = prev_active;
 
     // Now do a reverse loop setting all the hidden lines to stack on top of each other
-    stack_hidden_line_recursive(view, 0);
+    stack_hidden_line_recursive(ui, view, 0);
 
     view->prev_viewport_y = view->container->viewport_y;
 }

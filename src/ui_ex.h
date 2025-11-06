@@ -25,8 +25,8 @@ typedef struct etsuko_LyricsView_t {
     double prev_viewport_y;
 } etsuko_LyricsView_t;
 
-etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_Container_t *parent, const etsuko_Song_t *song);
-void ui_ex_lyrics_view_loop(etsuko_LyricsView_t *view);
+etsuko_LyricsView_t *ui_ex_make_lyrics_view(etsuko_UiState_t *ui, etsuko_Container_t *parent, const etsuko_Song_t *song);
+void ui_ex_lyrics_view_loop(etsuko_UiState_t *ui, etsuko_LyricsView_t *view);
 void ui_ex_lyrics_view_on_scroll(const etsuko_LyricsView_t *view, double delta_y);
 void ui_ex_destroy_lyrics_view(etsuko_LyricsView_t *view);
 

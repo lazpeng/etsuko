@@ -12,6 +12,7 @@ static bool g_mouse_clicked = false;
 static int32_t g_mouse_click_x, g_mouse_click_y;
 static Vector_t *g_key_presses;
 static double g_window_pixel_scale = 1.0;
+static uint64_t g_prev_ticks = 0;
 
 static void clear_key_presses() {
     // Remove one by one from right to left
@@ -90,6 +91,17 @@ void events_loop() {
             break;
         }
     }
+}
+
+double events_get_delta_time() {
+    const auto ticks = SDL_GetTicks64();
+
+    if ( g_prev_ticks == 0 )
+        return 0;
+
+    const auto delta = (double)(ticks - g_prev_ticks) / 1000.0;
+    g_prev_ticks = ticks;
+    return delta;
 }
 
 void events_get_mouse_position(int32_t *x, int32_t *y) {

@@ -19,6 +19,11 @@ typedef enum etsuko_Song_LineAlignment_t {
     SONG_LINE_RIGHT
 } etsuko_Song_LineAlignment_t;
 
+typedef enum etsuko_Song_BgType_t {
+    SONGBG_SIMPLE_GRADIENT = 0,
+    SONGBG_SOLID
+} etsuko_Song_BgType_t;
+
 typedef struct etsuko_SongLine_t {
     char *full_text;
     double base_start_time, base_duration;
@@ -38,8 +43,10 @@ typedef struct {
     char *karaoke, *language, *hidden;
     etsuko_Song_LineAlignment_t line_alignment;
     uint32_t bg_color;
+    uint32_t bg_color_secondary;
     double time_offset;
     char *font_override;
+    enum etsuko_Song_BgType_t bg_type;
 } etsuko_Song_t;
 
 void song_load(const char *src);

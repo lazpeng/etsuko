@@ -8,6 +8,7 @@
 #include <SDL2/SDL_ttf.h>
 
 #include "error.h"
+#include "renderer.h"
 
 int global_init() {
     // Init sdl
@@ -29,6 +30,8 @@ int global_init() {
         error_abort("IMG_Init failed");
     }
 
+    render_init();
+
     // Init audio
     constexpr int flags = MIX_INIT_MP3;
     if ( Mix_Init(flags) == 0 ) {
@@ -48,4 +51,5 @@ void global_finish() {
     Mix_Quit();
     IMG_Quit();
     SDL_Quit();
+    render_finish();
 }
