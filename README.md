@@ -9,7 +9,7 @@ opening a pull request.**
 ****
 
 etsuko is a shitty karaoke program written by reinventing the wheel in
-unnecessary ways, using SDL with OpenGL, some SDL libs, some otb libs and C.
+unnecessary ways, using SDL2 with OpenGL, some SDL libs and C.
 It displays lyrics in real time as the song plays, along with a rudimentary
 interface that mimics a music player.\
 My main source of inspiration/plagiarism is Apple Music's fullscreen player.
