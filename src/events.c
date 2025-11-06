@@ -96,11 +96,11 @@ void events_loop() {
 double events_get_delta_time() {
     const auto ticks = SDL_GetTicks64();
 
-    if ( g_prev_ticks == 0 )
-        return 0;
-
     const auto delta = (double)(ticks - g_prev_ticks) / 1000.0;
     g_prev_ticks = ticks;
+
+    if ( g_prev_ticks == 0 )
+        return 0;
     return delta;
 }
 
