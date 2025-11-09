@@ -136,10 +136,20 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         // Decide based on the smaller axis
         const double aspect_ratio = out_bounds->w / out_bounds->h;
 
-        if ( w < h ) {
-            h = w / aspect_ratio;
+        if ( w != 0.0 && h != 0.0 ) {
+            if ( w < h ) {
+                h = w / aspect_ratio;
+            } else {
+                w = h * aspect_ratio;
+            }
         } else {
-            w = h * aspect_ratio;
+            if ( h != 0.0 ) {
+                w = h * aspect_ratio;
+            } else if ( w != 0.0 ) {
+                h = w / aspect_ratio;
+            } else {
+                puts("Warning: Keep aspect ratio layout has no size set.");
+            }
         }
     }
 
