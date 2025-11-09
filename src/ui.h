@@ -47,6 +47,7 @@ typedef enum LayoutFlags_t {
 typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
+    double aspect_ratio_size;
     double width, height;
     Drawable_t *relative_to_size;
     Drawable_t *relative_to;

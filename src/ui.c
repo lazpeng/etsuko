@@ -105,30 +105,12 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
             w = parent->bounds.w * w;
         }
-        if ( layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO ) {
-            if ( h != 0 ) {
-                error_abort("Cannot keep aspect ratio when both width and height are set");
-            }
-            const double aspect_ratio = out_bounds->w / out_bounds->h;
-            h = w / aspect_ratio;
-            out_bounds->h = h;
-        }
-
-        out_bounds->w = w;
     }
 
     if ( layout->height > 0 ) {
-
         if ( layout->flags & LAYOUT_PROPORTIONAL_H ) {
             h = parent->bounds.h * h;
         }
-        if ( layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO ) {
-            const double aspect_ratio = out_bounds->w / out_bounds->h;
-            w = h * aspect_ratio;
-            out_bounds->w = w;
-        }
-
-        out_bounds->h = h;
     }
 
     if ( layout->relative_to_size != nullptr ) {
@@ -142,13 +124,30 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_WIDTH ) {
-            out_bounds->w = layout->relative_to_size->bounds.w;
+            w = layout->relative_to_size->bounds.w * layout->width;
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_HEIGHT ) {
-            out_bounds->h = layout->relative_to_size->bounds.h;
+            h = layout->relative_to_size->bounds.h * layout->height;
         }
     }
+
+    if ( layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO ) {
+        // Decide based on the smaller axis
+        const double aspect_ratio = out_bounds->w / out_bounds->h;
+
+        if ( w < h ) {
+            h = w / aspect_ratio;
+        } else {
+            w = h * aspect_ratio;
+        }
+    }
+
+    if ( w != layout->width )
+        out_bounds->w = w;
+
+    if ( h != layout->height )
+        out_bounds->h = h;
 }
 
 static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
@@ -186,8 +185,7 @@ static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
     }
 }
 
-static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent,
-                            Bounds_t *out_bounds) {
+static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
@@ -197,10 +195,10 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         x = parent->bounds.w / 2.f - out_bounds->w / 2.f - calc_w;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_X ) {
         x = parent->bounds.w * x;
-    } else {
-        if ( x < 0 && layout->flags & LAYOUT_WRAP_AROUND_X )
-            x = parent->bounds.w + x;
     }
+
+    if ( x < 0 && layout->flags & LAYOUT_WRAP_AROUND_X )
+        x = parent->bounds.w + x;
     x -= calc_w;
 
     double y = layout->offset_y;
@@ -212,10 +210,10 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         y = parent->bounds.h / 2.f - out_bounds->h / 2.f - calc_h;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_Y ) {
         y = parent->bounds.h * y;
-    } else {
-        if ( y < 0 && layout->flags & LAYOUT_WRAP_AROUND_Y )
-            y = parent->bounds.h + y;
     }
+
+    if ( y < 0 && layout->flags & LAYOUT_WRAP_AROUND_Y )
+        y = parent->bounds.h + y;
     y -= calc_h;
 
     if ( layout->relative_to != nullptr ) {
@@ -449,8 +447,7 @@ static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressB
 
 static void free_progressbar_data(Drawable_ProgressBarData_t *data) { free(data); }
 
-static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container,
-                                      const int32_t start) {
+static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container, const int32_t start) {
     const double m_current_width = container->bounds.w;
     const double calculated_max_width = m_current_width * data->wrap_width_threshold;
 
@@ -512,8 +509,8 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     return result;
 }
 
-static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_TextData_t *data,
-                                             const Container_t *container, const Layout_t *layout) {
+static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_TextData_t *data, const Container_t *container,
+                                      const Layout_t *layout) {
     Texture_t *final_texture;
 
     data = dup_text_data(data);
@@ -591,16 +588,14 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     return result;
 }
 
-Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container,
-                                const Layout_t *layout) {
+Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
     internal_make_text(ui, result, data, container, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData_t *data,
-                                const Layout_t *layout) {
+static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData_t *data, const Layout_t *layout) {
     data = dup_image_data(data);
 
     Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
@@ -614,16 +609,15 @@ static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData
     ui_reposition_drawable(ui, result);
 }
 
-Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container,
-                                 const Layout_t *layout) {
+Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
     internal_make_image(ui, result, data, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
 
-Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data,
-                                       Container_t *container, const Layout_t *layout) {
+Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container,
+                                const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
 
     result->custom_data = dup_progressbar_data(data);
@@ -658,8 +652,7 @@ void ui_destroy_drawable(Drawable_t *drawable) {
     free(drawable);
 }
 
-Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout,
-                                      const ContainerFlags_t flags) {
+Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));
     if ( result == nullptr ) {
         error_abort("Failed to allocate container");

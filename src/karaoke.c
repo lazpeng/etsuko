@@ -297,12 +297,12 @@ void karaoke_setup(Karaoke_t *state) {
             .border_radius_em = 4.0,
         },
         state->left_container,
-        &(Layout_t){.height = 0.6, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
+        &(Layout_t){.height = 0.6, .width = 0.6, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
 
     // Song info container
     state->song_info_container =
         ui_make_container(state->ui, state->left_container,
-                          &(Layout_t){.height = 0.3,
+                          &(Layout_t){.height = 0.3, .width = 1.0,
                                       .offset_y = vertical_padding,
                                       .relative_to = state->album_image,
                                       .relative_to_size = state->album_image,

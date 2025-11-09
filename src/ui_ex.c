@@ -50,7 +50,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     } else if ( song->line_alignment == SONG_LINE_RIGHT ) {
         base_alignment = ALIGN_RIGHT;
         base_alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X | LAYOUT_PROPORTIONAL_X;
-        base_offset_x = -0.3;
+        base_offset_x = -0.2;
     }
 
     Drawable_t *prev = nullptr;
@@ -81,8 +81,8 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                 alignment_flags = LAYOUT_CENTER_X;
             } else if ( line->alignment == SONG_LINE_RIGHT ) {
                 alignment = ALIGN_RIGHT;
-                alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X;
-                offset_x = -200;
+                alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_X | LAYOUT_WRAP_AROUND_X;
+                offset_x = -0.2;
             } else if ( line->alignment == SONG_LINE_LEFT ) {
                 alignment = ALIGN_LEFT;
                 alignment_flags = LAYOUT_NONE;
