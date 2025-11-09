@@ -91,10 +91,12 @@ bgType=simpleGradient
 #lyrics
 
 First line of the song
-And the second one
+And the second one#alignment=right
 ...
 #ass
-Dialogue: 0,0:00:00.00,0:00:24.75,Default,,0,0,0,,
+Dialogue: 0,0:00:00.00,0:00:05.75,Default,,0,0,0,,
+Dialogue: 0,0:00:05.75,0:00:13.10,Default,,0,0,0,,First line of the song
+Dialogue: 0,0:00:13.10,0:00:17.00,Default,,0,0,0,,And the second one#alignment=right
 ...
 ```
 
@@ -108,7 +110,7 @@ must come before lyrics) *OR* the #ass section which should be filled with
 *only* the [Events] part of a .ass file (generated using Aegisub, for example)
 from the second line onwards (ignoring the one that starts with Format:).
 
-Only timing and line content information is used from the .ass format, so
+Only timing and line content information are used from the .ass format, so
 any modifiers that can be applied to an individual line or the player itself
 are custom-made and handled separately (the full list can be seen in song.c).
 
