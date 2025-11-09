@@ -13,6 +13,8 @@ static int32_t g_mouse_click_x, g_mouse_click_y;
 static Vector_t *g_key_presses;
 static double g_window_pixel_scale = 1.0;
 static uint64_t g_prev_ticks = 0;
+static uint64_t g_start_ticks = 0;
+static double g_delta_time = 0;
 
 static void clear_key_presses() {
     // Remove one by one from right to left
@@ -44,7 +46,7 @@ static etsuko_Key_t *key_from_event(const SDL_Event *e) {
     return result;
 }
 
-void events_init() { g_key_presses = vec_init(); }
+void events_init() { g_key_presses = vec_init(); g_start_ticks = SDL_GetTicks64(); }
 
 void events_finish() { vec_destroy(g_key_presses); }
 
@@ -56,6 +58,12 @@ void events_loop() {
     g_mouse_click_x = g_mouse_click_y = 0;
     // Don't clear mouse_x and mouse_y
     clear_key_presses();
+
+    const auto ticks = SDL_GetTicks64();
+    if ( g_prev_ticks != 0 ) {
+        g_delta_time = (double)(ticks - g_prev_ticks) / 1000.0;
+    }
+    g_prev_ticks = ticks;
 
     etsuko_Key_t *key;
 
@@ -93,16 +101,8 @@ void events_loop() {
     }
 }
 
-double events_get_delta_time() {
-    const auto ticks = SDL_GetTicks64();
-
-    const auto delta = (double)(ticks - g_prev_ticks) / 1000.0;
-    g_prev_ticks = ticks;
-
-    if ( g_prev_ticks == 0 )
-        return 0;
-    return delta;
-}
+double events_get_delta_time() { return g_delta_time; }
+double events_get_elapsed_time() { return (double)(SDL_GetTicks64() - g_start_ticks) / 1000.0; }
 
 void events_get_mouse_position(int32_t *x, int32_t *y) {
     if ( x != nullptr )

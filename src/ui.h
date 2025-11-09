@@ -147,7 +147,7 @@ void ui_draw(const Ui_t *ui);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
-void ui_set_bg_gradient(uint32_t primary, uint32_t secondary);
+void ui_set_bg_gradient(uint32_t primary, uint32_t secondary, BackgroundType_t type);
 void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
 void ui_get_drawable_canon_pos(Ui_t *ui, const Drawable_t *drawable, double *x, double *y);

@@ -65,6 +65,10 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
             song->bg_type = BG_SIMPLE_GRADIENT;
         } else if ( strncmp(value, "solid", 5) == 0 ) {
             song->bg_type = BG_SOLID;
+        } else if ( strncmp(value, "dynamicGradient", 15) == 0 ) {
+            song->bg_type = BG_DYNAMIC_GRADIENT;
+        } else if ( strncmp(value, "randomGradient", 14) == 0 ) {
+            song->bg_type = BG_RANDOM_GRADIENT;
         } else {
             error_abort("Invalid background type for the song");
         }

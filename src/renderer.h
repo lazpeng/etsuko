@@ -23,15 +23,23 @@ typedef struct Bounds_t {
 
 typedef struct RenderTarget_t {
     Texture_t *texture;
-    unsigned int fbo;
     struct RenderTarget_t *prev_target;
-    int saved_viewport[4];
-    float saved_projection[16];
+    // Should not be used outside renderer
+    unsigned int fbo;
+    int viewport[4];
+    float projection[16];
 } RenderTarget_t;
+
+typedef enum BackgroundType_t {
+    BACKGROUND_NONE = 0,
+    BACKGROUND_GRADIENT,
+    BACKGROUND_DYNAMIC_GRADIENT,
+    BACKGROUND_RANDOM_GRADIENT
+} BackgroundType_t;
 
 typedef enum FontType_t { FONT_UI = 0, FONT_LYRICS = 1 } FontType_t;
 
-typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_NONE } BlendMode_t;
+typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_ADD, BLEND_MODE_NONE } BlendMode_t;
 
 void render_init();
 void render_finish();
@@ -42,7 +50,7 @@ const Bounds_t *render_get_viewport();
 double render_get_pixel_scale();
 void render_set_window_title(const char *title);
 void render_set_bg_color(Color_t color);
-void render_set_bg_gradient(Color_t top_color, Color_t bottom_color);
+void render_set_bg_gradient(Color_t top_color, Color_t bottom_color, BackgroundType_t type);
 void render_set_blend_mode(BlendMode_t mode);
 BlendMode_t render_get_blend_mode();
 Color_t render_color_parse(uint32_t color);
@@ -55,7 +63,9 @@ Texture_t *render_make_text(const char *text, int32_t pt_size, bool bold, const 
 Texture_t *render_make_image(const char *file_path, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
 void render_destroy_texture(Texture_t *texture);
-const RenderTarget_t *render_make_texture_target(int32_t w, int32_t h);
+const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
+Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
+Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
 void render_restore_texture_target();
 
 void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, float border_radius);

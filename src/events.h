@@ -22,6 +22,7 @@ bool events_has_quit();
 bool events_window_changed();
 // Queries for state
 double events_get_delta_time();
+double events_get_elapsed_time();
 void events_get_mouse_position(int32_t *x, int32_t *y);
 bool events_get_mouse_click(int32_t *x, int32_t *y);
 bool events_mouse_was_clicked_inside_area(int32_t x, int32_t y, int32_t w, int32_t h);

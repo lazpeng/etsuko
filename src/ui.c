@@ -82,9 +82,8 @@ void ui_begin_loop(Ui_t *ui) {
     if ( events_window_changed() )
         ui_on_window_changed(ui);
 
-    const double delta_time = events_get_delta_time();
     render_clear();
-    update_animations(ui, delta_time);
+    update_animations(ui, events_get_delta_time());
 }
 
 static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t *base_bounds) {
@@ -364,10 +363,10 @@ void ui_finish(Ui_t *ui) {
 
 void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
 
-void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary) {
+void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, BackgroundType_t type) {
     const auto primary_color = render_color_parse(primary);
     const auto secondary_color = render_color_parse(secondary);
-    render_set_bg_gradient(primary_color, secondary_color);
+    render_set_bg_gradient(primary_color, secondary_color, type);
 }
 
 Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
@@ -546,11 +545,9 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
         final_texture = target->texture;
 
-        double x, y = total_h;
+        double x, y = 0;
         for ( size_t i = 0; i < textures_vec->size; i++ ) {
             Texture_t *texture = textures_vec->data[i];
-            // int32_t w, h;
-            // render_measure_texture(texture, &w, &h);
             if ( data->alignment == ALIGN_LEFT ) {
                 x = 0;
             } else if ( data->alignment == ALIGN_RIGHT ) {
@@ -561,13 +558,13 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
                 error_abort("Invalid alignment mode");
             }
 
-            y -= texture->height - data->line_padding;
             Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
             // Disable blend on the texture so it doesn't lose alpha from blending multiple times
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
             render_draw_texture(texture, &destination, 0xFF);
+            y += texture->height + data->line_padding;
             render_set_blend_mode(blend_mode);
 
             render_destroy_texture(texture);

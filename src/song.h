@@ -21,7 +21,9 @@ typedef enum Song_LineAlignment_t {
 
 typedef enum Song_BgType_t {
     BG_SIMPLE_GRADIENT = 0,
-    BG_SOLID
+    BG_SOLID,
+    BG_DYNAMIC_GRADIENT,
+    BG_RANDOM_GRADIENT,
 } Song_BgType_t;
 
 typedef struct Song_Line_t {
