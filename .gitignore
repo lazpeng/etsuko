@@ -5,6 +5,7 @@ vcpkg_installed/
 .idea/
 .vs/
 .vscode/
+.cache/
 .DS_Store
 *.user
 *.dll
@@ -13,5 +14,6 @@ vcpkg_installed/
 *.out
 *.pdb
 assets_dbg/
+compile_commands.json
 # leave out the env
 src/secret.h
