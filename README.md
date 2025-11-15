@@ -50,6 +50,7 @@ cmake --build --preset desktop-release
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
+- GLEW, SDL2 and SDL2_ttf dev libraries
 
 **Upon running, the program will probably fail and close because it needs a song
 to play. It uses a custom format described below.**
@@ -127,3 +128,8 @@ source file, upon rebuilding you may see the playback.
 If your song needs a different font for displaying special characters (e.g.
 CJK or another non-latin language), or if you just want to use a font other
 than the default, a *fontOverride=* can be specified in the header as well.
+
+***
+This repository includes code in the public domain from the following projects:
+* nothings/stb: https://github.com/nothings/stb
+* lieff/minimp3: https://github.com/lieff/minimp3
