@@ -42,28 +42,23 @@ if(EMSCRIPTEN)
 
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
 
-    # Use Emscripten's built-in SDL2 ports instead of vcpkg
     target_compile_options(etsuko PRIVATE
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
     )
 
     target_link_options(etsuko PRIVATE
-            # Use built-in SDL2 ports
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
 
-            # Memory and runtime settings
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
             "SHELL:-sEXIT_RUNTIME=0"
             "SHELL:-sASYNCIFY=1"
             "SHELL:-sFETCH=1"
 
-            # WebGL settings
             #"SHELL:-sMIN_WEBGL_VERSION=2"
             "SHELL:-sMAX_WEBGL_VERSION=2"
 
-            # Optimization flags for size reduction
             "SHELL:-Oz"
             "SHELL:-flto"
             "SHELL:-g0"
@@ -71,7 +66,6 @@ if(EMSCRIPTEN)
             "SHELL:-sASSERTIONS=0"
             "SHELL:-sSTACK_SIZE=65536"
 
-            # Shell and assets
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
             "SHELL:--use-preload-plugins"
             "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
@@ -80,7 +74,6 @@ if(EMSCRIPTEN)
 else()
     message(STATUS "Configuring regular desktop build")
 
-    # Desktop: Use vcpkg's SDL2 libraries
     find_package(SDL2 REQUIRED)
     target_link_libraries(etsuko
             PRIVATE
@@ -94,7 +87,6 @@ else()
             $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
     )
 
-    # Desktop: OpenGL and GLEW
     find_package(OpenGL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenGL::GL)
 
@@ -104,13 +96,11 @@ else()
     # -lm
     target_link_libraries(etsuko PRIVATE m)
 
-    # Desktop: Sanitizers and debug options
     target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_compile_options(etsuko PRIVATE "-g")
     target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
     target_link_options(etsuko PRIVATE "-Wl,-dead_strip")
 
-    # Copy assets to build directory
     add_custom_command(TARGET etsuko POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/assets
@@ -129,10 +119,8 @@ else()
     )
 endif()
 
-# Common include directories
 target_include_directories(etsuko PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-# Common compiler warnings
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(etsuko PRIVATE
             -Wall
