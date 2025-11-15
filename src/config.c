@@ -1,7 +1,5 @@
 #include "config.h"
 
-#include "str_utils.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +11,7 @@ static Config_t *g_config = nullptr;
 #include <emscripten.h>
 
 #include "constants.h"
+#include "str_utils.h"
 
 EM_JS(const char *, get_song_param, (void), {
     const params = new URLSearchParams(window.location.search);
@@ -44,7 +43,7 @@ static Config_t *get_default_config() {
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
     // config->song_file = strdup("stop crying your heart out.txt");
-    config->song_file = strdup("yoake.txt");
+    config->song_file = strdup("sidewalks.txt");
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

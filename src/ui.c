@@ -40,6 +40,7 @@ void ui_load_font(const FontType_t type, const char *path) { render_load_font(pa
 
 static void animation_translation_data_destroy(Animation_EaseTranslationData_t *data) { free(data); }
 static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(data); }
+static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(data); }
 
 static void animation_destroy(Animation_t *animation) {
     if ( animation->custom_data != nullptr ) {
@@ -47,6 +48,8 @@ static void animation_destroy(Animation_t *animation) {
             animation_translation_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_FADE_IN_OUT ) {
             animation_fade_data_destroy(animation->custom_data);
+        } else if ( animation->type == ANIM_SCALE ) {
+            animation_scale_data_destroy(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
         }
@@ -168,7 +171,7 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         double draw_y;
         ui_get_drawable_canon_pos(ui, drawable, nullptr, &draw_y);
 
-        max_y = fmax(max_y, draw_y + drawable->bounds.h);
+        max_y = fmax(max_y, draw_y + drawable->bounds.h * (1.0 + drawable->bounds.scale_mod));
         min_y = fmin(min_y, draw_y);
     }
 
@@ -196,13 +199,14 @@ static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
 }
 
 static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
+    constexpr double scale = 1.0; // 1.0 + out_bounds->scale_mod;
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
-        calc_w = out_bounds->w;
+        calc_w = out_bounds->w * scale;
     }
     if ( layout->flags & LAYOUT_CENTER_X ) {
-        x = parent->bounds.w / 2.f - out_bounds->w / 2.f - calc_w;
+        x = parent->bounds.w / 2.f - out_bounds->w * scale / 2.f - calc_w;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_X ) {
         x = parent->bounds.w * x;
     }
@@ -214,10 +218,10 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     double y = layout->offset_y;
     double calc_h = 0;
     if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-        calc_h = out_bounds->h;
+        calc_h = out_bounds->h * scale;
     }
     if ( layout->flags & LAYOUT_CENTER_Y ) {
-        y = parent->bounds.h / 2.f - out_bounds->h / 2.f - calc_h;
+        y = parent->bounds.h / 2.f - out_bounds->h * scale / 2.f - calc_h;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_Y ) {
         y = parent->bounds.h * y;
     }
@@ -239,14 +243,14 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         if ( layout->flags & LAYOUT_RELATIVE_TO_X ) {
             x += layout->relative_to->bounds.x;
             if ( layout->flags & LAYOUT_RELATION_X_INCLUDE_WIDTH ) {
-                x += layout->relative_to->bounds.w;
+                x += layout->relative_to->bounds.w * (1.0 + layout->relative_to->bounds.scale_mod);
             }
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_Y ) {
             y += layout->relative_to->bounds.y;
             if ( layout->flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
-                y += layout->relative_to->bounds.h;
+                y += layout->relative_to->bounds.h * (1.0 + layout->relative_to->bounds.scale_mod);
             }
         }
     }
@@ -292,9 +296,22 @@ static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
     }
 }
 
+static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds) {
+    const Animation_ScaleData_t *data = animation->custom_data;
+
+    const double progress = animation->elapsed / animation->duration;
+    if ( progress < 1.0 ) {
+        const double scale_delta = data->to_scale - data->from_scale;
+        final_bounds->scale_mod = data->from_scale + scale_delta * progress;
+    } else {
+        animation->active = false;
+    }
+}
+
 struct AnimationDelta {
     Bounds_t final_bounds;
     int32_t final_alpha;
+    float color_mod;
 };
 
 static void apply_animations(const Drawable_t *drawable, struct AnimationDelta *animation_delta) {
@@ -305,6 +322,8 @@ static void apply_animations(const Drawable_t *drawable, struct AnimationDelta *
                 apply_translation_animation(animation, &animation_delta->final_bounds);
             } else if ( animation->type == ANIM_FADE_IN_OUT ) {
                 apply_fade_animation(animation, &animation_delta->final_alpha);
+            } else if ( animation->type == ANIM_SCALE ) {
+                apply_scale_animation(animation, &animation_delta->final_bounds);
             }
         }
     }
@@ -327,6 +346,7 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     struct AnimationDelta delta = {
         .final_bounds = drawable->bounds,
         .final_alpha = drawable->alpha_mod,
+        .color_mod = drawable->color_mod,
     };
     apply_animations(drawable, &delta);
 
@@ -334,7 +354,17 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
 
-    render_draw_texture(drawable->texture, &rect, delta.final_alpha);
+    if ( drawable->shadow != nullptr ) {
+        Bounds_t shadow_bounds = rect;
+        shadow_bounds.x += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
+        shadow_bounds.y += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
+        shadow_bounds.w += drawable->shadow_padding;
+        shadow_bounds.h += drawable->shadow_padding;
+        const auto alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : MIN(128, drawable->alpha_mod);
+        render_draw_texture(drawable->shadow, &shadow_bounds, alpha, 0.f);
+    }
+
+    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod);
 }
 
 static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
@@ -420,6 +450,7 @@ static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     result->measure_at_em = data->measure_at_em;
     result->alignment = data->alignment;
     result->line_padding = data->line_padding;
+    result->draw_shadow = data->draw_shadow;
     return result;
 }
 
@@ -435,6 +466,7 @@ static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
     }
     result->file_path = strdup(data->file_path);
     result->border_radius_em = data->border_radius_em;
+    result->draw_shadow = data->draw_shadow;
     return result;
 }
 
@@ -514,6 +546,7 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     result->parent = parent;
     result->enabled = true;
     result->alpha_mod = 0xFF;
+    result->color_mod = 1.f;
     result->animations = vec_init();
 
     return result;
@@ -570,7 +603,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
-            render_draw_texture(texture, &destination, 0xFF);
+            render_draw_texture(texture, &destination, 0xFF, 1.f);
             y += texture->height + data->line_padding;
             render_set_blend_mode(blend_mode);
 
@@ -588,12 +621,20 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         error_abort("Failed to allocate drawable");
     }
 
-    const double width = final_texture->width, height = final_texture->height;
-    result->bounds = (Bounds_t){.x = result->bounds.x, .y = result->bounds.y, .w = width, .h = height};
+    result->bounds.w = final_texture->width;
+    result->bounds.h = final_texture->height;
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
     ui_reposition_drawable(ui, result);
+
+    if ( data->draw_shadow ) {
+        const auto text_pt = render_measure_pt_from_em(data->em);
+        const auto blur_radius = MAX(1.f, MIN(15.f, text_pt * 0.05f));
+        const auto offset = (int32_t)MAX(1.f, MIN(10.f, text_pt * 0.15f));
+        result->shadow = render_make_shadow(result->texture, blur_radius, 0.f, 0);
+        result->shadow_offset = offset;
+    }
 
     return result;
 }
@@ -617,6 +658,14 @@ static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData
     result->layout = *layout;
 
     ui_reposition_drawable(ui, result);
+
+    // if ( data->draw_shadow ) {
+    //     const auto offset = (int32_t)MAX(1.f, MIN(10.f, texture->width * 0.15f));
+    //     const auto blur_radius = MAX(1.f, MIN(15.f, texture->width * 0.05f));
+    //     result->shadow = render_make_shadow(result->texture, blur_radius, 0.015f, 2);
+    //     result->shadow_offset = offset;
+    //     result->shadow_padding = 2;
+    // }
 }
 
 Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout) {
@@ -641,6 +690,9 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
 void ui_destroy_drawable(Drawable_t *drawable) {
     if ( drawable->texture != nullptr ) {
         render_destroy_texture(drawable->texture);
+    }
+    if ( drawable->shadow != nullptr ) {
+        render_destroy_texture(drawable->shadow);
     }
     if ( drawable->custom_data != nullptr ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
@@ -709,6 +761,16 @@ static void reapply_translate_animation(Animation_t *animation, const double old
     animation->active = true;
 }
 
+static Animation_t *find_animation(const Drawable_t *drawable, const AnimationType_t type) {
+    for ( size_t i = 0; i < drawable->animations->size; i++ ) {
+        Animation_t *animation = drawable->animations->data[i];
+        if ( animation->type == type ) {
+            return animation;
+        }
+    }
+    return nullptr;
+}
+
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
@@ -716,11 +778,9 @@ void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
     position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
-        for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-            Animation_t *animation = drawable->animations->data[i];
-            if ( animation->target == drawable && animation->type == ANIM_EASE_TRANSLATION ) {
-                reapply_translate_animation(animation, old_x, old_y);
-            }
+        Animation_t *animation = find_animation(drawable, ANIM_EASE_TRANSLATION);
+        if ( animation != nullptr ) {
+            reapply_translate_animation(animation, old_x, old_y);
         }
     }
 }
@@ -730,15 +790,7 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
         return;
     }
 
-    Animation_t *fade_animation = nullptr;
-    for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-        Animation_t *animation = drawable->animations->data[i];
-        if ( animation->type == ANIM_FADE_IN_OUT ) {
-            fade_animation = animation;
-            break;
-        }
-    }
-
+    Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
     if ( fade_animation != nullptr ) {
         Animation_FadeInOutData_t *data = fade_animation->custom_data;
 
@@ -820,6 +872,17 @@ static Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const Animation_Fade
     return result;
 }
 
+static Animation_ScaleData_t *dup_anim_scale_data(const Animation_ScaleData_t *data) {
+    Animation_ScaleData_t *result = calloc(1, sizeof(*result));
+    if ( result == nullptr ) {
+        error_abort("Failed to allocate animation scale data");
+    }
+    result->from_scale = data->from_scale;
+    result->to_scale = data->to_scale;
+    result->duration = data->duration;
+    return result;
+}
+
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
     if ( target == nullptr ) {
         error_abort("Target drawable is nullptr");
@@ -851,6 +914,75 @@ void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) 
 
     result->type = ANIM_FADE_IN_OUT;
     result->custom_data = dup_anim_fade_in_out_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+
+    vec_add(target->animations, result);
+}
+
+void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, const float scale) {
+    // Do this so that we can specify scale in a way that makes sense (that is, 1.0 for the default size, anything other as
+    // a transformation)
+    const float scale_mod = scale - 1.f;
+    if ( scale_mod == drawable->bounds.scale_mod )
+        return;
+
+    // TODO: Add duration override
+    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
+    if ( animation != nullptr ) {
+        Animation_ScaleData_t *data = animation->custom_data;
+        data->from_scale = drawable->bounds.scale_mod;
+        data->to_scale = scale_mod;
+
+        animation->elapsed = 0.0;
+        animation->active = true;
+    }
+    drawable->bounds.scale_mod = scale_mod;
+}
+
+void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, float scale) {
+    const float scale_mod = scale - 1.f;
+    if ( scale_mod == drawable->bounds.scale_mod )
+        return;
+
+    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
+    if ( animation != nullptr ) {
+        animation->elapsed = animation->duration;
+        animation->active = false;
+    }
+    drawable->bounds.scale_mod = scale_mod;
+    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
+}
+
+void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { drawable->color_mod = color_mod; }
+
+void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha) {
+    if ( alpha == drawable->alpha_mod ) {
+        return;
+    }
+
+    Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
+    if ( fade_animation != nullptr ) {
+        // Cancel animation
+        fade_animation->elapsed = fade_animation->duration;
+        fade_animation->active = false;
+    }
+    drawable->alpha_mod = alpha;
+}
+
+void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
+    if ( target == nullptr ) {
+        error_abort("Target drawable is nullptr");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == nullptr ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_SCALE;
+    result->custom_data = dup_anim_scale_data(data);
     result->target = target;
     result->duration = data->duration;
     result->active = false;

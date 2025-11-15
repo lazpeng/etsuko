@@ -9,6 +9,7 @@
 #include "ui.h"
 
 typedef enum LineState_t {
+    LINE_NONE = 0, // Transient state
     LINE_INACTIVE,
     LINE_ACTIVE,
     LINE_ALMOST_HIDDEN,
@@ -21,8 +22,8 @@ typedef struct etsuko_LyricsView_t {
     Vector_t *line_drawables;
     int32_t current_active_index;
     LineState_t line_states[MAX_SONG_LINES];
-    bool active_changed;
     double prev_viewport_y;
+    bool layout_dirty;
 } LyricsView_t;
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);

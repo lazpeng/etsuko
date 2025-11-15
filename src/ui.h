@@ -81,11 +81,15 @@ typedef struct Drawable_t {
     Layout_t layout;
     uint8_t alpha_mod;
     Vector_t *animations;
+    float color_mod;
+    Texture_t *shadow;
+    int32_t shadow_offset, shadow_padding;
 } Drawable_t;
 
 typedef enum AnimationType_t {
     ANIM_EASE_TRANSLATION = 0,
     ANIM_FADE_IN_OUT,
+    ANIM_SCALE,
 } AnimationType_t;
 
 typedef struct Animation_t {
@@ -112,11 +116,13 @@ typedef struct Drawable_TextData_t {
     double measure_at_em;
     int32_t line_padding;
     DrawableAlignment_t alignment;
+    bool draw_shadow;
 } Drawable_TextData_t;
 
 typedef struct Drawable_ImageData_t {
     char *file_path;
     double border_radius_em;
+    bool draw_shadow;
 } Drawable_ImageData_t;
 
 typedef struct Drawable_ProgressBarData_t {
@@ -136,6 +142,11 @@ typedef struct Animation_FadeInOutData_t {
     int32_t from_alpha, to_alpha;
     double duration;
 } Animation_FadeInOutData_t;
+
+typedef struct Animation_ScaleData_t {
+    double from_scale, to_scale;
+    double duration;
+} Animation_ScaleData_t;
 
 // Init and lifetime functions
 Ui_t *ui_init();
@@ -160,6 +171,10 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Drawable_t *drawable);
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
+void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
+void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, float scale);
+void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, float scale);
+void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);
@@ -167,5 +182,6 @@ void ui_destroy_container(Ui_t *ui, Container_t *container);
 // Animations
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data);
 void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data);
+void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data);
 
 #endif // ETSUKO_UI_H

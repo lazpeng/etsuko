@@ -63,6 +63,7 @@ typedef struct Renderer_t {
     GLint tex_bounds_loc;
     GLint tex_border_radius_loc;
     GLint tex_rect_size_loc;
+    GLint tex_color_mod_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -383,6 +384,7 @@ void render_init(void) {
     g_renderer->tex_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "bounds");
     g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
     g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
+    g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "colorModFactor");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
@@ -583,9 +585,6 @@ static Texture_t *internal_create_dynamic_gradient_background_texture() {
     glUniform1f(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_noise_magnitude"), noise_magnitude);
     glUniform3fv(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_colors"), 5, &colors[0][0]);
 
-    // float quadVertices[QUAD_VERTICES_SIZE] = {0};
-    // create_quad_vertices(0, 0, (float)width, (float)height, quadVertices);
-
     constexpr float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
                                       -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
 
@@ -636,7 +635,7 @@ static Texture_t *internal_create_gradient_background_texture() {
     return texture;
 }
 
-Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius) {
+Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius, const float fade_distance) {
     if ( !source || blur_radius <= 0 || source->width <= 0 || source->height <= 0 ) {
         error_abort("Fail at render_blur_texture_radius");
     }
@@ -654,6 +653,8 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
     glUniformMatrix4fv(g_renderer->blur_projection_loc, 1, GL_FALSE, first_target->projection);
     glUniform1f(g_renderer->blur_size_loc, blur_radius);
     glUniform2f(g_renderer->blur_direction_loc, 1.0f, 0.0f);
+    glUniform1i(glGetUniformLocation(g_renderer->blur_shader, "u_fade_edges"), fade_distance > 0.f);
+    glUniform1f(glGetUniformLocation(g_renderer->blur_shader, "u_fade_distance"), fade_distance);
 
     glBindTexture(GL_TEXTURE_2D, source->id);
 
@@ -683,8 +684,8 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
     return horizontal_texture;
 }
 
-Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radius) {
-    const auto blurred = render_blur_texture(source, blur_radius);
+Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radius, const float fade_distance) {
+    const auto blurred = render_blur_texture(source, blur_radius, fade_distance);
     render_destroy_texture(source);
     return blurred;
 }
@@ -699,17 +700,15 @@ void render_clear() {
         if ( g_renderer->bg_texture == nullptr ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
-        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255);
+        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f);
     } else if ( g_renderer->bg_type == BACKGROUND_DYNAMIC_GRADIENT ) {
-        auto bg_texture = internal_create_dynamic_gradient_background_texture();
-        bg_texture = render_blur_texture_replace(bg_texture, 50);
-
-        render_draw_texture(bg_texture, &(Bounds_t){0}, 255);
+        const auto bg_texture = internal_create_dynamic_gradient_background_texture();
+        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
 
         render_destroy_texture(bg_texture);
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
         const auto bg_texture = internal_create_random_gradient_background_texture();
-        render_draw_texture(bg_texture, &(Bounds_t){0}, 255);
+        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
 
         render_destroy_texture(bg_texture);
     }
@@ -933,7 +932,7 @@ Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool 
     return texture;
 }
 
-static Texture_t *create_test_texture(void) {
+static Texture_t *create_test_texture() {
     constexpr int size = 256;
     unsigned char *pixels = malloc(size * size * 4);
 
@@ -1043,13 +1042,14 @@ void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, cons
     glBindVertexArray(0);
 }
 
-void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod) {
+void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod) {
     if ( texture == nullptr || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
 
-    const float w = (float)(at->w == 0 ? texture->width : at->w);
-    const float h = (float)(at->w == 0 ? texture->height : at->h);
+    const float scale = MAX(0.f, 1.f + (float)at->scale_mod);
+    const float w = (float)(at->w == 0 ? (float)texture->width : at->w) * scale;
+    const float h = (float)(at->w == 0 ? (float)texture->height : at->h) * scale;
 
     if ( at->x + w < 0 || at->x > g_renderer->viewport.w || at->y + h < 0 || at->y > g_renderer->viewport.h ) {
         return;
@@ -1065,6 +1065,7 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
     glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
+    glUniform1f(g_renderer->tex_color_mod_loc, color_mod);
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 
@@ -1078,4 +1079,21 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     glBindVertexArray(0);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+Texture_t *render_make_shadow(const Texture_t *texture, const float blur_radius, const float fade_distance,
+                              const int32_t padding) {
+    const int32_t width = texture->width + padding, height = texture->height + padding;
+    const auto target = render_make_texture_target(width, height);
+    const Bounds_t bounds = {.x = padding / 2.0, .y = padding / 2.0, .w = width, .h = height};
+    render_draw_texture(texture, &bounds, 255, 0.f);
+    auto result = target->texture;
+    render_restore_texture_target();
+
+    result->border_radius = texture->border_radius;
+    if ( blur_radius > 0.f ) {
+        result = render_blur_texture_replace(result, blur_radius, fade_distance);
+    }
+
+    return result;
 }

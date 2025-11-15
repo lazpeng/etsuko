@@ -5,6 +5,7 @@ uniform float alpha;
 in vec2 FragPos;
 uniform float borderRadius;
 uniform vec2 rectSize;// width, height
+uniform float colorModFactor;
 
 void main() {
     vec4 texColor = texture(tex, TexCoord);
@@ -20,7 +21,7 @@ void main() {
             discard;
         }
         // Optional: smooth edges with anti-aliasing
-        finalAlpha = 1.0 - smoothstep(borderRadius - 1.0, borderRadius, dist);
+        finalAlpha = finalAlpha - smoothstep(borderRadius - 1.0, borderRadius, dist);
     }
-    FragColor = vec4(texColor.rgb, texColor.a * finalAlpha);
+    FragColor = vec4(texColor.rgb * colorModFactor, texColor.a * finalAlpha);
 }
