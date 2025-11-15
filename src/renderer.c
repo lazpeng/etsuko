@@ -9,8 +9,9 @@
 #include "error.h"
 #include "events.h"
 
+#include "contrib/stb_image.h"
+
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <math.h>
 #include <stdbool.h>
@@ -762,19 +763,11 @@ int32_t render_measure_pt_from_em(const double em) {
     return pt_size;
 }
 
-static void get_render_params(float **projection, GLuint *fbo) {
-    GLuint t_fbo;
+static float *get_projection_matrix(void) {
     if ( g_renderer->render_target == NULL ) {
-        t_fbo = 0;
-    } else {
-        t_fbo = g_renderer->render_target->fbo;
+        return g_renderer->projection_matrix;
     }
-
-    if ( projection != NULL )
-        *projection = g_renderer->render_target == NULL ? g_renderer->projection_matrix : g_renderer->render_target->projection;
-
-    if ( fbo != NULL )
-        *fbo = t_fbo;
+    return g_renderer->render_target->projection;
 }
 
 const RenderTarget_t *render_make_texture_target(const int32_t width, const int32_t height) {
@@ -970,20 +963,31 @@ static Texture_t *create_test_texture(void) {
 }
 
 Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
-    SDL_Surface *loaded = IMG_Load(file_path);
-    if ( loaded == NULL ) {
-        printf("IMG_GetError: %s\n", IMG_GetError());
+    int32_t w, h;
+    unsigned char *pixels = stbi_load(file_path, &w, &h, NULL, 4);
+    if ( pixels == NULL ) {
         error_abort("Failed to load image");
     }
 
-    SDL_Surface *converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA8888, 0);
-    if ( converted == NULL ) {
-        error_abort("Failed to convert image surface to appropriate pixel format");
-    }
-    SDL_FreeSurface(loaded);
+    GLuint texture_id;
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-    Texture_t *final_texture = create_texture_from_surface(converted);
-    SDL_FreeSurface(converted);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    free(pixels);
+
+    Texture_t *final_texture = calloc(1, sizeof(*final_texture));
+    if ( final_texture == NULL ) {
+        error_abort("Failed to allocate texture");
+    }
+    final_texture->width = w;
+    final_texture->height = h;
+    final_texture->id = texture_id;
 
     if ( border_radius_em > 0 ) {
         final_texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
@@ -1055,8 +1059,7 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
         return;
     }
 
-    float *projection;
-    get_render_params(&projection, NULL);
+    const float *projection = get_projection_matrix();
 
     glUseProgram(g_renderer->texture_shader);
 

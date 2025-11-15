@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -21,13 +20,6 @@ int global_init(void) {
     if ( TTF_Init() != 0 ) {
         puts(TTF_GetError());
         error_abort("TTF_Init failed");
-    }
-
-    // Init image
-    const int image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
-    if ( IMG_Init(image_formats) != image_formats ) {
-        puts(IMG_GetError());
-        error_abort("IMG_Init failed");
     }
 
     render_init();
@@ -49,7 +41,6 @@ int global_init(void) {
 
 void global_finish(void) {
     Mix_Quit();
-    IMG_Quit();
     SDL_Quit();
     render_finish();
 }

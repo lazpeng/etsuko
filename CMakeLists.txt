@@ -32,7 +32,7 @@ add_executable(etsuko src/main.c
         src/ui_ex.c
         src/renderer.h
         src/renderer.c
-        src/contrib/incbin.h)
+        src/contrib/stb_image.c)
 
 target_compile_features(etsuko PRIVATE c_std_17)
 
@@ -46,8 +46,6 @@ if(EMSCRIPTEN)
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
             "SHELL:-sUSE_SDL_MIXER=2"
-            "SHELL:-sUSE_SDL_IMAGE=2"
-            "SHELL:-sSDL2_IMAGE_FORMATS=['png','jpg']"
             "SHELL:-sSDL2_MIXER_FORMATS=['mp3']"
     )
 
@@ -56,8 +54,6 @@ if(EMSCRIPTEN)
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
             "SHELL:-sUSE_SDL_MIXER=2"
-            "SHELL:-sUSE_SDL_IMAGE=2"
-            "SHELL:-sSDL2_IMAGE_FORMATS=['png','jpg']"
             "SHELL:-sSDL2_MIXER_FORMATS=['mp3']"
 
             # Memory and runtime settings
@@ -106,11 +102,6 @@ else()
             PRIVATE
             $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>
     )
-
-    find_package(SDL2_image REQUIRED)
-    target_link_libraries(etsuko
-            PRIVATE
-            $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>)
 
     # Desktop: OpenGL and GLEW
     find_package(OpenGL REQUIRED)
