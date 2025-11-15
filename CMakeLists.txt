@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.5)
 project(etsuko C)
 
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(etsuko src/main.c
@@ -28,16 +28,13 @@ add_executable(etsuko src/main.c
         src/audio.h
         src/audio.c
         src/constants.h
-        src/secret.h
         src/ui_ex.h
         src/ui_ex.c
         src/renderer.h
         src/renderer.c
         src/contrib/incbin.h)
 
-target_compile_options(etsuko PRIVATE -Wall -Wpedantic)
-
-target_compile_features(etsuko PRIVATE c_std_23)
+target_compile_features(etsuko PRIVATE c_std_17)
 
 if(EMSCRIPTEN)
     message(STATUS "Configuring for Emscripten/WebAssembly")
@@ -121,6 +118,9 @@ else()
 
     find_package(GLEW REQUIRED)
     target_link_libraries(etsuko PRIVATE GLEW::GLEW)
+
+    # -lm
+    target_link_libraries(etsuko PRIVATE m)
 
     # Desktop: Sanitizers and debug options
     target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")

@@ -52,7 +52,7 @@ typedef struct Song_t {
 } Song_t;
 
 void song_load(const char *src);
-Song_t *song_get();
-void song_destroy();
+Song_t *song_get(void);
+void song_destroy(void);
 
 #endif // ETSUKO_SONG_H

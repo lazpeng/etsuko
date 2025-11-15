@@ -10,7 +10,7 @@
 #include "error.h"
 #include "renderer.h"
 
-int global_init() {
+int global_init(void) {
     // Init sdl
     if ( SDL_Init(SDL_INIT_VIDEO) != 0 ) {
         puts(SDL_GetError());
@@ -24,7 +24,7 @@ int global_init() {
     }
 
     // Init image
-    constexpr int image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
+    const int image_formats = IMG_INIT_PNG | IMG_INIT_JPG;
     if ( IMG_Init(image_formats) != image_formats ) {
         puts(IMG_GetError());
         error_abort("IMG_Init failed");
@@ -33,7 +33,7 @@ int global_init() {
     render_init();
 
     // Init audio
-    constexpr int flags = MIX_INIT_MP3;
+    const int flags = MIX_INIT_MP3;
     if ( Mix_Init(flags) == 0 ) {
         puts(Mix_GetError());
         error_abort("Mix_Init failed");
@@ -47,7 +47,7 @@ int global_init() {
     return 0;
 }
 
-void global_finish() {
+void global_finish(void) {
     Mix_Quit();
     IMG_Quit();
     SDL_Quit();

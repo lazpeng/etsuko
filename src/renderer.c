@@ -13,6 +13,7 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <math.h>
+#include <stdbool.h>
 
 #ifdef __EMSCRIPTEN__
 #include <GLES3/gl3.h>
@@ -27,9 +28,9 @@
 #endif
 
 // 1MB
-constexpr int MAX_SHADER_SIZE = 1 * 1024 * 1024;
-constexpr int QUAD_VERTICES_SIZE = 4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/;
-constexpr int PROJECTION_MATRIX_SIZE = 16;
+#define MAX_SHADER_SIZE (1 * 1024 * 1024)
+#define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
+#define PROJECTION_MATRIX_SIZE (16)
 
 typedef struct Renderer_t {
     SDL_Window *window;
@@ -82,7 +83,7 @@ typedef struct Renderer_t {
     GLint rand_grad_resolution_loc;
 } Renderer_t;
 
-static Renderer_t *g_renderer = nullptr;
+static Renderer_t *g_renderer = NULL;
 
 // ============================================================================
 // SHADERS
@@ -167,14 +168,14 @@ INCBIN(copy_frag_shader, "shaders/copy.frag.glsl")
 
 static GLuint compile_shader(const GLenum type, const char *source, const char *name) {
     const GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
+    glShaderSource(shader, 1, &source, NULL);
     glCompileShader(shader);
 
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if ( !success ) {
         char log[512];
-        glGetShaderInfoLog(shader, 512, nullptr, log);
+        glGetShaderInfoLog(shader, 512, NULL, log);
         printf("Shader compilation failed for %s:\n%s\n", name, log);
         printf("source: %s\n", source);
         error_abort("Shader compilation failed");
@@ -185,7 +186,7 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
 
 static char *begin_shader_compilation(void) {
     char *buffer = calloc(1, MAX_SHADER_SIZE);
-    if ( buffer == nullptr ) {
+    if ( buffer == NULL ) {
         error_abort("Failed to allocate shader compilation buffer");
     }
     return buffer;
@@ -211,7 +212,7 @@ static GLuint create_shader_program(char *buffer, const char *vert_src, const ch
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if ( !success ) {
         char log[512];
-        glGetProgramInfoLog(program, 512, nullptr, log);
+        glGetProgramInfoLog(program, 512, NULL, log);
         printf("Shader linking failed:\n%s\n", log);
         error_abort("Shader linking failed");
     }
@@ -248,12 +249,12 @@ static void update_projection_matrix(void) {
 
 static Texture_t *create_texture_from_surface(SDL_Surface *surface) {
     SDL_Surface *rgba_surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
-    if ( rgba_surface == nullptr ) {
+    if ( rgba_surface == NULL ) {
         error_abort("Failed to convert surface to ABGR8888");
     }
 
     Texture_t *texture = calloc(1, sizeof(*texture));
-    if ( texture == nullptr ) {
+    if ( texture == NULL ) {
         error_abort("Failed to allocate texture");
     }
 
@@ -278,13 +279,13 @@ static Texture_t *create_texture_from_surface(SDL_Surface *surface) {
 }
 
 void render_init(void) {
-    if ( g_renderer != nullptr ) {
+    if ( g_renderer != NULL ) {
         printf("Warning: renderer already initialized\n");
         return;
     }
 
     g_renderer = calloc(1, sizeof(*g_renderer));
-    if ( g_renderer == nullptr ) {
+    if ( g_renderer == NULL ) {
         error_abort("Failed to allocate renderer");
     }
 
@@ -300,15 +301,15 @@ void render_init(void) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-    constexpr int pos = SDL_WINDOWPOS_CENTERED;
-    constexpr int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
+    const int pos = SDL_WINDOWPOS_CENTERED;
+    const int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
     g_renderer->window = SDL_CreateWindow(DEFAULT_TITLE, pos, pos, DEFAULT_WIDTH, DEFAULT_HEIGHT, flags);
-    if ( g_renderer->window == nullptr ) {
+    if ( g_renderer->window == NULL ) {
         error_abort("Failed to create window");
     }
 
     g_renderer->gl_context = SDL_GL_CreateContext(g_renderer->window);
-    if ( g_renderer->gl_context == nullptr ) {
+    if ( g_renderer->gl_context == NULL ) {
         printf("SDL Error: %s\n", SDL_GetError());
 
         error_abort("Failed to create OpenGL context");
@@ -352,11 +353,11 @@ void render_init(void) {
     glBindBuffer(GL_ARRAY_BUFFER, g_renderer->VBO);
 
     // Allocate buffer (4 vertices * 4 floats per vertex: x, y, u, v)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4, nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4, NULL, GL_DYNAMIC_DRAW);
 
     // Position attribute (location 0)
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), NULL);
 
     // TexCoord attribute (location 1)
     glEnableVertexAttribArray(1);
@@ -411,14 +412,14 @@ void render_init(void) {
 }
 
 void render_finish(void) {
-    if ( g_renderer == nullptr ) {
+    if ( g_renderer == NULL ) {
         return;
     }
 
     // Unload fonts
-    if ( g_renderer->ui_font != nullptr )
+    if ( g_renderer->ui_font != NULL )
         TTF_CloseFont(g_renderer->ui_font);
-    if ( g_renderer->lyrics_font != nullptr )
+    if ( g_renderer->lyrics_font != NULL )
         TTF_CloseFont(g_renderer->lyrics_font);
 
     // Delete OpenGL objects
@@ -437,7 +438,7 @@ void render_finish(void) {
 
     // Cleanup
     free(g_renderer);
-    g_renderer = nullptr;
+    g_renderer = NULL;
 }
 
 void render_on_window_changed(void) {
@@ -445,14 +446,14 @@ void render_on_window_changed(void) {
     SDL_GL_GetDrawableSize(g_renderer->window, &outW, &outH);
 
     int32_t window_w;
-    SDL_GetWindowSize(g_renderer->window, &window_w, nullptr);
+    SDL_GetWindowSize(g_renderer->window, &window_w, NULL);
 
     g_renderer->window_pixel_scale = (double)outW / (double)window_w;
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
     float hdpi_temp, v_dpi_temp;
-    if ( SDL_GetDisplayDPI(0, nullptr, &hdpi_temp, &v_dpi_temp) != 0 ) {
+    if ( SDL_GetDisplayDPI(0, NULL, &hdpi_temp, &v_dpi_temp) != 0 ) {
         puts(SDL_GetError());
         error_abort("Failed to get DPI");
     }
@@ -465,9 +466,9 @@ void render_on_window_changed(void) {
     update_projection_matrix();
 
     // Update background texture
-    if ( g_renderer->bg_texture != nullptr ) {
+    if ( g_renderer->bg_texture != NULL ) {
         render_destroy_texture(g_renderer->bg_texture);
-        g_renderer->bg_texture = nullptr;
+        g_renderer->bg_texture = NULL;
     }
 }
 
@@ -498,8 +499,8 @@ static void hslToRgb(const float h, const float s, const float l, float *dst) {
     if ( s == 0 ) {
         r = g = b = l;
     } else {
-        const auto q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-        const auto p = 2 * l - q;
+        const float q = l < 0.5f ? l * (1 + s) : l + s - l * s;
+        const float p = 2 * l - q;
         r = hueToRgb(p, q, h + 1.f / 3);
         g = hueToRgb(p, q, h);
         b = hueToRgb(p, q, h - 1.f / 3);
@@ -510,21 +511,21 @@ static void hslToRgb(const float h, const float s, const float l, float *dst) {
     dst[2] = b;
 }
 
-static Texture_t *internal_create_random_gradient_background_texture() {
+static Texture_t *internal_create_random_gradient_background_texture(void) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    constexpr float rate = 0.005f;
+    const float rate = 0.005f;
     static float progress = 0.f;
     static float noise_magnitude = 0.1f;
 
-    constexpr float target_magnitude = 0.2f;
+    const float target_magnitude = 0.2f;
 
     progress += (float)(rate * events_get_delta_time());
     noise_magnitude = noise_magnitude * (1.f - progress) + target_magnitude * progress;
 
     const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const auto target = render_make_texture_target(width, height);
+    const RenderTarget_t *target = render_make_texture_target(width, height);
 
     glUseProgram(g_renderer->rand_gradient_shader);
 
@@ -532,36 +533,36 @@ static Texture_t *internal_create_random_gradient_background_texture() {
     glUniform1f(g_renderer->rand_grad_noise_scale_loc, noise_magnitude);
     glUniform2f(g_renderer->rand_grad_resolution_loc, (float)width, (float)height);
 
-    constexpr float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-                                      -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+    static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+                                   -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
 
     glBindVertexArray(g_renderer->VAO);
     glBindBuffer(GL_ARRAY_BUFFER, g_renderer->VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const auto result = target->texture;
+    Texture_t *result = target->texture;
     render_restore_texture_target();
     render_set_blend_mode(saved_blend);
 
     return result;
 }
 
-static Texture_t *internal_create_dynamic_gradient_background_texture() {
-    const auto saved_blend = g_renderer->blend_mode;
+static Texture_t *internal_create_dynamic_gradient_background_texture(void) {
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    constexpr float rate = 0.005f;
+    const float rate = 0.005f;
     static float progress = 0.f;
     static float noise_magnitude = 0.1f;
 
-    constexpr float target_magnitude = 0.2f;
+    const float target_magnitude = 0.2f;
 
     progress += (float)(rate * events_get_delta_time());
     noise_magnitude = noise_magnitude * (1.f - progress) + target_magnitude * progress;
 
     const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const auto target = render_make_texture_target(width, height);
+    const RenderTarget_t *target = render_make_texture_target(width, height);
 
     static bool colors_initialized = false;
     static float colors[5][3] = {
@@ -569,7 +570,7 @@ static Texture_t *internal_create_dynamic_gradient_background_texture() {
     };
     if ( !colors_initialized ) {
         memset(colors, 0, sizeof(colors));
-        srand(time(nullptr)); // NOLINT(*-msc51-cpp)
+        srand(time(NULL)); // NOLINT(*-msc51-cpp)
         for ( int i = 0; i < 5; i++ ) {
             const float h = (float)(rand() % 255) / 255.f;               // NOLINT(*-msc50-cpp)
             const float s = (float)(rand() % 255) / 255.f * 0.2f + 0.3f; // NOLINT(*-msc50-cpp)
@@ -585,8 +586,8 @@ static Texture_t *internal_create_dynamic_gradient_background_texture() {
     glUniform1f(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_noise_magnitude"), noise_magnitude);
     glUniform3fv(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_colors"), 5, &colors[0][0]);
 
-    constexpr float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-                                      -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+    static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+                                   -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(g_renderer->VAO);
@@ -594,19 +595,19 @@ static Texture_t *internal_create_dynamic_gradient_background_texture() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const auto result = target->texture;
+    Texture_t *result = target->texture;
     render_restore_texture_target();
     render_set_blend_mode(saved_blend);
 
     return result;
 }
 
-static Texture_t *internal_create_gradient_background_texture() {
-    const auto saved_blend = g_renderer->blend_mode;
+static Texture_t *internal_create_gradient_background_texture(void) {
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
     const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const auto target = render_make_texture_target(width, height);
+    const RenderTarget_t *target = render_make_texture_target(width, height);
 
     glUseProgram(g_renderer->gradient_shader);
 
@@ -628,7 +629,7 @@ static Texture_t *internal_create_gradient_background_texture() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const auto texture = target->texture;
+    Texture_t *texture = target->texture;
 
     render_restore_texture_target();
     render_set_blend_mode(saved_blend);
@@ -640,11 +641,11 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius,
         error_abort("Fail at render_blur_texture_radius");
     }
 
-    const auto saved_blend = g_renderer->blend_mode;
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
     const int32_t width = source->width, height = source->height;
-    const auto first_target = render_make_texture_target(width, height);
+    const RenderTarget_t *first_target = render_make_texture_target(width, height);
 
     const float w = (float)source->width;
     const float h = (float)source->height;
@@ -666,15 +667,15 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius,
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const auto vertical_texture = first_target->texture;
+    Texture_t *vertical_texture = first_target->texture;
     render_restore_texture_target();
 
-    const auto second_target = render_make_texture_target(width, height);
+    const RenderTarget_t *second_target = render_make_texture_target(width, height);
     glUniform2f(g_renderer->blur_direction_loc, 0.0f, 1.0f);
     glBindTexture(GL_TEXTURE_2D, vertical_texture->id);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const auto horizontal_texture = second_target->texture;
+    Texture_t *horizontal_texture = second_target->texture;
     horizontal_texture->border_radius = source->border_radius;
     render_restore_texture_target();
     render_destroy_texture(vertical_texture);
@@ -685,29 +686,29 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius,
 }
 
 Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radius, const float fade_distance) {
-    const auto blurred = render_blur_texture(source, blur_radius, fade_distance);
+    Texture_t *blurred = render_blur_texture(source, blur_radius, fade_distance);
     render_destroy_texture(source);
     return blurred;
 }
 
-void render_clear() {
+void render_clear(void) {
     float r, g, b, a;
     deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     if ( g_renderer->bg_type == BACKGROUND_GRADIENT ) {
-        if ( g_renderer->bg_texture == nullptr ) {
+        if ( g_renderer->bg_texture == NULL ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
         render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f);
     } else if ( g_renderer->bg_type == BACKGROUND_DYNAMIC_GRADIENT ) {
-        const auto bg_texture = internal_create_dynamic_gradient_background_texture();
+        Texture_t *bg_texture = internal_create_dynamic_gradient_background_texture();
         render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
 
         render_destroy_texture(bg_texture);
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
-        const auto bg_texture = internal_create_random_gradient_background_texture();
+        Texture_t *bg_texture = internal_create_random_gradient_background_texture();
         render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
 
         render_destroy_texture(bg_texture);
@@ -723,7 +724,7 @@ double render_get_pixel_scale(void) { return g_renderer->window_pixel_scale; }
 void render_load_font(const char *path, const FontType_t type) {
     TTF_Font *font = TTF_OpenFontDPI(path, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
 
-    if ( font == nullptr ) {
+    if ( font == NULL ) {
         puts(TTF_GetError());
         error_abort("Could not load font");
     }
@@ -763,28 +764,27 @@ int32_t render_measure_pt_from_em(const double em) {
 
 static void get_render_params(float **projection, GLuint *fbo) {
     GLuint t_fbo;
-    if ( g_renderer->render_target == nullptr ) {
+    if ( g_renderer->render_target == NULL ) {
         t_fbo = 0;
     } else {
         t_fbo = g_renderer->render_target->fbo;
     }
 
-    if ( projection != nullptr )
-        *projection =
-            g_renderer->render_target == nullptr ? g_renderer->projection_matrix : g_renderer->render_target->projection;
+    if ( projection != NULL )
+        *projection = g_renderer->render_target == NULL ? g_renderer->projection_matrix : g_renderer->render_target->projection;
 
-    if ( fbo != nullptr )
+    if ( fbo != NULL )
         *fbo = t_fbo;
 }
 
 const RenderTarget_t *render_make_texture_target(const int32_t width, const int32_t height) {
     RenderTarget_t *target = calloc(1, sizeof(*target));
-    if ( target == nullptr ) {
+    if ( target == NULL ) {
         error_abort("Failed to allocate render target");
     }
 
     target->texture = calloc(1, sizeof(*target->texture));
-    if ( target->texture == nullptr ) {
+    if ( target->texture == NULL ) {
         error_abort("Failed to allocate texture for render target");
     }
 
@@ -802,7 +802,7 @@ const RenderTarget_t *render_make_texture_target(const int32_t width, const int3
     glGenTextures(1, &target->texture->id);
 
     glBindTexture(GL_TEXTURE_2D, target->texture->id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -823,7 +823,7 @@ const RenderTarget_t *render_make_texture_target(const int32_t width, const int3
 }
 
 void render_restore_texture_target(void) {
-    if ( g_renderer->render_target == nullptr ) {
+    if ( g_renderer->render_target == NULL ) {
         error_abort("No render target to restore");
     }
 
@@ -832,7 +832,7 @@ void render_restore_texture_target(void) {
     g_renderer->render_target = prev;
 
     // Bind appropriate framebuffer
-    if ( prev == nullptr ) {
+    if ( prev == NULL ) {
         glViewport(0, 0, (int32_t)g_renderer->viewport.w, (int32_t)g_renderer->viewport.h);
         // Restore default framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -862,7 +862,7 @@ Color_t render_color_parse(const uint32_t color) {
 }
 
 Color_t render_color_darken(Color_t color) {
-    constexpr double amount = 0.8;
+    const double amount = 0.8;
     color.r = (uint8_t)fmax(0, color.r * amount);
     color.g = (uint8_t)fmax(0, color.g * amount);
     color.b = (uint8_t)fmax(0, color.b * amount);
@@ -905,7 +905,7 @@ BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; }
 Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool bold, const Color_t *color,
                             const FontType_t font_type) {
     TTF_Font *font = font_type == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
-    if ( font == nullptr ) {
+    if ( font == NULL ) {
         error_abort("Font not loaded");
     }
     if ( strnlen(text, MAX_TEXT_SIZE) == 0 ) {
@@ -919,9 +919,9 @@ Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool 
     const int style = bold ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL;
     TTF_SetFontStyle(font, style);
 
-    const auto sdl_color = (SDL_Color){color->r, color->g, color->b, color->a};
+    const SDL_Color sdl_color = (SDL_Color){color->r, color->g, color->b, color->a};
     SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, sdl_color);
-    if ( surface == nullptr ) {
+    if ( surface == NULL ) {
         puts(TTF_GetError());
         error_abort("Failed to render to surface");
     }
@@ -932,8 +932,8 @@ Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool 
     return texture;
 }
 
-static Texture_t *create_test_texture() {
-    constexpr int size = 256;
+static Texture_t *create_test_texture(void) {
+    const int size = 256;
     unsigned char *pixels = malloc(size * size * 4);
 
     // Create a checkerboard pattern
@@ -971,13 +971,13 @@ static Texture_t *create_test_texture() {
 
 Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
     SDL_Surface *loaded = IMG_Load(file_path);
-    if ( loaded == nullptr ) {
+    if ( loaded == NULL ) {
         printf("IMG_GetError: %s\n", IMG_GetError());
         error_abort("Failed to load image");
     }
 
     SDL_Surface *converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA8888, 0);
-    if ( converted == nullptr ) {
+    if ( converted == NULL ) {
         error_abort("Failed to convert image surface to appropriate pixel format");
     }
     SDL_FreeSurface(loaded);
@@ -1043,7 +1043,7 @@ void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, cons
 }
 
 void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod) {
-    if ( texture == nullptr || texture->id == 0 ) {
+    if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
 
@@ -1056,7 +1056,7 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     }
 
     float *projection;
-    get_render_params(&projection, nullptr);
+    get_render_params(&projection, NULL);
 
     glUseProgram(g_renderer->texture_shader);
 
@@ -1084,10 +1084,10 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
 Texture_t *render_make_shadow(const Texture_t *texture, const float blur_radius, const float fade_distance,
                               const int32_t padding) {
     const int32_t width = texture->width + padding, height = texture->height + padding;
-    const auto target = render_make_texture_target(width, height);
+    const RenderTarget_t *target = render_make_texture_target(width, height);
     const Bounds_t bounds = {.x = padding / 2.0, .y = padding / 2.0, .w = width, .h = height};
     render_draw_texture(texture, &bounds, 255, 0.f);
-    auto result = target->texture;
+    Texture_t *result = target->texture;
     render_restore_texture_target();
 
     result->border_radius = texture->border_radius;

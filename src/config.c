@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static Config_t *g_config = nullptr;
+static Config_t *g_config = NULL;
 
 #ifdef __EMSCRIPTEN__
 
@@ -24,7 +24,7 @@ static void try_load_config_web(Config_t *config) {
     if ( strnlen(song, MAX_TEXT_SIZE) > 0 ) {
         printf("song: %s\n", song);
 
-        if ( config->song_file != nullptr ) {
+        if ( config->song_file != NULL ) {
             free(config->song_file);
         }
 
@@ -35,10 +35,10 @@ static void try_load_config_web(Config_t *config) {
 
 #endif
 
-static Config_t *get_default_config() {
+static Config_t *get_default_config(void) {
     Config_t *config = malloc(sizeof(*config));
-    if ( config == nullptr ) {
-        return nullptr;
+    if ( config == NULL ) {
+        return NULL;
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
@@ -52,8 +52,8 @@ static Config_t *get_default_config() {
     return config;
 }
 
-Config_t *config_get() {
-    if ( g_config == nullptr ) {
+Config_t *config_get(void) {
+    if ( g_config == NULL ) {
         g_config = get_default_config();
     }
     return g_config;

@@ -36,9 +36,9 @@ struct Karaoke_t {
     Drawable_t *loading_text;
 };
 
-Karaoke_t *karaoke_init() {
+Karaoke_t *karaoke_init(void) {
     Karaoke_t *karaoke = calloc(1, sizeof(*karaoke));
-    if ( karaoke == nullptr )
+    if ( karaoke == NULL )
         error_abort("Failed to allocate memory for karaoke.");
 
     karaoke->ui = ui_init();
@@ -112,13 +112,13 @@ static int load_async(Karaoke_t *state) {
     }
     // Song
     if ( state->load_song.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->song_file, nullptr, &state->load_song);
+        repository_get_resource(config->song_file, NULL, &state->load_song);
     }
     if ( state->load_song.status == LOAD_DONE ) {
         config->song_file = state->load_song.destination;
 
         song_load(config->song_file);
-        if ( song_get() == nullptr )
+        if ( song_get() == NULL )
             error_abort("Failed to load song");
         state->load_song.status = LOAD_FINISHED;
 
@@ -142,7 +142,7 @@ static int load_async(Karaoke_t *state) {
             ui_set_bg_gradient(song_get()->bg_color, song_get()->bg_color_secondary, bg_type);
         }
 
-        if ( song_get()->font_override != nullptr ) {
+        if ( song_get()->font_override != NULL ) {
             config->lyrics_font = strdup(song_get()->font_override);
             repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
         }
@@ -152,14 +152,14 @@ static int load_async(Karaoke_t *state) {
     // Finish loading the song before we load the rest
 
     // Display progress
-    if ( state->loading_progress_bar != nullptr ) {
+    if ( state->loading_progress_bar != NULL ) {
         const uint64_t total_size = get_total_loading_files_size(state);
         const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
         Drawable_ProgressBarData_t *loading_progress = state->loading_progress_bar->custom_data;
         loading_progress->progress = (double)downloaded / (double)total_size;
     }
     // Update progress text
-    if ( state->loading_text != nullptr ) {
+    if ( state->loading_text != NULL ) {
         char *current_loading_text = get_loading_files_names(state);
         Drawable_TextData_t *text_data = state->loading_text->custom_data;
 
@@ -174,7 +174,7 @@ static int load_async(Karaoke_t *state) {
 
     // Song audio file
     if ( state->load_audio.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->file_path, nullptr, &state->load_audio);
+        repository_get_resource(song_get()->file_path, NULL, &state->load_audio);
     }
     if ( state->load_audio.status == LOAD_DONE ) {
         free(song_get()->file_path);
@@ -183,7 +183,7 @@ static int load_async(Karaoke_t *state) {
     }
     // Album art
     if ( state->load_album_art.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->album_art_path, nullptr, &state->load_album_art);
+        repository_get_resource(song_get()->album_art_path, NULL, &state->load_album_art);
     }
     if ( state->load_album_art.status == LOAD_DONE ) {
         free(song_get()->album_art_path);
@@ -202,7 +202,7 @@ int karaoke_load_loop(Karaoke_t *state) {
         return -1;
 
     if ( state->load_ui_font.status == LOAD_FINISHED ) {
-        if ( state->loading_progress_bar == nullptr ) {
+        if ( state->loading_progress_bar == NULL ) {
             state->loading_progress_bar = ui_make_progressbar(state->ui,
                                                               &(Drawable_ProgressBarData_t){
                                                                   .progress = 0,
@@ -218,7 +218,7 @@ int karaoke_load_loop(Karaoke_t *state) {
                                                               });
         }
 
-        if ( state->loading_text == nullptr ) {
+        if ( state->loading_text == NULL ) {
             state->loading_text =
                 ui_make_text(state->ui,
                              &(Drawable_TextData_t){.text = "Loading...",
@@ -245,9 +245,9 @@ int karaoke_load_loop(Karaoke_t *state) {
 }
 
 void karaoke_setup(Karaoke_t *state) {
-    if ( state->ui != nullptr ) {
+    if ( state->ui != NULL ) {
         ui_finish(state->ui);
-        state->loading_progress_bar = state->loading_text = nullptr;
+        state->loading_progress_bar = state->loading_text = NULL;
     }
     state->ui = ui_init();
 
@@ -258,7 +258,7 @@ void karaoke_setup(Karaoke_t *state) {
     ui_set_window_title(window_title);
     free(window_title);
 
-    constexpr double vertical_padding = 0.01;
+    const double vertical_padding = 0.01;
 
     // Make the left container
     state->left_container = ui_make_container(state->ui, ui_root_container(state->ui),
@@ -438,7 +438,7 @@ static void update_remaining_text(const Karaoke_t *state) {
 }
 
 static void update_song_progressbar(const Karaoke_t *state) {
-    if ( state->song_progressbar != nullptr ) {
+    if ( state->song_progressbar != NULL ) {
         const double progress = audio_elapsed_time() / audio_total_time();
         ((Drawable_ProgressBarData_t *)state->song_progressbar->custom_data)->progress = (float)progress;
     }
@@ -473,9 +473,9 @@ static void check_user_input(const Karaoke_t *state) {
         // Check if the user clicked on the progress bar
         {
             double progress_bar_x, progress_bar_y;
-            ui_get_drawable_canon_pos(state->ui, state->song_progressbar, &progress_bar_x, &progress_bar_y);
+            ui_get_drawable_canon_pos(state->song_progressbar, &progress_bar_x, &progress_bar_y);
 
-            constexpr int32_t padding_amount = 10;
+            const int32_t padding_amount = 10;
             const double base_y = progress_bar_y - padding_amount;
             const double base_h = state->song_progressbar->bounds.h + padding_amount;
 
@@ -490,7 +490,7 @@ static void check_user_input(const Karaoke_t *state) {
         // Check if clicked on the play/pause button
         {
             double play_button_x, play_button_y;
-            ui_get_drawable_canon_pos(state->ui, state->play_button, &play_button_x, &play_button_y);
+            ui_get_drawable_canon_pos(state->play_button, &play_button_x, &play_button_y);
             const int32_t width = (int32_t)state->play_button->bounds.w, height = (int32_t)state->play_button->bounds.h;
             if ( events_mouse_was_clicked_inside_area((int32_t)play_button_x, (int32_t)play_button_y, width, height) ) {
                 toggle_pause(state);
@@ -502,10 +502,10 @@ static void check_user_input(const Karaoke_t *state) {
     {
         // Check if the mouse is inside the song name area
         double can_y;
-        ui_get_drawable_canon_pos(state->ui, state->song_name_text, nullptr, &can_y);
+        ui_get_drawable_canon_pos(state->song_name_text, NULL, &can_y);
 
         const double begin_x = state->song_info_container->bounds.x, begin_y = can_y;
-        ui_get_drawable_canon_pos(state->ui, state->song_artist_album_text, nullptr, &can_y);
+        ui_get_drawable_canon_pos(state->song_artist_album_text, NULL, &can_y);
         const double end_x = begin_x + state->song_info_container->bounds.w,
                      end_y = can_y + state->song_artist_album_text->bounds.h;
 
@@ -519,7 +519,7 @@ static void check_user_input(const Karaoke_t *state) {
     {
         // Check if the mouse is inside the lyric container
         double can_x, can_y;
-        ui_get_container_canon_pos(state->ui, state->lyrics_view->container, &can_x, &can_y);
+        ui_get_container_canon_pos(state->lyrics_view->container, &can_x, &can_y);
 
         if ( mouse_x >= can_x && mouse_x <= can_x + state->lyrics_view->container->bounds.w && mouse_y >= can_y &&
              mouse_y <= can_y + state->lyrics_view->container->bounds.h ) {

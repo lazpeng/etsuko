@@ -27,7 +27,7 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
     } else if ( strncmp(buffer, "artist", equals) == 0 ) {
         song->artist = value;
     } else if ( strncmp(buffer, "year", equals) == 0 ) {
-        song->year = (int)strtol(value, nullptr, 10);
+        song->year = (int)strtol(value, NULL, 10);
         free(value);
     } else if ( strncmp(buffer, "karaoke", equals) == 0 ) {
         song->karaoke = value;
@@ -40,10 +40,10 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
     } else if ( strncmp(buffer, "filePath", equals) == 0 ) {
         song->file_path = value;
     } else if ( strncmp(buffer, "bgColor", equals) == 0 ) {
-        song->bg_color = strtol(value, nullptr, 16);
+        song->bg_color = strtol(value, NULL, 16);
         free(value);
     } else if ( strncmp(buffer, "bgColorSecondary", equals) == 0 ) {
-        song->bg_color_secondary = strtol(value, nullptr, 16);
+        song->bg_color_secondary = strtol(value, NULL, 16);
         free(value);
     } else if ( strncmp(buffer, "alignment", equals) == 0 ) {
         if ( strncmp(value, "left", 4) == 0 ) {
@@ -56,7 +56,7 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
             error_abort("Invalid song line alignment");
         }
     } else if ( strncmp(buffer, "offset", equals) == 0 ) {
-        song->time_offset = strtod(value, nullptr);
+        song->time_offset = strtod(value, NULL);
         free(value);
     } else if ( strncmp(buffer, "fontOverride", equals) == 0 ) {
         song->font_override = value;
@@ -77,13 +77,13 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
 
 static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
     const char *comma = strchr(opts, ',');
-    const size_t end = comma == nullptr ? strlen(opts) : comma - opts;
+    const size_t end = comma == NULL ? strlen(opts) : comma - opts;
 
     if ( end == 0 )
         return;
 
     const char *equals = strchr(opts, '=');
-    if ( equals != nullptr ) {
+    if ( equals != NULL ) {
         if ( strncmp(opts, "alignment", equals - opts) == 0 ) {
             if ( strncmp(equals + 1, "left", 4) == 0 ) {
                 line->alignment = SONG_LINE_LEFT;
@@ -97,7 +97,7 @@ static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
         }
     } // else TODO: Not supported non-key-value options
 
-    if ( comma != nullptr ) {
+    if ( comma != NULL ) {
         read_lyrics_opts(line, comma + 1);
     }
 }
@@ -107,14 +107,14 @@ static void read_lyrics(const Song_t *song, const char *buffer) {
         error_abort("Lyrics were placed before the timings");
     }
 
-    // Find the first that full_text is nullptr
+    // Find the first that full_text is NULL
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         Song_Line_t *line = song->lyrics_lines->data[i];
-        if ( line->full_text == nullptr ) {
+        if ( line->full_text == NULL ) {
             const char *hash = strchr(buffer, '#');
-            const size_t end = hash == nullptr ? strlen(buffer) : (hash - buffer);
+            const size_t end = hash == NULL ? strlen(buffer) : (hash - buffer);
             line->full_text = strndup(buffer, end);
-            if ( hash != nullptr ) {
+            if ( hash != NULL ) {
                 read_lyrics_opts(line, hash + 1);
             }
             return;
@@ -125,10 +125,10 @@ static void read_lyrics(const Song_t *song, const char *buffer) {
 static double convert_timing(const char *str, const size_t len) {
     const char *colon = strchr(str, ':');
     char *minutes_str = strndup(str, colon - str);
-    const double minutes = strtod(minutes_str, nullptr);
+    const double minutes = strtod(minutes_str, NULL);
     free(minutes_str);
     char *seconds_str = strndup(colon + 1, len - (colon - str));
-    const double seconds = strtod(seconds_str, nullptr);
+    const double seconds = strtod(seconds_str, NULL);
     free(seconds_str);
 
     return minutes * 60.0 + seconds;
@@ -138,7 +138,7 @@ static void read_timings(const Song_t *song, const char *buffer) {
     Song_Line_t *line = calloc(1, sizeof(*line));
 
     const char *comma = strchr(buffer, ',');
-    const size_t start_len = comma == nullptr ? strlen(buffer) : (comma - buffer);
+    const size_t start_len = comma == NULL ? strlen(buffer) : (comma - buffer);
 
     line->base_start_time = convert_timing(buffer, start_len);
     if ( song->lyrics_lines->size > 0 ) {
@@ -147,7 +147,7 @@ static void read_timings(const Song_t *song, const char *buffer) {
             last_line->base_duration = line->base_start_time - last_line->base_start_time;
         }
     }
-    if ( comma != nullptr ) {
+    if ( comma != NULL ) {
         const double end = convert_timing(comma + 1, strlen(comma + 1));
         line->base_duration = end - line->base_start_time;
     }
@@ -158,7 +158,7 @@ static void read_timings(const Song_t *song, const char *buffer) {
 
 void song_load(const char *src) {
     FILE *file = fopen(src, "r");
-    if ( file == nullptr ) {
+    if ( file == NULL ) {
         printf("trying to load song from src: %s\n", src);
         error_abort("Failed to open song file");
     }
@@ -206,10 +206,10 @@ void song_load(const char *src) {
     }
 }
 
-Song_t *song_get() { return g_song; }
+Song_t *song_get(void) { return g_song; }
 
-void song_destroy() {
-    if ( g_song != nullptr ) {
+void song_destroy(void) {
+    if ( g_song != NULL ) {
         // Free lyrics lines
         for ( size_t i = 0; i < g_song->lyrics_lines->size; i++ ) {
             free(((Song_Line_t *)g_song->lyrics_lines->data[i])->full_text);
@@ -217,41 +217,41 @@ void song_destroy() {
         }
         vec_destroy(g_song->lyrics_lines);
         // Free strings
-        if ( g_song->id != nullptr ) {
+        if ( g_song->id != NULL ) {
             free(g_song->id);
         }
-        if ( g_song->name != nullptr ) {
+        if ( g_song->name != NULL ) {
             free(g_song->name);
         }
-        if ( g_song->translated_name != nullptr ) {
+        if ( g_song->translated_name != NULL ) {
             free(g_song->translated_name);
         }
-        if ( g_song->album != nullptr ) {
+        if ( g_song->album != NULL ) {
             free(g_song->album);
         }
-        if ( g_song->artist != nullptr ) {
+        if ( g_song->artist != NULL ) {
             free(g_song->artist);
         }
-        if ( g_song->karaoke != nullptr ) {
+        if ( g_song->karaoke != NULL ) {
             free(g_song->karaoke);
         }
-        if ( g_song->language != nullptr ) {
+        if ( g_song->language != NULL ) {
             free(g_song->language);
         }
-        if ( g_song->hidden != nullptr ) {
+        if ( g_song->hidden != NULL ) {
             free(g_song->hidden);
         }
-        if ( g_song->file_path != nullptr ) {
+        if ( g_song->file_path != NULL ) {
             free(g_song->file_path);
         }
-        if ( g_song->album_art_path != nullptr ) {
+        if ( g_song->album_art_path != NULL ) {
             free(g_song->album_art_path);
         }
-        if ( g_song->font_override != nullptr ) {
+        if ( g_song->font_override != NULL ) {
             free(g_song->font_override);
         }
         // Free the song
         free(g_song);
     }
-    g_song = nullptr;
+    g_song = NULL;
 }

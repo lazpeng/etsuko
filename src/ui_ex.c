@@ -8,17 +8,17 @@
 #include <stdio.h>
 #include <string.h>
 
-constexpr double LINE_VERTICAL_PADDING = 0.035;
-constexpr double LINE_RIGHT_ALIGN_PADDING = -0.1;
-constexpr int LINE_FADE_MAX_DISTANCE = 3;
-constexpr double SCROLL_THRESHOLD = 0.05;
+#define LINE_VERTICAL_PADDING (0.035)
+#define LINE_RIGHT_ALIGN_PADDING (-0.1)
+#define LINE_FADE_MAX_DISTANCE (3)
+#define SCROLL_THRESHOLD (0.05)
 #ifdef __EMSCRIPTEN__
-constexpr int SCROLL_MODIFIER = 50;
+#define SCROLL_MODIFIER (50)
 #else
-constexpr int SCROLL_MODIFIER = 10;
+#define SCROLL_MODIFIER (10)
 #endif
-constexpr float LINE_COLOR_MOD_INACTIVE = 0.35f;
-constexpr float LINE_SCALE_FACTOR_INACTIVE = 0.75f;
+#define LINE_COLOR_MOD_INACTIVE (0.35f)
+#define LINE_SCALE_FACTOR_INACTIVE (0.75f)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -26,12 +26,12 @@ static bool is_line_intermission(const LyricsView_t *view, const int32_t index) 
 }
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
-    if ( parent == nullptr ) {
-        error_abort("Parent container is nullptr");
+    if ( parent == NULL ) {
+        error_abort("Parent container is NULL");
     }
 
-    if ( song == nullptr ) {
-        error_abort("Song is nullptr");
+    if ( song == NULL ) {
+        error_abort("Song is NULL");
     }
 
     LyricsView_t *view = calloc(1, sizeof(*view));
@@ -57,12 +57,12 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         base_offset_x = LINE_RIGHT_ALIGN_PADDING;
     }
 
-    Drawable_t *prev = nullptr;
+    Drawable_t *prev = NULL;
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         const Song_Line_t *line = song->lyrics_lines->data[i];
 
         char *line_text = line->full_text;
-        if ( line_text == nullptr ) {
+        if ( line_text == NULL ) {
             printf("Warn: line was not initialized properly. idx: %lu\n", i);
             continue;
         }
@@ -109,7 +109,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
         };
-        if ( prev != nullptr ) {
+        if ( prev != NULL ) {
             layout.relative_to = prev;
         }
         prev = ui_make_text(ui, &data, parent, &layout);
@@ -136,12 +136,12 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     ui_drawable_set_scale_factor(ui, drawable, 1.f);
     ui_drawable_set_color_mod(drawable, 1.f);
 
-    Drawable_t *prev_relative = nullptr;
+    Drawable_t *prev_relative = NULL;
     if ( prev_active >= 0 ) {
         prev_relative = view->line_drawables->data[prev_active];
     }
 
-    constexpr LineState_t new_state = LINE_ACTIVE;
+    const LineState_t new_state = LINE_ACTIVE;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
 
@@ -178,7 +178,7 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
             start = index;
             end = prev_active;
         }
-        for ( auto i = start; i < end; i++ ) {
+        for ( int32_t i = start; i < end; i++ ) {
             const Song_Line_t *line = view->song->lyrics_lines->data[i];
             if ( str_is_empty(line->full_text) ) {
                 distance -= 1;
@@ -211,9 +211,9 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         ui_drawable_set_alpha(drawable, alpha);
     }
 
-    constexpr LineState_t new_state = LINE_INACTIVE;
+    const LineState_t new_state = LINE_INACTIVE;
     if ( view->line_states[index] != new_state ) {
-        const auto prev_state = view->line_states[index];
+        const LineState_t prev_state = view->line_states[index];
         view->line_states[index] = new_state;
 
         drawable->layout.offset_y = LINE_VERTICAL_PADDING;
@@ -239,10 +239,10 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
 static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
-    constexpr LineState_t new_state = LINE_HIDDEN;
+    const LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
-        drawable->layout.relative_to = nullptr;
+        drawable->layout.relative_to = NULL;
         drawable->layout.offset_y = -LINE_VERTICAL_PADDING;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
@@ -270,7 +270,7 @@ static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
 static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
-    constexpr LineState_t new_state = LINE_ALMOST_HIDDEN;
+    const LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
             // Don't do anything, just fade into a low alpha
@@ -280,7 +280,7 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
             ui_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable
-            drawable->layout.relative_to = nullptr;
+            drawable->layout.relative_to = NULL;
             drawable->layout.offset_y = 0;
             if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
                 drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
@@ -295,7 +295,7 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
 
 static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *view, int32_t idx) {
     if ( idx >= (int32_t)view->line_drawables->size - 1 )
-        return nullptr;
+        return NULL;
 
     if ( view->line_states[idx] != LINE_HIDDEN ) {
         int32_t next_hidden = -1;
@@ -306,7 +306,7 @@ static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *vie
             break;
         }
         if ( next_hidden < 0 )
-            return nullptr;
+            return NULL;
         idx = next_hidden;
     }
 
@@ -318,8 +318,8 @@ static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *vie
 }
 
 void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
-    if ( view == nullptr ) {
-        error_abort("loop: lyrics_view is nullptr");
+    if ( view == NULL ) {
+        error_abort("loop: lyrics_view is NULL");
     }
 
     view->layout_dirty = false;
@@ -401,8 +401,8 @@ void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, const double delta_y)
 }
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
-    if ( view == nullptr ) {
-        error_abort("destroy: lyrics_view is nullptr");
+    if ( view == NULL ) {
+        error_abort("destroy: lyrics_view is NULL");
     }
     // No need to free the drawables individually
     vec_destroy(view->line_drawables);

@@ -17,7 +17,7 @@ typedef struct {
 static void web_entrypoint(void *em_arg) {
     EntryPointArgs_t *args = em_arg;
     if ( !args->initialized ) {
-        if ( args->karaoke == nullptr ) {
+        if ( args->karaoke == NULL ) {
             if ( global_init() != 0 ) {
                 printf("Failed to initialize global");
                 return;
@@ -35,17 +35,17 @@ static void web_entrypoint(void *em_arg) {
 }
 #endif
 
-int main() {
+int main(void) {
 #ifdef __EMSCRIPTEN__
     EntryPointArgs_t *args = calloc(1, sizeof(*args));
-    if ( args == nullptr ) {
+    if ( args == NULL ) {
         error_abort("Failed to allocate args for emscripten");
     }
     args->initialized = false;
-    args->karaoke = nullptr;
+    args->karaoke = NULL;
 
     emscripten_set_main_loop_arg(web_entrypoint, args, 0, 1);
-    if ( args->karaoke != nullptr ) {
+    if ( args->karaoke != NULL ) {
         karaoke_finish(args->karaoke);
     }
     free(args);

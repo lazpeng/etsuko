@@ -7,7 +7,7 @@
 
 typedef struct Karaoke_t Karaoke_t;
 
-Karaoke_t *karaoke_init();
+Karaoke_t *karaoke_init(void);
 int karaoke_load_loop(Karaoke_t *state);
 void karaoke_setup(Karaoke_t *state);
 int karaoke_loop(const Karaoke_t *state);

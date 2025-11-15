@@ -21,9 +21,9 @@ struct Ui_t {
     Container_t root_container;
 };
 
-Ui_t *ui_init() {
+Ui_t *ui_init(void) {
     Ui_t *ui = calloc(1, sizeof(*ui));
-    if ( ui == nullptr ) {
+    if ( ui == NULL ) {
         error_abort("Failed to allocate UI");
     }
 
@@ -43,7 +43,7 @@ static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(
 static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(data); }
 
 static void animation_destroy(Animation_t *animation) {
-    if ( animation->custom_data != nullptr ) {
+    if ( animation->custom_data != NULL ) {
         if ( animation->type == ANIM_EASE_TRANSLATION ) {
             animation_translation_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_FADE_IN_OUT ) {
@@ -116,7 +116,7 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
-    if ( layout->relative_to_size != nullptr ) {
+    if ( layout->relative_to_size != NULL ) {
         if ( layout->relative_to_size->parent != parent ) {
             error_abort("Relative layout's parent is not the same as the container");
         }
@@ -169,7 +169,7 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
         double draw_y;
-        ui_get_drawable_canon_pos(ui, drawable, nullptr, &draw_y);
+        ui_get_drawable_canon_pos(drawable, NULL, &draw_y);
 
         max_y = fmax(max_y, draw_y + drawable->bounds.h * (1.0 + drawable->bounds.scale_mod));
         min_y = fmin(min_y, draw_y);
@@ -187,7 +187,7 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
 }
 
 static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
-    if ( container->parent != nullptr )
+    if ( container->parent != NULL )
         recalculate_container_alignment(ui, container->parent);
 
     if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
@@ -199,14 +199,13 @@ static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
 }
 
 static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
-    constexpr double scale = 1.0; // 1.0 + out_bounds->scale_mod;
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
-        calc_w = out_bounds->w * scale;
+        calc_w = out_bounds->w;
     }
     if ( layout->flags & LAYOUT_CENTER_X ) {
-        x = parent->bounds.w / 2.f - out_bounds->w * scale / 2.f - calc_w;
+        x = parent->bounds.w / 2.f - out_bounds->w / 2.f - calc_w;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_X ) {
         x = parent->bounds.w * x;
     }
@@ -218,10 +217,10 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     double y = layout->offset_y;
     double calc_h = 0;
     if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-        calc_h = out_bounds->h * scale;
+        calc_h = out_bounds->h;
     }
     if ( layout->flags & LAYOUT_CENTER_Y ) {
-        y = parent->bounds.h / 2.f - out_bounds->h * scale / 2.f - calc_h;
+        y = parent->bounds.h / 2.f - out_bounds->h / 2.f - calc_h;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_Y ) {
         y = parent->bounds.h * y;
     }
@@ -230,7 +229,7 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         y = parent->bounds.h + y;
     y -= calc_h;
 
-    if ( layout->relative_to != nullptr ) {
+    if ( layout->relative_to != NULL ) {
         if ( layout->relative_to->parent != parent ) {
             error_abort("Relative layout's parent is not the same as the container");
         }
@@ -354,13 +353,13 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
 
-    if ( drawable->shadow != nullptr ) {
+    if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
         shadow_bounds.x += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
         shadow_bounds.y += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
         shadow_bounds.w += drawable->shadow_padding;
         shadow_bounds.h += drawable->shadow_padding;
-        const auto alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : MIN(128, drawable->alpha_mod);
+        const uint8_t alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : MIN(128, drawable->alpha_mod);
         render_draw_texture(drawable->shadow, &shadow_bounds, alpha, 0.f);
     }
 
@@ -388,7 +387,7 @@ void ui_draw(const Ui_t *ui) {
     draw_all_container(&ui->root_container, bounds);
 }
 
-void ui_end_loop() { render_present(); }
+void ui_end_loop(void) { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
 
@@ -402,41 +401,41 @@ void ui_finish(Ui_t *ui) {
 void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
 
 void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, BackgroundType_t type) {
-    const auto primary_color = render_color_parse(primary);
-    const auto secondary_color = render_color_parse(secondary);
+    const Color_t primary_color = render_color_parse(primary);
+    const Color_t secondary_color = render_color_parse(secondary);
     render_set_bg_gradient(primary_color, secondary_color, type);
 }
 
 Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
-void ui_get_drawable_canon_pos(Ui_t *ui, const Drawable_t *drawable, double *x, double *y) {
+void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    ui_get_container_canon_pos(ui, drawable->parent, &parent_x, &parent_y);
+    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y);
 
-    if ( x != nullptr )
+    if ( x != NULL )
         *x = parent_x + drawable->bounds.x;
-    if ( y != nullptr )
+    if ( y != NULL )
         *y = parent_y + drawable->bounds.y;
 }
 
-void ui_get_container_canon_pos(Ui_t *ui, const Container_t *container, double *x, double *y) {
+void ui_get_container_canon_pos(const Container_t *container, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
     const Container_t *parent = container;
-    while ( parent != nullptr ) {
+    while ( parent != NULL ) {
         parent_x += parent->bounds.x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
         parent = parent->parent;
     }
 
-    if ( x != nullptr )
+    if ( x != NULL )
         *x = parent_x;
-    if ( y != nullptr )
+    if ( y != NULL )
         *y = parent_y;
 }
 
 static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     Drawable_TextData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate text data");
     }
     result->text = strdup(data->text);
@@ -461,7 +460,7 @@ static void free_text_data(Drawable_TextData_t *data) {
 
 static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
     Drawable_ImageData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate image data");
     }
     result->file_path = strdup(data->file_path);
@@ -477,7 +476,7 @@ static void free_image_data(Drawable_ImageData_t *data) {
 
 static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressBarData_t *data) {
     Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate image data");
     }
     result->progress = data->progress;
@@ -537,7 +536,7 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
 
 static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type, const bool dynamic) {
     Drawable_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate drawable");
     }
 
@@ -617,7 +616,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         final_texture = render_make_text(data->text, pt_size, data->bold, &data->color, data->font_type);
     }
 
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate drawable");
     }
 
@@ -629,9 +628,9 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     ui_reposition_drawable(ui, result);
 
     if ( data->draw_shadow ) {
-        const auto text_pt = render_measure_pt_from_em(data->em);
-        const auto blur_radius = MAX(1.f, MIN(15.f, text_pt * 0.05f));
-        const auto offset = (int32_t)MAX(1.f, MIN(10.f, text_pt * 0.15f));
+        const int32_t text_pt = render_measure_pt_from_em(data->em);
+        const float blur_radius = MAX(1.f, MIN(15.f, text_pt * 0.05f));
+        const int32_t offset = (int32_t)MAX(1.f, MIN(10.f, text_pt * 0.15f));
         result->shadow = render_make_shadow(result->texture, blur_radius, 0.f, 0);
         result->shadow_offset = offset;
     }
@@ -688,13 +687,13 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
 }
 
 void ui_destroy_drawable(Drawable_t *drawable) {
-    if ( drawable->texture != nullptr ) {
+    if ( drawable->texture != NULL ) {
         render_destroy_texture(drawable->texture);
     }
-    if ( drawable->shadow != nullptr ) {
+    if ( drawable->shadow != NULL ) {
         render_destroy_texture(drawable->shadow);
     }
-    if ( drawable->custom_data != nullptr ) {
+    if ( drawable->custom_data != NULL ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
             Drawable_TextData_t *text_data = drawable->custom_data;
             free_text_data(text_data);
@@ -716,7 +715,7 @@ void ui_destroy_drawable(Drawable_t *drawable) {
 
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate container");
     }
 
@@ -768,7 +767,7 @@ static Animation_t *find_animation(const Drawable_t *drawable, const AnimationTy
             return animation;
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
@@ -779,7 +778,7 @@ void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
         Animation_t *animation = find_animation(drawable, ANIM_EASE_TRANSLATION);
-        if ( animation != nullptr ) {
+        if ( animation != NULL ) {
             reapply_translate_animation(animation, old_x, old_y);
         }
     }
@@ -791,7 +790,7 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
     }
 
     Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
-    if ( fade_animation != nullptr ) {
+    if ( fade_animation != NULL ) {
         Animation_FadeInOutData_t *data = fade_animation->custom_data;
 
         fade_animation->elapsed = 0.0;
@@ -822,7 +821,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
 }
 
 void ui_recompute_container(Ui_t *ui, Container_t *container) {
-    if ( container->parent != nullptr ) {
+    if ( container->parent != NULL ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
         position_layout(ui, &container->layout, container->parent, &container->bounds);
     }
@@ -832,7 +831,7 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        if ( container->child_containers->data[i] != nullptr ) {
+        if ( container->child_containers->data[i] != NULL ) {
             ui_recompute_container(ui, container->child_containers->data[i]);
         }
     }
@@ -846,7 +845,7 @@ void ui_on_window_changed(Ui_t *ui) {
 
 static Animation_EaseTranslationData_t *dup_anim_translate_data(const Animation_EaseTranslationData_t *data) {
     Animation_EaseTranslationData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation ease translation data");
     }
 
@@ -862,7 +861,7 @@ static Animation_EaseTranslationData_t *dup_anim_translate_data(const Animation_
 
 static Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const Animation_FadeInOutData_t *data) {
     Animation_FadeInOutData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation fade in out data");
     }
     result->from_alpha = data->from_alpha;
@@ -874,7 +873,7 @@ static Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const Animation_Fade
 
 static Animation_ScaleData_t *dup_anim_scale_data(const Animation_ScaleData_t *data) {
     Animation_ScaleData_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation scale data");
     }
     result->from_scale = data->from_scale;
@@ -884,12 +883,12 @@ static Animation_ScaleData_t *dup_anim_scale_data(const Animation_ScaleData_t *d
 }
 
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
-    if ( target == nullptr ) {
-        error_abort("Target drawable is nullptr");
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
     }
 
     Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation");
     }
 
@@ -903,12 +902,12 @@ void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationD
 }
 
 void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) {
-    if ( target == nullptr ) {
-        error_abort("Target drawable is nullptr");
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
     }
 
     Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation");
     }
 
@@ -930,7 +929,7 @@ void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, const float sc
 
     // TODO: Add duration override
     Animation_t *animation = find_animation(drawable, ANIM_SCALE);
-    if ( animation != nullptr ) {
+    if ( animation != NULL ) {
         Animation_ScaleData_t *data = animation->custom_data;
         data->from_scale = drawable->bounds.scale_mod;
         data->to_scale = scale_mod;
@@ -947,7 +946,7 @@ void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, floa
         return;
 
     Animation_t *animation = find_animation(drawable, ANIM_SCALE);
-    if ( animation != nullptr ) {
+    if ( animation != NULL ) {
         animation->elapsed = animation->duration;
         animation->active = false;
     }
@@ -963,7 +962,7 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha) {
     }
 
     Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
-    if ( fade_animation != nullptr ) {
+    if ( fade_animation != NULL ) {
         // Cancel animation
         fade_animation->elapsed = fade_animation->duration;
         fade_animation->active = false;
@@ -972,12 +971,12 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha) {
 }
 
 void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
-    if ( target == nullptr ) {
-        error_abort("Target drawable is nullptr");
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
     }
 
     Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == nullptr ) {
+    if ( result == NULL ) {
         error_abort("Failed to allocate animation");
     }
 

@@ -149,10 +149,10 @@ typedef struct Animation_ScaleData_t {
 } Animation_ScaleData_t;
 
 // Init and lifetime functions
-Ui_t *ui_init();
+Ui_t *ui_init(void);
 void ui_finish(Ui_t *ui);
 void ui_begin_loop(Ui_t *ui);
-void ui_end_loop();
+void ui_end_loop(void);
 void ui_load_font(FontType_t type, const char *path);
 void ui_draw(const Ui_t *ui);
 // Meta helpers
@@ -161,8 +161,8 @@ void ui_set_bg_color(uint32_t color);
 void ui_set_bg_gradient(uint32_t primary, uint32_t secondary, BackgroundType_t type);
 void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
-void ui_get_drawable_canon_pos(Ui_t *ui, const Drawable_t *drawable, double *x, double *y);
-void ui_get_container_canon_pos(Ui_t *ui, const Container_t *container, double *x, double *y);
+void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
+void ui_get_container_canon_pos(const Container_t *container, double *x, double *y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);

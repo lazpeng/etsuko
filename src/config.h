@@ -15,6 +15,6 @@ typedef struct {
     Config_OpMode_t op_mode;
 } Config_t;
 
-Config_t *config_get();
+Config_t *config_get(void);
 
 #endif // ETSUKO_CONFIG_H
