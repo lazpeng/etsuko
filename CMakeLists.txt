@@ -35,6 +35,9 @@ add_executable(etsuko src/main.c
         src/contrib/stb_image.c
         src/contrib/minimp3.c)
 
+set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
+set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
+
 target_compile_features(etsuko PRIVATE c_std_17)
 
 if(EMSCRIPTEN)
