@@ -24,23 +24,10 @@ int global_init(void) {
 
     render_init();
 
-    // Init audio
-    const int flags = MIX_INIT_MP3;
-    if ( Mix_Init(flags) == 0 ) {
-        puts(Mix_GetError());
-        error_abort("Mix_Init failed");
-    }
-
-    if ( Mix_OpenAudio(48000, MIX_DEFAULT_FORMAT, 2, 2048) != 0 ) {
-        puts(Mix_GetError());
-        error_abort("OpenAudio failed");
-    }
-
     return 0;
 }
 
 void global_finish(void) {
-    Mix_Quit();
     SDL_Quit();
     render_finish();
 }

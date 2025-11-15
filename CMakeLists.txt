@@ -32,7 +32,8 @@ add_executable(etsuko src/main.c
         src/ui_ex.c
         src/renderer.h
         src/renderer.c
-        src/contrib/stb_image.c)
+        src/contrib/stb_image.c
+        src/contrib/minimp3.c)
 
 target_compile_features(etsuko PRIVATE c_std_17)
 
@@ -45,16 +46,12 @@ if(EMSCRIPTEN)
     target_compile_options(etsuko PRIVATE
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
-            "SHELL:-sUSE_SDL_MIXER=2"
-            "SHELL:-sSDL2_MIXER_FORMATS=['mp3']"
     )
 
     target_link_options(etsuko PRIVATE
             # Use built-in SDL2 ports
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
-            "SHELL:-sUSE_SDL_MIXER=2"
-            "SHELL:-sSDL2_MIXER_FORMATS=['mp3']"
 
             # Memory and runtime settings
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
@@ -95,12 +92,6 @@ else()
     target_link_libraries(etsuko
             PRIVATE
             $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
-    )
-
-    find_package(SDL2_mixer REQUIRED)
-    target_link_libraries(etsuko
-            PRIVATE
-            $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>
     )
 
     # Desktop: OpenGL and GLEW
