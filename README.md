@@ -9,7 +9,7 @@ opening a pull request.**
 ***
 
 etsuko is a shitty karaoke program written by reinventing the wheel in
-unnecessary ways, using SDL2 with OpenGL, some SDL libs and C.
+unnecessary ways, using SDL2 with OpenGL, some stb libs and C.
 It displays lyrics in real time as the song plays, along with a rudimentary
 interface that mimics a music player.\
 My main source of inspiration/plagiarism is Apple Music's fullscreen player.
@@ -23,7 +23,7 @@ as I do).
 A publicly viewable demo is hosted [here](https://tl.wooby.moe/karaoke/v2)
 using emscripten to target wasm.\
 Check the console if it takes a while to load to see if there are any errors.
-Also it expects support for WebGL 2/OpenGL ES 3.0, or else it'll fail to run.\
+Also, it expects support for WebGL 2/OpenGL ES 3.0, or else it'll fail to run.\
 **If you represent an artist and would like your song taken down from
 the website, you may also contact me via the email above.**\
 **I make no money out of this whatsoever nor the site shows any ads.
@@ -47,7 +47,7 @@ cmake --build --preset desktop-release
 
 **Requirements**
 - CMake
-- vcpkg for managing dependencies
+- Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
 
