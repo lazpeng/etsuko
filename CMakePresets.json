@@ -20,7 +20,6 @@
       "displayName": "Desktop Debug",
       "binaryDir": "build/desktop-debug",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
