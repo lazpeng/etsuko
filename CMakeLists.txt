@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 project(etsuko C)
 
 set(CMAKE_C_STANDARD 23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(etsuko src/main.c
         src/etsuko.h
@@ -90,26 +91,26 @@ else()
     message(STATUS "Configuring regular desktop build")
 
     # Desktop: Use vcpkg's SDL2 libraries
-    find_package(SDL2 CONFIG REQUIRED)
+    find_package(SDL2 REQUIRED)
     target_link_libraries(etsuko
             PRIVATE
             $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
             $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     )
 
-    find_package(SDL2_ttf CONFIG REQUIRED)
+    find_package(SDL2_ttf REQUIRED)
     target_link_libraries(etsuko
             PRIVATE
             $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
     )
 
-    find_package(SDL2_mixer CONFIG REQUIRED)
+    find_package(SDL2_mixer REQUIRED)
     target_link_libraries(etsuko
             PRIVATE
             $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>
     )
 
-    find_package(SDL2_image CONFIG REQUIRED)
+    find_package(SDL2_image REQUIRED)
     target_link_libraries(etsuko
             PRIVATE
             $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>)
