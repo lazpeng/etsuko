@@ -57,12 +57,12 @@ void render_set_blend_mode(BlendMode_t mode);
 BlendMode_t render_get_blend_mode(void);
 Color_t render_color_parse(uint32_t color);
 Color_t render_color_darken(Color_t color);
-void render_load_font(const char *path, FontType_t type);
+void render_load_font(const unsigned char *data, int data_size, FontType_t type);
 void render_measure_text_size(const char *text, int32_t pt, int32_t *w, int32_t *h, FontType_t kind);
 int32_t render_measure_pt_from_em(double em);
 
 Texture_t *render_make_text(const char *text, int32_t pt_size, bool bold, const Color_t *color, FontType_t font_type);
-Texture_t *render_make_image(const char *file_path, double border_radius_em);
+Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
 Texture_t *render_make_shadow(const Texture_t *texture, float blur_radius, float fade_distance, int32_t padding);
 void render_destroy_texture(Texture_t *texture);

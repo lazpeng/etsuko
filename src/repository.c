@@ -19,16 +19,10 @@
 
 static void on_fetch_success(emscripten_fetch_t *fetch) {
     Load_t *job = fetch->userData;
-    const char *output_file = job->destination;
-
-    printf("writing file to: %s\n", output_file);
-    FILE *out = fopen(output_file, "wb");
-    if ( out == NULL ) {
-        error_abort("Failed to open file\n");
-    }
-    fwrite(fetch->data, 1, fetch->numBytes, out);
-    fflush(out);
-    fclose(out);
+    unsigned char *new_buffer = calloc(1, (int)fetch->numBytes);
+    memcpy(new_buffer, fetch->data, fetch->numBytes);
+    job->data = new_buffer;
+    job->data_size = (int)fetch->numBytes;
 
     job->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
@@ -46,24 +40,37 @@ static void on_fetch_ready(emscripten_fetch_t *fetch) {
     job->total_size = fetch->totalBytes;
 }
 
+#else
+
+const unsigned char *load_file(const char *filename, int *size) {
+    FILE *file = fopen(filename, "rb");
+    if ( file == NULL ) {
+        return NULL;
+    }
+    fseek(file, 0, SEEK_END);
+    const int file_size = (int)ftell(file);
+    fseek(file, 0, SEEK_SET);
+    unsigned char *data = malloc(file_size);
+    fread(data, 1, file_size, file);
+    fclose(file);
+
+    *size = file_size;
+    return data;
+}
+
 #endif
 
 void repository_get_resource(const char *src, const char *subdir, Load_t *load) {
     if ( load == NULL ) {
         error_abort("Load job is NULL");
     }
+    if ( load->data != NULL ) {
+        error_abort("Load job already has data");
+    }
 
     mkdir("assets", 0777);
     load->filename = str_get_filename(src);
-    asprintf(&load->destination, "assets/%s", load->filename);
     load->status = LOAD_IN_PROGRESS;
-
-    FILE *existing = fopen(load->destination, "r");
-    if ( existing != NULL ) {
-        fclose(existing);
-        load->status = LOAD_DONE;
-        return;
-    }
 #ifdef __EMSCRIPTEN__
     char *full_path;
     if ( subdir != NULL ) {
@@ -84,6 +91,21 @@ void repository_get_resource(const char *src, const char *subdir, Load_t *load) 
     emscripten_fetch(&attr, full_path);
     free(full_path);
 #else
+    char *path;
+    asprintf(&path, "assets/%s", str_get_filename(src));
+    load->data = load_file(path, &load->data_size);
+    if ( load->data == NULL )
+        error_abort("Failed to load resource");
     load->status = LOAD_DONE;
 #endif
+}
+
+void repository_free_resource(Load_t *load) {
+    if ( load->data != NULL ) {
+        free((void *)load->data);
+    }
+    free(load->filename);
+    load->filename = NULL;
+    load->data = NULL;
+    load->data_size = 0;
 }

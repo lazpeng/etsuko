@@ -5,7 +5,6 @@
 #include "renderer.h"
 
 #include "constants.h"
-#include "contrib/incbin.h"
 #include "error.h"
 #include "events.h"
 
@@ -27,6 +26,9 @@
 #define GLSL_VERSION "#version 330 core\n"
 #define GLSL_PRECISION ""
 #endif
+
+#define RESOURCE_INCLUDE_SHADERS
+#include "resource_includes.h"
 
 // 1MB
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
@@ -85,87 +87,6 @@ typedef struct Renderer_t {
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
-
-// ============================================================================
-// SHADERS
-// ============================================================================
-
-#if defined __EMSCRIPTEN__
-static const char incbin_texture_vert_shader[] = {
-#embed "shaders/texture.vert.glsl"
-};
-static const char incbin_texture_frag_shader[] = {
-#embed "shaders/texture.frag.glsl"
-};
-
-static const char incbin_rect_vert_shader[] = {
-#embed "shaders/rect.vert.glsl"
-};
-static const char incbin_rect_frag_shader[] = {
-#embed "shaders/rect.frag.glsl"
-};
-
-static const char incbin_copy_vert_shader[] = {
-#embed "shaders/copy.vert.glsl"
-};
-static const char incbin_copy_frag_shader[] = {
-#embed "shaders/copy.frag.glsl"
-};
-
-static const char incbin_gradient_vert_shader[] = {
-#embed "shaders/gradient.vert.glsl"
-};
-static const char incbin_gradient_frag_shader[] = {
-#embed "shaders/gradient.frag.glsl"
-};
-
-static const char incbin_dyn_gradient_vert_shader[] = {
-#embed "shaders/dynamic gradient.vert.glsl"
-};
-static const char incbin_dyn_gradient_frag_shader[] = {
-#embed "shaders/dynamic gradient.frag.glsl"
-};
-
-static const char incbin_blur_vert_shader[] = {
-#embed "shaders/blur.vert.glsl"
-};
-static const char incbin_blur_frag_shader[] = {
-#embed "shaders/blur.frag.glsl"
-};
-
-static const char incbin_rand_gradient_vert_shader[] = {
-#embed "shaders/random gradient.vert.glsl"
-};
-static const char incbin_rand_gradient_frag_shader[] = {
-#embed "shaders/random gradient.frag.glsl"
-};
-
-#else
-INCBIN(texture_vert_shader, "shaders/texture.vert.glsl")
-INCBIN(texture_frag_shader, "shaders/texture.frag.glsl")
-
-INCBIN(rect_vert_shader, "shaders/rect.vert.glsl")
-INCBIN(rect_frag_shader, "shaders/rect.frag.glsl")
-
-INCBIN(gradient_vert_shader, "shaders/gradient.vert.glsl")
-INCBIN(gradient_frag_shader, "shaders/gradient.frag.glsl")
-
-INCBIN(dyn_gradient_vert_shader, "shaders/dynamic gradient.vert.glsl")
-INCBIN(dyn_gradient_frag_shader, "shaders/dynamic gradient.frag.glsl")
-
-INCBIN(rand_gradient_vert_shader, "shaders/random gradient.vert.glsl")
-INCBIN(rand_gradient_frag_shader, "shaders/random gradient.frag.glsl")
-
-INCBIN(blur_vert_shader, "shaders/blur.vert.glsl")
-INCBIN(blur_frag_shader, "shaders/blur.frag.glsl")
-
-INCBIN(copy_vert_shader, "shaders/copy.vert.glsl")
-INCBIN(copy_frag_shader, "shaders/copy.frag.glsl")
-#endif
-
-// ============================================================================
-// SHADER HELPERS
-// ============================================================================
 
 static GLuint compile_shader(const GLenum type, const char *source, const char *name) {
     const GLuint shader = glCreateShader(type);
@@ -332,11 +253,11 @@ void render_init(void) {
     g_renderer->bg_type = BACKGROUND_NONE;
 
 #ifdef __EMSCRIPTEN__
-    double cssWidth, cssHeight;
-    emscripten_get_element_css_size("#canvas", &cssWidth, &cssHeight);
-    const int32_t width = (int32_t)cssWidth;
-    const int32_t height = (int32_t)cssHeight;
-    SDL_SetWindowSize(g_renderer->window, width, height);
+    // double cssWidth, cssHeight;
+    // emscripten_get_element_css_size("#canvas", &cssWidth, &cssHeight);
+    // const int32_t width = (int32_t)cssWidth;
+    // const int32_t height = (int32_t)cssHeight;
+    // SDL_SetWindowSize(g_renderer->window, width, height);
 #endif
 
     render_on_window_changed();
@@ -722,8 +643,13 @@ const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 
 double render_get_pixel_scale(void) { return g_renderer->window_pixel_scale; }
 
-void render_load_font(const char *path, const FontType_t type) {
-    TTF_Font *font = TTF_OpenFontDPI(path, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
+void render_load_font(const unsigned char *data, const int data_size, const FontType_t type) {
+    unsigned char *data_copy = calloc(1, data_size);
+    memcpy(data_copy, data, data_size);
+    // Make a copy and hand it over to SDL_TTF because it appears to, for some reason, use the buffer we pass without copying it
+    // so when it's freed later on by the repository, it causes use-after-free
+    SDL_RWops *rw = SDL_RWFromConstMem(data_copy, data_size);
+    TTF_Font *font = TTF_OpenFontDPIRW(rw, true, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
 
     if ( font == NULL ) {
         puts(TTF_GetError());
@@ -899,7 +825,8 @@ Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool 
                             const FontType_t font_type) {
     TTF_Font *font = font_type == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
     if ( font == NULL ) {
-        error_abort("Font not loaded");
+        puts("Warning: Font not loaded");
+        return NULL;
     }
     if ( strnlen(text, MAX_TEXT_SIZE) == 0 ) {
         error_abort("Text is empty");
@@ -962,9 +889,9 @@ static Texture_t *create_test_texture(void) {
     return texture;
 }
 
-Texture_t *render_make_image(const char *file_path, const double border_radius_em) {
+Texture_t *render_make_image(const unsigned char *bytes, const int length, const double border_radius_em) {
     int32_t w, h;
-    unsigned char *pixels = stbi_load(file_path, &w, &h, NULL, 4);
+    unsigned char *pixels = stbi_load_from_memory(bytes, length, &w, &h, NULL, 4);
     if ( pixels == NULL ) {
         error_abort("Failed to load image");
     }
@@ -981,19 +908,19 @@ Texture_t *render_make_image(const char *file_path, const double border_radius_e
 
     free(pixels);
 
-    Texture_t *final_texture = calloc(1, sizeof(*final_texture));
-    if ( final_texture == NULL ) {
+    Texture_t *texture = calloc(1, sizeof(*texture));
+    if ( texture == NULL ) {
         error_abort("Failed to allocate texture");
     }
-    final_texture->width = w;
-    final_texture->height = h;
-    final_texture->id = texture_id;
+    texture->width = w;
+    texture->height = h;
+    texture->id = texture_id;
 
     if ( border_radius_em > 0 ) {
-        final_texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
+        texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
     }
 
-    return final_texture;
+    return texture;
 }
 
 Texture_t *render_make_dummy_image(const double border_radius_em) {

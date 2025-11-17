@@ -54,5 +54,5 @@ void str_replace_char(char *str, const char old_c, const char new_c) {
 bool str_is_empty(const char *str) {
     if ( str == NULL )
         return true;
-    return strncmp(str, "", 1) == 0;
+    return strnlen(str, 1) < 1;
 }

@@ -33,7 +33,8 @@ add_executable(etsuko src/main.c
         src/renderer.h
         src/renderer.c
         src/contrib/stb_image.c
-        src/contrib/minimp3.c)
+        src/contrib/minimp3.c
+        src/resource_includes.h)
 
 set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
@@ -53,6 +54,7 @@ if(EMSCRIPTEN)
     target_link_options(etsuko PRIVATE
             "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_SDL_TTF=2"
+            "SHELL:-sUSE_GLFW=0"
 
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
             "SHELL:-sEXIT_RUNTIME=0"
@@ -65,13 +67,11 @@ if(EMSCRIPTEN)
             "SHELL:-Oz"
             "SHELL:-flto"
             "SHELL:-g0"
-            "SHELL:--closure 1"
-            "SHELL:-sASSERTIONS=0"
-            "SHELL:-sSTACK_SIZE=65536"
+            "SHELL:-sFILESYSTEM=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
-            "SHELL:--use-preload-plugins"
-            "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
+            #"SHELL:--use-preload-plugins"
+            #"SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
     )
 
 else()

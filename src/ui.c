@@ -36,7 +36,9 @@ Ui_t *ui_init(void) {
     return ui;
 }
 
-void ui_load_font(const FontType_t type, const char *path) { render_load_font(path, type); }
+void ui_load_font(const unsigned char *data, const int data_size, const FontType_t type) {
+    render_load_font(data, data_size, type);
+}
 
 static void animation_translation_data_destroy(Animation_EaseTranslationData_t *data) { free(data); }
 static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(data); }
@@ -468,9 +470,7 @@ static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
     return result;
 }
 
-static void free_image_data(Drawable_ImageData_t *data) {
-    free(data);
-}
+static void free_image_data(Drawable_ImageData_t *data) { free(data); }
 
 static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressBarData_t *data) {
     Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
@@ -643,11 +643,12 @@ Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *conta
     return result;
 }
 
-Drawable_t *ui_make_image(Ui_t *ui, const char *file_path, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout) {
+Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length, Drawable_ImageData_t *data,
+                          Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
     data = dup_image_data(data);
 
-    Texture_t *texture = render_make_image(file_path, data->border_radius_em);
+    Texture_t *texture = render_make_image(bytes, length, data->border_radius_em);
     result->bounds.w = texture->width;
     result->bounds.h = texture->height;
 
@@ -657,6 +658,7 @@ Drawable_t *ui_make_image(Ui_t *ui, const char *file_path, Drawable_ImageData_t 
 
     ui_reposition_drawable(ui, result);
 
+    // TODO: Fix shadows for images and other drawables (and overall)
     // if ( data->draw_shadow ) {
     //     const auto offset = (int32_t)MAX(1.f, MIN(10.f, texture->width * 0.15f));
     //     const auto blur_radius = MAX(1.f, MIN(15.f, texture->width * 0.05f));

@@ -51,7 +51,7 @@ typedef struct Song_t {
     Song_BgType_t bg_type;
 } Song_t;
 
-void song_load(const char *src);
+void song_load(const char *filename, const char *src, int src_size);
 Song_t *song_get(void);
 void song_destroy(void);
 

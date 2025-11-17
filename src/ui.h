@@ -152,7 +152,7 @@ Ui_t *ui_init(void);
 void ui_finish(Ui_t *ui);
 void ui_begin_loop(Ui_t *ui);
 void ui_end_loop(void);
-void ui_load_font(FontType_t type, const char *path);
+void ui_load_font(const unsigned char *data, int data_size, FontType_t type);
 void ui_draw(const Ui_t *ui);
 // Meta helpers
 void ui_set_window_title(const char *title);
@@ -164,7 +164,7 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_image(Ui_t *ui, const char *file_path, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);

@@ -6,7 +6,6 @@
 
 #include "constants.h"
 #include "error.h"
-#include "str_utils.h"
 
 static Song_t *g_song;
 
@@ -156,30 +155,43 @@ static void read_timings(const Song_t *song, const char *buffer) {
     vec_add(song->lyrics_lines, line);
 }
 
-void song_load(const char *src) {
-    FILE *file = fopen(src, "r");
-    if ( file == NULL ) {
-        printf("trying to load song from src: %s\n", src);
-        error_abort("Failed to open song file");
-    }
+static char *buffer_gets(char *destination, const size_t size, const char *src, const size_t src_len, size_t *offset) {
+    if ( *offset >= src_len )
+        return NULL;
 
+    size_t i = 0;
+    while ( i < size - 1 && *offset < src_len ) {
+        const char c = src[*offset];
+        destination[i++] = c;
+        (*offset)++;
+
+        if ( c == '\n' )
+            break;
+    }
+    destination[i] = '\0';
+    return i > 0 ? destination : NULL;
+}
+
+void song_load(const char *filename, const char *src, const int src_size) {
     g_song = calloc(1, sizeof(*g_song));
     g_song->lyrics_lines = vec_init();
 
-    g_song->id = str_get_filename_no_ext(src);
+    g_song->id = strdup(filename);
 
-    char buffer[BUFFER_SIZE];
-    buffer[0] = 0;
+    char *buffer = calloc(1, BUFFER_SIZE);
+    if ( buffer == NULL )
+        error_abort("Failed to allocate buffer");
+    size_t offset = 0;
 
     BlockType current_block = BLOCK_HEADER;
-    while ( fgets(buffer, sizeof(buffer), file) ) {
+    while ( buffer_gets(buffer, BUFFER_SIZE, src, src_size, &offset) ) {
         buffer[strcspn(buffer, "\r")] = 0;
         buffer[strcspn(buffer, "\n")] = 0;
-        const size_t len = strnlen(buffer, sizeof(buffer));
+        const size_t len = strnlen(buffer, BUFFER_SIZE);
         if ( len > 0 && buffer[0] == '#' ) {
-            if ( strncmp(buffer, "#timings", sizeof(buffer)) == 0 ) {
+            if ( strncmp(buffer, "#timings", BUFFER_SIZE) == 0 ) {
                 current_block = BLOCK_TIMINGS;
-            } else if ( strncmp(buffer, "#lyrics", sizeof(buffer)) == 0 ) {
+            } else if ( strncmp(buffer, "#lyrics", BUFFER_SIZE) == 0 ) {
                 current_block = BLOCK_LYRICS;
             } else {
                 error_abort("Invalid block inside song file");

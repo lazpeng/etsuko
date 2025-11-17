@@ -139,7 +139,7 @@ static void reset(void) {
     audio_pause();
 }
 
-void audio_load(const char *file) {
+void audio_load(const unsigned char *data, const int data_size) {
     SDL_LockMutex(g_audio_mutex);
 
     if ( g_audio.mp3_data != NULL ) {
@@ -148,7 +148,7 @@ void audio_load(const char *file) {
         g_audio.mp3_data = NULL;
     }
 
-    SDL_RWops *rw = SDL_RWFromFile(file, "rb");
+    SDL_RWops *rw = SDL_RWFromConstMem(data, data_size);
     if ( rw == NULL ) {
         SDL_UnlockMutex(g_audio_mutex);
         error_abort("Failed to open MP3 file");

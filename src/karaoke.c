@@ -7,6 +7,11 @@
 #include "song.h"
 #include "ui.h"
 #include "ui_ex.h"
+
+#define RESOURCE_INCLUDE_IMAGES
+#include "resource_includes.h"
+#include "str_utils.h"
+
 #include <SDL2/SDL.h>
 #include <stdlib.h>
 
@@ -73,15 +78,22 @@ static char *get_loading_files_names(const Karaoke_t *state) {
 
     bool first = true;
     if ( state->load_lyrics_font.status != LOAD_FINISHED ) {
-        buffer = append_file_to_loading_text(buffer, state->load_lyrics_font.filename, first, original_buffer + MAX_TEXT_SIZE);
-        first = false;
+        if ( !str_is_empty(state->load_lyrics_font.filename) ) {
+            buffer =
+                append_file_to_loading_text(buffer, state->load_lyrics_font.filename, first, original_buffer + MAX_TEXT_SIZE);
+            first = false;
+        }
     }
     if ( state->load_album_art.status != LOAD_FINISHED ) {
-        buffer = append_file_to_loading_text(buffer, state->load_album_art.filename, first, original_buffer + MAX_TEXT_SIZE);
-        first = false;
+        if ( !str_is_empty(state->load_album_art.filename) ) {
+            buffer = append_file_to_loading_text(buffer, state->load_album_art.filename, first, original_buffer + MAX_TEXT_SIZE);
+            first = false;
+        }
     }
     if ( state->load_audio.status != LOAD_FINISHED ) {
-        buffer = append_file_to_loading_text(buffer, state->load_audio.filename, first, original_buffer + MAX_TEXT_SIZE);
+        if ( !str_is_empty(state->load_audio.filename) ) {
+            buffer = append_file_to_loading_text(buffer, state->load_audio.filename, first, original_buffer + MAX_TEXT_SIZE);
+        }
     }
 
     snprintf(buffer, MAX_TEXT_SIZE - (buffer - original_buffer), "...");
@@ -95,31 +107,28 @@ static int load_async(Karaoke_t *state) {
         repository_get_resource(config->ui_font, "files", &state->load_ui_font);
     }
     if ( state->load_ui_font.status == LOAD_DONE ) {
-        config->ui_font = state->load_ui_font.destination;
         state->load_ui_font.status = LOAD_FINISHED;
-
-        ui_load_font(FONT_UI, state->load_ui_font.destination);
+        ui_load_font(state->load_ui_font.data, state->load_ui_font.data_size, FONT_UI);
+        repository_free_resource(&state->load_ui_font);
     }
     // Lyrics font
     if ( state->load_lyrics_font.status == LOAD_NOT_STARTED ) {
         repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
     }
     if ( state->load_lyrics_font.status == LOAD_DONE ) {
-        config->lyrics_font = state->load_lyrics_font.destination;
         state->load_lyrics_font.status = LOAD_FINISHED;
-
-        ui_load_font(FONT_LYRICS, state->load_lyrics_font.destination);
+        ui_load_font(state->load_lyrics_font.data, state->load_lyrics_font.data_size, FONT_LYRICS);
+        repository_free_resource(&state->load_lyrics_font);
     }
     // Song
     if ( state->load_song.status == LOAD_NOT_STARTED ) {
         repository_get_resource(config->song_file, NULL, &state->load_song);
     }
     if ( state->load_song.status == LOAD_DONE ) {
-        config->song_file = state->load_song.destination;
-
-        song_load(config->song_file);
+        song_load(state->load_song.filename, (const char *)state->load_song.data, state->load_song.data_size);
         if ( song_get() == NULL )
             error_abort("Failed to load song");
+        repository_free_resource(&state->load_song);
         state->load_song.status = LOAD_FINISHED;
 
         if ( song_get()->bg_type == BG_SOLID ) {
@@ -178,8 +187,9 @@ static int load_async(Karaoke_t *state) {
     }
     if ( state->load_audio.status == LOAD_DONE ) {
         free(song_get()->file_path);
-        song_get()->file_path = state->load_audio.destination;
         state->load_audio.status = LOAD_FINISHED;
+        audio_load(state->load_audio.data, state->load_audio.data_size);
+        repository_free_resource(&state->load_audio);
     }
     // Album art
     if ( state->load_album_art.status == LOAD_NOT_STARTED ) {
@@ -187,7 +197,6 @@ static int load_async(Karaoke_t *state) {
     }
     if ( state->load_album_art.status == LOAD_DONE ) {
         free(song_get()->album_art_path);
-        song_get()->album_art_path = state->load_album_art.destination;
         state->load_album_art.status = LOAD_FINISHED;
     }
 
@@ -251,8 +260,6 @@ void karaoke_setup(Karaoke_t *state) {
     }
     state->ui = ui_init();
 
-    audio_load(song_get()->file_path);
-
     char *window_title;
     asprintf(&window_title, "%s - %s", APP_NAME, song_get()->name);
     ui_set_window_title(window_title);
@@ -288,8 +295,7 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Album art
     state->album_image = ui_make_image(
-        state->ui,
-        song_get()->album_art_path,
+        state->ui, state->load_album_art.data, state->load_album_art.data_size,
         &(Drawable_ImageData_t){
             .border_radius_em = 2.0,
             .draw_shadow = true,
@@ -297,6 +303,7 @@ void karaoke_setup(Karaoke_t *state) {
         state->left_container,
         &(Layout_t){
             .height = 0.6, .width = 0.6, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
+    repository_free_resource(&state->load_album_art);
 
     // Song info container
     state->song_info_container =
@@ -384,15 +391,19 @@ void karaoke_setup(Karaoke_t *state) {
                           CONTAINER_NONE);
 
     // Play and pause buttons
+    const unsigned char *play_bytes = incbin_play_img;
+    const int play_bytes_len = sizeof incbin_play_img;
     state->play_button =
-        ui_make_image(state->ui, "assets/play.png", &(Drawable_ImageData_t){0}, state->song_controls_container,
+        ui_make_image(state->ui, play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,
                                   .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
 
+    const unsigned char *pause_bytes = incbin_pause_img;
+    const int pause_bytes_len = sizeof incbin_pause_img;
     state->pause_button =
-        ui_make_image(state->ui, "assets/pause.png", &(Drawable_ImageData_t){0}, state->song_controls_container,
+        ui_make_image(state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,

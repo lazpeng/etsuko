@@ -10,7 +10,7 @@
 void audio_init(void);
 void audio_finish(void);
 void audio_loop(void);
-void audio_load(const char *file);
+void audio_load(const unsigned char *data, int data_size);
 void audio_resume(void);
 void audio_pause(void);
 void audio_seek(double time);
