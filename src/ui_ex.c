@@ -363,29 +363,37 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
 }
 
 static double get_hidden_height(const LyricsView_t *view) {
-    double height = 0;
+    if ( view->line_states[0] != LINE_HIDDEN )
+        return 0;
+
+    const Drawable_t *first_non_hidden = NULL;
     for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
-        const LineState_t state = view->line_states[i];
-        if ( state == LINE_HIDDEN || state == LINE_ALMOST_HIDDEN ) {
-            const Drawable_t *drawable = view->line_drawables->data[i];
-            height += drawable->bounds.h + LINE_VERTICAL_PADDING;
+        if ( view->line_states[i] != LINE_HIDDEN ) {
+            first_non_hidden = view->line_drawables->data[i];
+            break;
         }
     }
+    const Drawable_t *first_line = view->line_drawables->data[0];
+    if ( first_non_hidden == NULL || first_non_hidden == first_line )
+        return 0;
 
-    return height;
+    return first_non_hidden->bounds.y - first_line->bounds.y;
 }
 
 static double get_visible_height(const LyricsView_t *view) {
-    double height = 0;
+    const Drawable_t *first_visible = NULL;
     for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
-        const LineState_t state = view->line_states[i];
-        if ( state == LINE_ACTIVE || state == LINE_INACTIVE ) {
-            const Drawable_t *drawable = view->line_drawables->data[i];
-            height += drawable->bounds.h + LINE_VERTICAL_PADDING;
+        if ( view->line_states[i] == LINE_HIDDEN ) {
+            continue;
         }
+        first_visible = view->line_drawables->data[i];
+        break;
     }
 
-    return -height + view->container->bounds.h * 0.5;
+    const Drawable_t *last_visible = view->line_drawables->data[view->line_drawables->size - 1];
+    if ( first_visible == NULL || last_visible == first_visible )
+        return 0;
+    return -(last_visible->bounds.y - first_visible->bounds.y);
 }
 
 void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, const double delta_y) {
@@ -393,7 +401,6 @@ void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, const double delta_y)
         return;
 
     double new_viewport_y = view->container->viewport_y + delta_y * SCROLL_MODIFIER;
-    // TODO: Fix, these are wrong because the vertical padding is relative and not absolute
     new_viewport_y = MIN(new_viewport_y, get_hidden_height(view));
     new_viewport_y = MAX(new_viewport_y, get_visible_height(view));
 

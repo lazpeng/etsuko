@@ -485,6 +485,8 @@ static void check_user_input(const Karaoke_t *state) {
                 const double distance_from_x = mouse_x - progress_bar_x;
                 const double distance = distance_from_x / state->song_progressbar->bounds.w;
                 audio_seek(audio_total_time() * distance);
+                // Reset viewport
+                state->lyrics_view->container->viewport_y = 0;
             }
         }
         // Check if clicked on the play/pause button
