@@ -120,7 +120,6 @@ typedef struct Drawable_TextData_t {
 } Drawable_TextData_t;
 
 typedef struct Drawable_ImageData_t {
-    char *file_path;
     double border_radius_em;
     bool draw_shadow;
 } Drawable_ImageData_t;
@@ -165,15 +164,15 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(Ui_t *ui, const char *file_path, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Drawable_t *drawable);
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
-void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, float scale);
-void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, float scale);
+void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
+void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);

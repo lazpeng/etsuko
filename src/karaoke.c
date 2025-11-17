@@ -289,8 +289,8 @@ void karaoke_setup(Karaoke_t *state) {
     // Album art
     state->album_image = ui_make_image(
         state->ui,
+        song_get()->album_art_path,
         &(Drawable_ImageData_t){
-            .file_path = song_get()->album_art_path,
             .border_radius_em = 2.0,
             .draw_shadow = true,
         },
@@ -385,14 +385,14 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Play and pause buttons
     state->play_button =
-        ui_make_image(state->ui, &(Drawable_ImageData_t){.file_path = "assets/play.png"}, state->song_controls_container,
+        ui_make_image(state->ui, "assets/play.png", &(Drawable_ImageData_t){0}, state->song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,
                                   .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
 
     state->pause_button =
-        ui_make_image(state->ui, &(Drawable_ImageData_t){.file_path = "assets/pause.png"}, state->song_controls_container,
+        ui_make_image(state->ui, "assets/pause.png", &(Drawable_ImageData_t){0}, state->song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,

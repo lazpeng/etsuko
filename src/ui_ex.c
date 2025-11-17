@@ -134,7 +134,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     drawable->enabled = true;
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
-    ui_drawable_set_scale_factor(ui, drawable, 1.f);
+    ui_drawable_set_scale_factor(drawable, 1.f);
     ui_drawable_set_color_mod(drawable, 1.f);
 
     Drawable_t *prev_relative = NULL;
@@ -224,9 +224,9 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
         if ( prev_state == LINE_NONE ) {
-            ui_drawable_set_scale_factor_immediate(ui, drawable, LINE_SCALE_FACTOR_INACTIVE);
+            ui_drawable_set_scale_factor_immediate(drawable, LINE_SCALE_FACTOR_INACTIVE);
         } else {
-            ui_drawable_set_scale_factor(ui, drawable, LINE_SCALE_FACTOR_INACTIVE);
+            ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
         }
         ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
         ui_reposition_drawable(ui, drawable);
@@ -251,7 +251,7 @@ static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
             drawable->layout.flags ^= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
         }
 
-        ui_drawable_set_scale_factor(ui, drawable, LINE_SCALE_FACTOR_INACTIVE);
+        ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
         ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
     }
 

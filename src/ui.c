@@ -463,14 +463,12 @@ static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
     if ( result == NULL ) {
         error_abort("Failed to allocate image data");
     }
-    result->file_path = strdup(data->file_path);
     result->border_radius_em = data->border_radius_em;
     result->draw_shadow = data->draw_shadow;
     return result;
 }
 
 static void free_image_data(Drawable_ImageData_t *data) {
-    free(data->file_path);
     free(data);
 }
 
@@ -645,10 +643,11 @@ Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *conta
     return result;
 }
 
-static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData_t *data, const Layout_t *layout) {
+Drawable_t *ui_make_image(Ui_t *ui, const char *file_path, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
     data = dup_image_data(data);
 
-    Texture_t *texture = render_make_image(data->file_path, data->border_radius_em);
+    Texture_t *texture = render_make_image(file_path, data->border_radius_em);
     result->bounds.w = texture->width;
     result->bounds.h = texture->height;
 
@@ -665,11 +664,6 @@ static void internal_make_image(Ui_t *ui, Drawable_t *result, Drawable_ImageData
     //     result->shadow_offset = offset;
     //     result->shadow_padding = 2;
     // }
-}
-
-Drawable_t *ui_make_image(Ui_t *ui, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout) {
-    Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
-    internal_make_image(ui, result, data, layout);
     vec_add(container->child_drawables, result);
     return result;
 }
@@ -808,12 +802,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         void *old_custom_data = drawable->custom_data;
         internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
-    } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
-        void *old_custom_data = drawable->custom_data;
-        internal_make_image(ui, drawable, old_custom_data, &drawable->layout);
-        free_image_data(old_custom_data);
-    } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
-        // There's nothing to do in this case
+    } else if ( drawable->type == DRAW_TYPE_IMAGE || drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
         ui_reposition_drawable(ui, drawable);
     } else {
         error_abort("Invalid drawable type");
@@ -920,7 +909,7 @@ void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) 
     vec_add(target->animations, result);
 }
 
-void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, const float scale) {
+void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     // Do this so that we can specify scale in a way that makes sense (that is, 1.0 for the default size, anything other as
     // a transformation)
     const float scale_mod = scale - 1.f;
@@ -940,7 +929,7 @@ void ui_drawable_set_scale_factor(Ui_t *ui, Drawable_t *drawable, const float sc
     drawable->bounds.scale_mod = scale_mod;
 }
 
-void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, float scale) {
+void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float scale) {
     const float scale_mod = scale - 1.f;
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
@@ -951,7 +940,6 @@ void ui_drawable_set_scale_factor_immediate(Ui_t *ui, Drawable_t *drawable, floa
         animation->active = false;
     }
     drawable->bounds.scale_mod = scale_mod;
-    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
 }
 
 void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { drawable->color_mod = color_mod; }
