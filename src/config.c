@@ -44,6 +44,7 @@ static Config_t *get_default_config(void) {
     config->ui_font = strdup("NotoSans-Regular.ttf");
     // config->song_file = strdup("stop crying your heart out.txt");
     config->song_file = strdup("yoake.txt");
+    config->hide_past_lyrics = true;
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

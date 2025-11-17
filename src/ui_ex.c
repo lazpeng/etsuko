@@ -1,6 +1,7 @@
 #include "ui_ex.h"
 
 #include "audio.h"
+#include "config.h"
 #include "error.h"
 #include "str_utils.h"
 
@@ -254,8 +255,9 @@ static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
         ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
     }
 
+    const double threshold = config_get()->hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
-    if ( view->container->viewport_y < SCROLL_THRESHOLD ) {
+    if ( view->container->viewport_y < threshold ) {
         ui_drawable_set_alpha(drawable, 0);
     } else {
         int32_t distance =

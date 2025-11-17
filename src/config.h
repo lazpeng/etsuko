@@ -5,7 +5,9 @@
 #ifndef ETSUKO_CONFIG_H
 #define ETSUKO_CONFIG_H
 
-typedef enum etsuko_Config_OpMode_t {
+#include <stdbool.h>
+
+typedef enum Config_OpMode_t {
     APP_MODE_KARAOKE = 0,
 } Config_OpMode_t;
 
@@ -13,6 +15,7 @@ typedef struct {
     char *ui_font, *lyrics_font;
     char *song_file;
     Config_OpMode_t op_mode;
+    bool hide_past_lyrics;
 } Config_t;
 
 Config_t *config_get(void);
