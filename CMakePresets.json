@@ -39,7 +39,6 @@
       "binaryDir": "build/wasm-release",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_SYSROOT": "$env{EMSDK}/upstream/emscripten/cache/sysroot",
         "CMAKE_SYSTEM_NAME": "Emscripten"

@@ -33,10 +33,12 @@ add_executable(etsuko src/main.c
         src/renderer.h
         src/renderer.c
         src/contrib/stb_image.c
+        src/contrib/stb_truetype.c
         src/contrib/minimp3.c
         src/resource_includes.h)
 
 set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
+set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
 
 target_compile_features(etsuko PRIVATE c_std_17)
@@ -48,13 +50,13 @@ if(EMSCRIPTEN)
 
     target_compile_options(etsuko PRIVATE
             "SHELL:-sUSE_SDL=2"
-            "SHELL:-sUSE_SDL_TTF=2"
+            "SHELL:-sUSE_ICU=1"
     )
 
     target_link_options(etsuko PRIVATE
             "SHELL:-sUSE_SDL=2"
-            "SHELL:-sUSE_SDL_TTF=2"
             "SHELL:-sUSE_GLFW=0"
+            "SHELL:-sUSE_ICU=1"
 
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
             "SHELL:-sEXIT_RUNTIME=0"
@@ -66,7 +68,7 @@ if(EMSCRIPTEN)
 
             "SHELL:-Oz"
             "SHELL:-flto"
-            "SHELL:-g0"
+            "SHELL:-g"
             "SHELL:-sFILESYSTEM=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
@@ -84,17 +86,20 @@ else()
             $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     )
 
-    find_package(SDL2_ttf REQUIRED)
-    target_link_libraries(etsuko
-            PRIVATE
-            $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
-    )
-
     find_package(OpenGL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenGL::GL)
 
     find_package(GLEW REQUIRED)
     target_link_libraries(etsuko PRIVATE GLEW::GLEW)
+
+    # ICU
+    find_path(ICU_INCLUDE_DIR unicode/utf8.h PATHS /opt/homebrew/opt/icu4c@78/include /usr/local/opt/icu4c/include)
+    find_library(ICU_LIBRARY icuuc PATHS /opt/homebrew/opt/icu4c@78/lib /usr/local/opt/icu4c/lib)
+    if (NOT ICU_INCLUDE_DIR OR NOT ICU_LIBRARY)
+        message(FATAL_ERROR "ICU not found")
+    endif()
+    target_include_directories(etsuko PRIVATE ${ICU_INCLUDE_DIR})
+    target_link_libraries(etsuko PRIVATE ${ICU_LIBRARY})
 
     # -lm
     target_link_libraries(etsuko PRIVATE m)

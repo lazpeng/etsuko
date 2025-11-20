@@ -11,15 +11,16 @@
 
 #define LINE_VERTICAL_PADDING (0.035)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
-#define LINE_FADE_MAX_DISTANCE (3)
+#define LINE_FADE_MAX_DISTANCE (5)
 #define SCROLL_THRESHOLD (0.05)
 #ifdef __EMSCRIPTEN__
 #define SCROLL_MODIFIER (50)
 #else
 #define SCROLL_MODIFIER (10)
 #endif
-#define LINE_COLOR_MOD_INACTIVE (0.35f)
 #define LINE_SCALE_FACTOR_INACTIVE (0.75f)
+#define ALPHA_DISTANCE_BASE_CALC (100)
+#define ALPHA_DISTANCE_MIN_VALUE (25)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -102,7 +103,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .wrap_enabled = true,
                                     .wrap_width_threshold = 0.85,
                                     .color = color,
-                                    .bold = false,
                                     .alignment = alignment,
                                     .draw_shadow = true};
         Layout_t layout = {
@@ -135,7 +135,6 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
     ui_drawable_set_scale_factor(drawable, 1.f);
-    ui_drawable_set_color_mod(drawable, 1.f);
 
     Drawable_t *prev_relative = NULL;
     if ( prev_active >= 0 ) {
@@ -164,16 +163,16 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
 }
 
 static int32_t calculate_alpha(const int32_t distance) {
-    return 225 - 200 / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
+    const int32_t dec = ALPHA_DISTANCE_BASE_CALC / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
+    return MAX(ALPHA_DISTANCE_MIN_VALUE, ALPHA_DISTANCE_BASE_CALC - dec);
 }
 
 static int32_t calculate_distance(const LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     int32_t distance = abs(index - prev_active);
     if ( distance == 1 ) {
-        return 0;
+        return 1;
     }
     if ( distance > 0 ) {
-        distance -= 1;
         int32_t start = prev_active, end = index;
         if ( index < prev_active ) {
             start = index;
@@ -187,7 +186,7 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
         }
     }
 
-    return MAX(0, distance);
+    return MAX(1, distance);
 }
 
 static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
@@ -228,7 +227,6 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         } else {
             ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
         }
-        ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
         ui_reposition_drawable(ui, drawable);
 
         view->layout_dirty = true;
@@ -252,7 +250,6 @@ static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
         }
 
         ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
-        ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
     }
 
     const double threshold = config_get()->hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
@@ -275,10 +272,7 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
-            // Don't do anything, just fade into a low alpha
-            // TODO: Animate this color change
-            // ui_drawable_set_color_mod(drawable, LINE_COLOR_MOD_INACTIVE);
-            const int32_t alpha = calculate_alpha(LINE_FADE_MAX_DISTANCE - 1);
+            const int32_t alpha = calculate_alpha(1);
             ui_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable

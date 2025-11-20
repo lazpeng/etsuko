@@ -228,18 +228,15 @@ int karaoke_load_loop(Karaoke_t *state) {
         }
 
         if ( state->loading_text == NULL ) {
-            state->loading_text =
-                ui_make_text(state->ui,
-                             &(Drawable_TextData_t){.text = "Loading...",
-                                                    .bold = false,
-                                                    .em = 1.5,
-                                                    .color = {.r = 200, .g = 200, .b = 200, .a = 255},
-                                                    .font_type = FONT_UI},
-                             ui_root_container(state->ui),
-                             &(Layout_t){.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y |
-                                                  LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
-                                         .offset_y = -0.035,
-                                         .relative_to = state->loading_progress_bar});
+            state->loading_text = ui_make_text(
+                state->ui,
+                &(Drawable_TextData_t){
+                    .text = "Loading...", .em = 1.5, .color = {.r = 200, .g = 200, .b = 200, .a = 255}, .font_type = FONT_UI},
+                ui_root_container(state->ui),
+                &(Layout_t){.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y |
+                                     LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
+                            .offset_y = -0.035,
+                            .relative_to = state->loading_progress_bar});
         }
     }
 
@@ -287,7 +284,6 @@ void karaoke_setup(Karaoke_t *state) {
                                            .text = "etsuko v" VERSION,
                                            .font_type = FONT_UI,
                                            .em = 0.8,
-                                           .bold = false,
                                            .color = {255, 255, 255, 128},
                                        },
                                        ui_root_container(state->ui),
@@ -318,26 +314,26 @@ void karaoke_setup(Karaoke_t *state) {
                           CONTAINER_NONE);
 
     // Elapsed time
-    state->elapsed_time_text = ui_make_text(
-        state->ui,
-        &(Drawable_TextData_t){
-            .text = "00:00", .font_type = FONT_UI, .em = 0.8, .bold = false, .color = {200, 200, 200, 255}, .draw_shadow = true},
-        state->song_info_container, &(Layout_t){0});
+    state->elapsed_time_text =
+        ui_make_text(state->ui,
+                     &(Drawable_TextData_t){
+                         .text = "00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
+                     state->song_info_container, &(Layout_t){0});
 
     // Remaining time
     state->remaining_time_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
-            .text = "-00:00", .font_type = FONT_UI, .em = 0.8, .bold = false, .color = {200, 200, 200, 255}, .draw_shadow = true},
+            .text = "-00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
         state->song_info_container, &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
 
     // Progress bar
     state->song_progressbar = ui_make_progressbar(state->ui,
                                                   &(Drawable_ProgressBarData_t){
                                                       .progress = 0,
-                                                      .border_radius_em = 0.4,
+                                                      .border_radius_em = 0.3,
                                                       .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
-                                                      .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
+                                                      .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 255},
                                                   },
                                                   state->song_info_container,
                                                   &(Layout_t){.offset_y = 0.02,
@@ -350,12 +346,8 @@ void karaoke_setup(Karaoke_t *state) {
     // Song name
     state->song_name_text = ui_make_text(
         state->ui,
-        &(Drawable_TextData_t){.text = song_get()->name,
-                               .font_type = FONT_UI,
-                               .em = 0.9,
-                               .bold = false,
-                               .color = {200, 200, 200, 255},
-                               .draw_shadow = true},
+        &(Drawable_TextData_t){
+            .text = song_get()->name, .font_type = FONT_UI, .em = 0.9, .color = {255, 255, 255, 150}, .draw_shadow = true},
         state->song_info_container,
         &(Layout_t){.offset_y = 0.05,
                     .relative_to = state->song_progressbar,
@@ -367,12 +359,8 @@ void karaoke_setup(Karaoke_t *state) {
 
     state->song_artist_album_text = ui_make_text(
         state->ui,
-        &(Drawable_TextData_t){.text = artist_album_text,
-                               .font_type = FONT_UI,
-                               .em = 0.7,
-                               .bold = false,
-                               .color = {150, 150, 150, 255},
-                               .draw_shadow = true},
+        &(Drawable_TextData_t){
+            .text = artist_album_text, .font_type = FONT_UI, .em = 0.7, .color = {225, 225, 225, 255}, .draw_shadow = true},
         state->song_info_container,
         &(Layout_t){.offset_y = 0.01,
                     .relative_to = state->song_name_text,

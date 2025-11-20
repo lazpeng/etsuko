@@ -9,9 +9,11 @@
 #include "events.h"
 
 #include "contrib/stb_image.h"
+#include "contrib/stb_truetype.h"
+
+#include <unicode/utf8.h>
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
 #include <math.h>
 #include <stdbool.h>
 
@@ -39,7 +41,8 @@ typedef struct Renderer_t {
     SDL_Window *window;
     SDL_GLContext gl_context;
     Bounds_t viewport;
-    TTF_Font *ui_font, *lyrics_font;
+    stbtt_fontinfo ui_font_info, lyrics_font_info;
+    unsigned char *ui_font_data, *lyrics_font_data;
     double h_dpi, v_dpi;
     Color_t bg_color, bg_color_secondary;
     Color_t draw_color;
@@ -68,6 +71,8 @@ typedef struct Renderer_t {
     GLint tex_border_radius_loc;
     GLint tex_rect_size_loc;
     GLint tex_color_mod_loc;
+    GLint tex_fade_edges_loc;
+    GLint tex_fade_distance_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -98,7 +103,8 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
     if ( !success ) {
         char log[512];
         glGetShaderInfoLog(shader, 512, NULL, log);
-        printf("Shader compilation failed for %s:\n%s\n", name, log);
+        const char *const type_str = type == GL_VERTEX_SHADER ? "vert" : "frag";
+        printf("Shader compilation failed for %s.%s:\n%s\n", name, type_str, log);
         printf("source: %s\n", source);
         error_abort("Shader compilation failed");
     }
@@ -167,37 +173,6 @@ static void update_projection_matrix(void) {
     const float h = (float)g_renderer->viewport.h;
 
     create_orthographic_matrix(0.f, w, h, 0.f, g_renderer->projection_matrix);
-}
-
-static Texture_t *create_texture_from_surface(SDL_Surface *surface) {
-    SDL_Surface *rgba_surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
-    if ( rgba_surface == NULL ) {
-        error_abort("Failed to convert surface to ABGR8888");
-    }
-
-    Texture_t *texture = calloc(1, sizeof(*texture));
-    if ( texture == NULL ) {
-        error_abort("Failed to allocate texture");
-    }
-
-    texture->width = rgba_surface->w;
-    texture->height = rgba_surface->h;
-
-    GLuint texture_id;
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba_surface->w, rgba_surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_surface->pixels);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    SDL_FreeSurface(rgba_surface);
-    texture->id = texture_id;
-
-    return texture;
 }
 
 void render_init(void) {
@@ -308,6 +283,8 @@ void render_init(void) {
     g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
     g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
     g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "colorModFactor");
+    g_renderer->tex_fade_edges_loc = glGetUniformLocation(g_renderer->texture_shader, "fadeEdges");
+    g_renderer->tex_fade_distance_loc = glGetUniformLocation(g_renderer->texture_shader, "fadeDistance");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
@@ -339,10 +316,10 @@ void render_finish(void) {
     }
 
     // Unload fonts
-    if ( g_renderer->ui_font != NULL )
-        TTF_CloseFont(g_renderer->ui_font);
-    if ( g_renderer->lyrics_font != NULL )
-        TTF_CloseFont(g_renderer->lyrics_font);
+    if ( g_renderer->ui_font_data != NULL )
+        free(g_renderer->ui_font_data);
+    if ( g_renderer->lyrics_font_data != NULL )
+        free(g_renderer->lyrics_font_data);
 
     // Delete OpenGL objects
     glDeleteProgram(g_renderer->texture_shader);
@@ -558,7 +535,7 @@ static Texture_t *internal_create_gradient_background_texture(void) {
     return texture;
 }
 
-Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius, const float fade_distance) {
+Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius) {
     if ( !source || blur_radius <= 0 || source->width <= 0 || source->height <= 0 ) {
         error_abort("Fail at render_blur_texture_radius");
     }
@@ -576,8 +553,6 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius,
     glUniformMatrix4fv(g_renderer->blur_projection_loc, 1, GL_FALSE, first_target->projection);
     glUniform1f(g_renderer->blur_size_loc, blur_radius);
     glUniform2f(g_renderer->blur_direction_loc, 1.0f, 0.0f);
-    glUniform1i(glGetUniformLocation(g_renderer->blur_shader, "u_fade_edges"), fade_distance > 0.f);
-    glUniform1f(glGetUniformLocation(g_renderer->blur_shader, "u_fade_distance"), fade_distance);
 
     glBindTexture(GL_TEXTURE_2D, source->id);
 
@@ -607,8 +582,8 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius,
     return horizontal_texture;
 }
 
-Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radius, const float fade_distance) {
-    Texture_t *blurred = render_blur_texture(source, blur_radius, fade_distance);
+Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radius) {
+    Texture_t *blurred = render_blur_texture(source, blur_radius);
     render_destroy_texture(source);
     return blurred;
 }
@@ -623,15 +598,15 @@ void render_clear(void) {
         if ( g_renderer->bg_texture == NULL ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
-        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f);
+        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
     } else if ( g_renderer->bg_type == BACKGROUND_DYNAMIC_GRADIENT ) {
         Texture_t *bg_texture = internal_create_dynamic_gradient_background_texture();
-        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
+        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
 
         render_destroy_texture(bg_texture);
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
         Texture_t *bg_texture = internal_create_random_gradient_background_texture();
-        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f);
+        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
 
         render_destroy_texture(bg_texture);
     }
@@ -646,45 +621,70 @@ double render_get_pixel_scale(void) { return g_renderer->window_pixel_scale; }
 void render_load_font(const unsigned char *data, const int data_size, const FontType_t type) {
     unsigned char *data_copy = calloc(1, data_size);
     memcpy(data_copy, data, data_size);
-    // Make a copy and hand it over to SDL_TTF because it appears to, for some reason, use the buffer we pass without copying it
-    // so when it's freed later on by the repository, it causes use-after-free
-    SDL_RWops *rw = SDL_RWFromConstMem(data_copy, data_size);
-    TTF_Font *font = TTF_OpenFontDPIRW(rw, true, DEFAULT_PT, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->h_dpi);
 
-    if ( font == NULL ) {
-        puts(TTF_GetError());
-        error_abort("Could not load font");
-    }
-
-    TTF_SetFontHinting(font, TTF_HINTING_NORMAL);
-    TTF_SetFontKerning(font, 1);
-
+    stbtt_fontinfo *info;
     if ( type == FONT_UI ) {
-        g_renderer->ui_font = font;
+        info = &g_renderer->ui_font_info;
+        g_renderer->ui_font_data = data_copy;
     } else if ( type == FONT_LYRICS ) {
-        g_renderer->lyrics_font = font;
+        info = &g_renderer->lyrics_font_info;
+        g_renderer->lyrics_font_data = data_copy;
     } else {
         error_abort("Invalid font kind");
+    }
+
+    if ( !stbtt_InitFont(info, data_copy, 0) ) {
+        error_abort("Could not load font");
     }
 }
 
 void render_set_window_title(const char *title) { SDL_SetWindowTitle(g_renderer->window, title); }
 
-void render_measure_text_size(const char *text, const int32_t pt, int32_t *w, int32_t *h, const FontType_t kind) {
-    TTF_Font *font = kind == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
-    if ( TTF_SetFontSizeDPI(font, pt, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->v_dpi) != 0 ) {
-        error_abort("Failed to set font size/DPI");
+void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w, int32_t *h, const FontType_t kind) {
+    const stbtt_fontinfo *font = kind == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+
+    const float pixel_height = (float)pixels;
+    const float scale = stbtt_ScaleForMappingEmToPixels(font, pixel_height);
+
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
+
+    *h = (int32_t)((ascent - descent + lineGap) * (double)scale);
+
+    int width = 0;
+    int32_t i = 0;
+    const int32_t len = (int32_t)strlen(text);
+    UChar32 c = 0;
+    UChar32 prev_c = -1;
+
+    while ( i < len ) {
+        U8_NEXT(text, i, len, c);
+        if ( c < 0 )
+            continue;
+
+        int advance, lsb;
+        stbtt_GetCodepointHMetrics(font, c, &advance, &lsb);
+
+        if ( prev_c != -1 ) {
+            width += stbtt_GetCodepointKernAdvance(font, prev_c, c);
+        }
+
+        width += advance;
+        prev_c = c;
     }
 
-    if ( TTF_SizeUTF8(font, text, w, h) != 0 ) {
-        error_abort("Failed to measure line size");
-    }
+    *w = (int32_t)(width * (double)scale);
 }
 
-int32_t render_measure_pt_from_em(const double em) {
+int32_t render_measure_pixels_from_em(const double em) {
     const double scale = g_renderer->viewport.w / DEFAULT_WIDTH;
     const double rem = fmax(12.0, round(DEFAULT_PT * scale));
     const double pixels = em * rem;
+    return (int32_t)pixels;
+}
+
+int32_t render_measure_pt_from_em(const double em) {
+    const double pixels = render_measure_pixels_from_em(em);
     const int32_t pt_size = (int32_t)lround(pixels * 72.0 / g_renderer->h_dpi);
     return pt_size;
 }
@@ -800,6 +800,8 @@ void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color,
 }
 
 void render_set_blend_mode(const BlendMode_t mode) {
+    if ( mode == g_renderer->blend_mode )
+        return;
     g_renderer->blend_mode = mode;
 
     switch ( mode ) {
@@ -814,6 +816,10 @@ void render_set_blend_mode(const BlendMode_t mode) {
     case BLEND_MODE_NONE:
         glDisable(GL_BLEND);
         break;
+    case BLEND_MODE_ERASE:
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+        break;
     default:
         error_abort("Invalid blend mode");
     }
@@ -821,33 +827,122 @@ void render_set_blend_mode(const BlendMode_t mode) {
 
 BlendMode_t render_get_blend_mode(void) { return g_renderer->blend_mode; }
 
-Texture_t *render_make_text(const char *text, const int32_t pt_size, const bool bold, const Color_t *color,
-                            const FontType_t font_type) {
-    TTF_Font *font = font_type == FONT_UI ? g_renderer->ui_font : g_renderer->lyrics_font;
-    if ( font == NULL ) {
-        puts("Warning: Font not loaded");
-        return NULL;
-    }
+Texture_t *render_make_text(const char *text, const int32_t pixels_size, const Color_t *color, const FontType_t font_type) {
+    const stbtt_fontinfo *font = font_type == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+
     if ( strnlen(text, MAX_TEXT_SIZE) == 0 ) {
-        error_abort("Text is empty");
+        error_abort("render_make_text: Text is empty");
     }
 
-    if ( TTF_SetFontSizeDPI(font, pt_size, (int32_t)g_renderer->h_dpi, (int32_t)g_renderer->v_dpi) != 0 ) {
-        puts(TTF_GetError());
-        error_abort("Failed to set font size/DPI");
-    }
-    const int style = bold ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL;
-    TTF_SetFontStyle(font, style);
+    // TODO: Improve performance (single pass bitmap creation, reusing bitmap buffers)
+    // TODO: Maybe look into SDF and making a texture atlas
 
-    const SDL_Color sdl_color = (SDL_Color){color->r, color->g, color->b, color->a};
-    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, sdl_color);
-    if ( surface == NULL ) {
-        puts(TTF_GetError());
-        error_abort("Failed to render to surface");
+    const float pixel_height = (float)pixels_size;
+    const float scale = stbtt_ScaleForMappingEmToPixels(font, pixel_height);
+
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
+
+    const int baseline = (int)(ascent * (double)scale);
+    const int height = (int)((ascent - descent + lineGap) * (double)scale);
+
+    int width = 0;
+    int32_t i = 0;
+    const int32_t len = (int32_t)strlen(text);
+    UChar32 c = 0;
+    UChar32 prev_c = -1;
+
+    while ( i < len ) {
+        U8_NEXT(text, i, len, c);
+        if ( c < 0 )
+            continue;
+
+        int advance, lsb;
+        stbtt_GetCodepointHMetrics(font, c, &advance, &lsb);
+
+        if ( prev_c != -1 ) {
+            width += stbtt_GetCodepointKernAdvance(font, prev_c, c);
+        }
+
+        width += advance;
+        prev_c = c;
+    }
+    width = (int)(width * (double)scale);
+
+    unsigned char *bitmap = calloc(1, width * height);
+
+    double x = 0;
+    i = 0;
+    prev_c = -1;
+
+    while ( i < len ) {
+        U8_NEXT(text, i, len, c);
+        if ( c < 0 )
+            continue;
+
+        int advance, lsb;
+        stbtt_GetCodepointHMetrics(font, c, &advance, &lsb);
+
+        if ( prev_c != -1 ) {
+            x += stbtt_GetCodepointKernAdvance(font, prev_c, c) * (double)scale;
+        }
+
+        int x0, y0, x1, y1;
+        stbtt_GetCodepointBitmapBoxSubpixel(font, c, scale, scale, 0, 0, &x0, &y0, &x1, &y1);
+
+        int c_w, c_h, c_xoff, c_yoff;
+        unsigned char *char_bitmap = stbtt_GetCodepointBitmapSubpixel(font, 0, scale, 0, 0, c, &c_w, &c_h, &c_xoff, &c_yoff);
+
+        if ( char_bitmap ) {
+            const int target_x = (int)x + c_xoff;
+            const int target_y = baseline + c_yoff;
+
+            for ( int y = 0; y < c_h; ++y ) {
+                for ( int x_pix = 0; x_pix < c_w; ++x_pix ) {
+                    const int out_x = target_x + x_pix;
+                    const int out_y = target_y + y;
+
+                    if ( out_x >= 0 && out_x < width && out_y >= 0 && out_y < height ) {
+                        const unsigned char val = char_bitmap[y * c_w + x_pix];
+                        if ( val > 0 ) {
+                            bitmap[out_y * width + out_x] = val;
+                        }
+                    }
+                }
+            }
+            stbtt_FreeBitmap(char_bitmap, NULL);
+        }
+
+        x += advance * (double)scale;
+        prev_c = c;
     }
 
-    Texture_t *texture = create_texture_from_surface(surface);
-    SDL_FreeSurface(surface);
+    unsigned char *rgba = malloc(width * height * 4);
+    for ( int j = 0; j < width * height; ++j ) {
+        rgba[j * 4 + 0] = color->r;
+        rgba[j * 4 + 1] = color->g;
+        rgba[j * 4 + 2] = color->b;
+        rgba[j * 4 + 3] = bitmap[j];
+    }
+    free(bitmap);
+
+    Texture_t *texture = calloc(1, sizeof(*texture));
+    texture->width = width;
+    texture->height = height;
+
+    GLuint texture_id;
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    free(rgba);
+    texture->id = texture_id;
 
     return texture;
 }
@@ -973,7 +1068,8 @@ void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, cons
     glBindVertexArray(0);
 }
 
-void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod) {
+void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod,
+                         const float fade_distance) {
     if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
@@ -996,6 +1092,8 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
     glUniform1f(g_renderer->tex_color_mod_loc, color_mod);
+    glUniform1i(g_renderer->tex_fade_edges_loc, fade_distance > 0.f);
+    glUniform1f(g_renderer->tex_fade_distance_loc, fade_distance);
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 
@@ -1011,18 +1109,17 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-Texture_t *render_make_shadow(const Texture_t *texture, const float blur_radius, const float fade_distance,
-                              const int32_t padding) {
-    const int32_t width = texture->width + padding, height = texture->height + padding;
+Texture_t *render_make_shadow(const Texture_t *texture, const float blur_radius, const float fade_distance) {
+    const int32_t width = texture->width, height = texture->height;
     const RenderTarget_t *target = render_make_texture_target(width, height);
-    const Bounds_t bounds = {.x = padding / 2.0, .y = padding / 2.0, .w = width, .h = height};
-    render_draw_texture(texture, &bounds, 255, 0.f);
+    const Bounds_t bounds = {.w = width, .h = height};
+    render_draw_texture(texture, &bounds, 255, 0.f, 0.005f);
     Texture_t *result = target->texture;
     render_restore_texture_target();
 
     result->border_radius = texture->border_radius;
     if ( blur_radius > 0.f ) {
-        result = render_blur_texture_replace(result, blur_radius, fade_distance);
+        result = render_blur_texture_replace(result, blur_radius);
     }
 
     return result;

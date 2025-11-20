@@ -5,8 +5,8 @@
 #ifndef ETSUKO_RENDERER_H
 #define ETSUKO_RENDERER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct Texture_t {
     unsigned int id;
@@ -41,7 +41,7 @@ typedef enum BackgroundType_t {
 
 typedef enum FontType_t { FONT_UI = 0, FONT_LYRICS = 1 } FontType_t;
 
-typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_ADD, BLEND_MODE_NONE } BlendMode_t;
+typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_ADD, BLEND_MODE_NONE, BLEND_MODE_ERASE } BlendMode_t;
 
 void render_init(void);
 void render_finish(void);
@@ -58,20 +58,21 @@ BlendMode_t render_get_blend_mode(void);
 Color_t render_color_parse(uint32_t color);
 Color_t render_color_darken(Color_t color);
 void render_load_font(const unsigned char *data, int data_size, FontType_t type);
-void render_measure_text_size(const char *text, int32_t pt, int32_t *w, int32_t *h, FontType_t kind);
+void render_measure_text_size(const char *text, int32_t pixels, int32_t *w, int32_t *h, FontType_t kind);
 int32_t render_measure_pt_from_em(double em);
+int32_t render_measure_pixels_from_em(double em);
 
-Texture_t *render_make_text(const char *text, int32_t pt_size, bool bold, const Color_t *color, FontType_t font_type);
+Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
-Texture_t *render_make_shadow(const Texture_t *texture, float blur_radius, float fade_distance, int32_t padding);
+Texture_t *render_make_shadow(const Texture_t *texture, float blur_radius, float fade_distance);
 void render_destroy_texture(Texture_t *texture);
 const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
-Texture_t *render_blur_texture(const Texture_t *source, float blur_radius, float fade_distance);
-Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius, float fade_distance);
+Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
+Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
 void render_restore_texture_target(void);
 
 void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, float border_radius);
-void render_draw_texture(const Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod);
+void render_draw_texture(const Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod, float fade_distance);
 
 #endif // ETSUKO_RENDERER_H

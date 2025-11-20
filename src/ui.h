@@ -83,7 +83,7 @@ typedef struct Drawable_t {
     Vector_t *animations;
     float color_mod;
     Texture_t *shadow;
-    int32_t shadow_offset, shadow_padding;
+    int32_t shadow_offset;
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -109,7 +109,6 @@ typedef struct Drawable_TextData_t {
     FontType_t font_type;
     double em;
     Color_t color;
-    bool bold;
     // Wrap options
     int wrap_enabled;
     double wrap_width_threshold;

@@ -354,18 +354,17 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     Bounds_t rect = delta.final_bounds;
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
+    const double final_scale = 1.0 + rect.scale_mod;
 
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
-        shadow_bounds.x += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
-        shadow_bounds.y += drawable->shadow_padding / 2.0 + drawable->shadow_offset;
-        shadow_bounds.w += drawable->shadow_padding;
-        shadow_bounds.h += drawable->shadow_padding;
-        const uint8_t alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : MIN(128, drawable->alpha_mod);
-        render_draw_texture(drawable->shadow, &shadow_bounds, alpha, 0.f);
+        shadow_bounds.x += drawable->shadow_offset * final_scale;
+        shadow_bounds.y += drawable->shadow_offset * final_scale;
+        const uint8_t alpha = MIN(128, drawable->alpha_mod);
+        render_draw_texture(drawable->shadow, &shadow_bounds, alpha, 0.f, 0.f);
     }
 
-    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod);
+    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod, 0.f);
 }
 
 static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
@@ -445,7 +444,6 @@ static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     result->em = data->em;
     result->wrap_enabled = data->wrap_enabled;
     result->color = data->color;
-    result->bold = data->bold;
     result->wrap_enabled = data->wrap_enabled;
     result->wrap_width_threshold = data->wrap_width_threshold;
     result->measure_at_em = data->measure_at_em;
@@ -501,15 +499,15 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
         if ( start == tmp_end_idx )
             break;
 
-        int32_t measure_pt_size = 0;
+        int32_t measure_pixels_size = 0;
         if ( data->measure_at_em != 0 ) {
-            measure_pt_size = render_measure_pt_from_em(data->measure_at_em);
+            measure_pixels_size = render_measure_pixels_from_em(data->measure_at_em);
         } else {
-            measure_pt_size = render_measure_pt_from_em(data->em);
+            measure_pixels_size = render_measure_pixels_from_em(data->em);
         }
         int32_t w, h;
         char *dup = strndup(data->text + start, tmp_end_idx - start);
-        render_measure_text_size(dup, measure_pt_size, &w, &h, data->font_type);
+        render_measure_text_size(dup, measure_pixels_size, &w, &h, data->font_type);
         free(dup);
 
         if ( w > calculated_max_width ) {
@@ -564,8 +562,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         do {
             const size_t end = measure_text_wrap_stop(data, container, (int32_t)start);
             char *line_str = strndup(data->text + start, end - start);
-            const int pt_size = render_measure_pt_from_em(data->em);
-            Texture_t *texture = render_make_text(line_str, pt_size, data->bold, &data->color, data->font_type);
+            const int pixels_size = render_measure_pixels_from_em(data->em);
+            Texture_t *texture = render_make_text(line_str, pixels_size, &data->color, data->font_type);
             free(line_str);
 
             vec_add(textures_vec, texture);
@@ -600,7 +598,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
-            render_draw_texture(texture, &destination, 0xFF, 1.f);
+            render_draw_texture(texture, &destination, 0xFF, 1.f, 0.f);
             y += texture->height + data->line_padding;
             render_set_blend_mode(blend_mode);
 
@@ -610,8 +608,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         vec_destroy(textures_vec);
         render_restore_texture_target();
     } else {
-        const int32_t pt_size = render_measure_pt_from_em(data->em);
-        final_texture = render_make_text(data->text, pt_size, data->bold, &data->color, data->font_type);
+        const int32_t pixels_size = render_measure_pixels_from_em(data->em);
+        final_texture = render_make_text(data->text, pixels_size, &data->color, data->font_type);
     }
 
     if ( result == NULL ) {
@@ -626,10 +624,10 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     ui_reposition_drawable(ui, result);
 
     if ( data->draw_shadow ) {
-        const int32_t text_pt = render_measure_pt_from_em(data->em);
-        const float blur_radius = MAX(1.f, MIN(15.f, text_pt * 0.05f));
-        const int32_t offset = (int32_t)MAX(1.f, MIN(10.f, text_pt * 0.15f));
-        result->shadow = render_make_shadow(result->texture, blur_radius, 0.f, 0);
+        const int32_t text_pixels = render_measure_pixels_from_em(data->em);
+        const int32_t offset = (int32_t)MAX(1.f, MIN(10.f, text_pixels * 0.1f));
+        const float blur_radius = (float)data->em; // Make blur radius relative to text size in a shitty way
+        result->shadow = render_make_shadow(result->texture, blur_radius, 0.f);
         result->shadow_offset = offset;
     }
 
@@ -658,14 +656,11 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
 
     ui_reposition_drawable(ui, result);
 
-    // TODO: Fix shadows for images and other drawables (and overall)
-    // if ( data->draw_shadow ) {
-    //     const auto offset = (int32_t)MAX(1.f, MIN(10.f, texture->width * 0.15f));
-    //     const auto blur_radius = MAX(1.f, MIN(15.f, texture->width * 0.05f));
-    //     result->shadow = render_make_shadow(result->texture, blur_radius, 0.015f, 2);
-    //     result->shadow_offset = offset;
-    //     result->shadow_padding = 2;
-    // }
+    if ( data->draw_shadow ) {
+        result->shadow = render_make_shadow(result->texture, 1.f, 0.0f);
+        result->shadow_offset = 5;
+        result->shadow->border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+    }
     vec_add(container->child_drawables, result);
     return result;
 }
