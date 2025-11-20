@@ -42,7 +42,9 @@ cmake --preset desktop-release
 # Build the project
 cmake --build --preset desktop-release
 
-./build/desktop-release/etsuko
+# Change working dir and run the program
+cd ./build/desktop-release
+./etsuko
 ```
 
 **Requirements**
@@ -50,7 +52,7 @@ cmake --build --preset desktop-release
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
-- GLEW, SDL2 and SDL2_ttf dev libraries
+- GLEW, SDL2 and ICU dev libraries
 
 **Upon running, the program will probably fail and close because it needs a song
 to play. It uses a custom format described below.**
