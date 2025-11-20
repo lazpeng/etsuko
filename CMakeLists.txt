@@ -43,7 +43,7 @@ set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
 
 target_compile_features(etsuko PRIVATE c_std_17)
 
-if(EMSCRIPTEN)
+if (EMSCRIPTEN)
     message(STATUS "Configuring for Emscripten/WebAssembly")
 
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
@@ -68,7 +68,7 @@ if(EMSCRIPTEN)
 
             "SHELL:-Oz"
             "SHELL:-flto"
-            "SHELL:-g"
+            "SHELL:-g0"
             "SHELL:-sFILESYSTEM=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
@@ -76,7 +76,7 @@ if(EMSCRIPTEN)
             #"SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
     )
 
-else()
+else ()
     message(STATUS "Configuring regular desktop build")
 
     find_package(SDL2 REQUIRED)
@@ -97,16 +97,23 @@ else()
     find_library(ICU_LIBRARY icuuc PATHS /opt/homebrew/opt/icu4c@78/lib /usr/local/opt/icu4c/lib)
     if (NOT ICU_INCLUDE_DIR OR NOT ICU_LIBRARY)
         message(FATAL_ERROR "ICU not found")
-    endif()
+    endif ()
     target_include_directories(etsuko PRIVATE ${ICU_INCLUDE_DIR})
     target_link_libraries(etsuko PRIVATE ${ICU_LIBRARY})
 
     # -lm
     target_link_libraries(etsuko PRIVATE m)
 
-    target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
-    target_compile_options(etsuko PRIVATE "-g")
-    target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
+    # Add sanitizers only for Debug builds.
+    # For single-config generators check CMAKE_BUILD_TYPE, for multi-config use generator expressions.
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
+        target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
+        target_compile_options(etsuko PRIVATE "-g")
+    else ()
+        target_compile_options(etsuko PRIVATE "-g0")
+    endif ()
+
     target_link_options(etsuko PRIVATE "-Wl,-dead_strip")
 
     add_custom_command(TARGET etsuko POST_BUILD
@@ -125,15 +132,15 @@ else()
             ${CMAKE_SOURCE_DIR}/src
             ${SDL2_INCLUDE_DIRS}
     )
-endif()
+endif ()
 
 target_include_directories(etsuko PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(etsuko PRIVATE
             -Wall
             -Wextra
             -Wpedantic
             -Wno-unused-parameter
     )
-endif()
+endif ()
