@@ -42,9 +42,8 @@ static Config_t *get_default_config(void) {
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
-    // config->song_file = strdup("stop crying your heart out.txt");
     config->song_file = strdup("yoake.txt");
-    config->hide_past_lyrics = true;
+    config->hide_past_lyrics = false;
     config->draw_album_art_shadow = true;
     config->draw_lyric_shadow = true;
     config->show_loading_screen = true;
