@@ -134,7 +134,7 @@ static int load_async(Karaoke_t *state) {
         if ( song_get()->bg_type == BG_SOLID ) {
             ui_set_bg_color(song_get()->bg_color);
         } else {
-            BackgroundType_t bg_type = BACKGROUND_GRADIENT;
+            BackgroundType_t bg_type = BACKGROUND_AM_LIKE_GRADIENT;
             switch ( song_get()->bg_type ) {
             case BG_SIMPLE_GRADIENT:
                 bg_type = BACKGROUND_GRADIENT;
