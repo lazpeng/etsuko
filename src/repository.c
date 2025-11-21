@@ -34,6 +34,7 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
     error_abort("Failed to fetch resource");
 }
 
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
 static void on_fetch_ready(emscripten_fetch_t *fetch) {
     Load_t *job = fetch->userData;
     job->downloaded = fetch->dataOffset;
@@ -78,7 +79,6 @@ void repository_get_resource(const char *src, const char *subdir, Load_t *load) 
     } else {
         asprintf(&full_path, "%s/%s", CDN_BASE_PATH, src);
     }
-    printf("full path: '%s'\n", full_path);
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
     strcpy(attr.requestMethod, "GET");
@@ -104,8 +104,10 @@ void repository_free_resource(Load_t *load) {
     if ( load->data != NULL ) {
         free((void *)load->data);
     }
-    free(load->filename);
-    load->filename = NULL;
+    if ( load->filename != NULL ) {
+        free(load->filename);
+        load->filename = NULL;
+    }
     load->data = NULL;
     load->data_size = 0;
 }
