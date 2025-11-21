@@ -429,15 +429,6 @@ static void draw_dynamic_gradient_bg(void) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    const float rate = 0.05f;
-    static float progress = 0.f;
-    static float noise_magnitude = 0.1f;
-
-    const float target_magnitude = 0.2f;
-
-    progress += (float)(rate * events_get_delta_time());
-    noise_magnitude = noise_magnitude * (1.f - progress) + target_magnitude * progress;
-
     if ( g_renderer->bg_texture == NULL ) {
         g_renderer->bg_texture = render_make_null();
     }
@@ -458,7 +449,7 @@ static void draw_dynamic_gradient_bg(void) {
     }
 
     glUniform1f(g_renderer->dyn_grad_time_loc, (float)events_get_elapsed_time() / 5.f);
-    glUniform1f(g_renderer->dyn_grad_noise_mag_loc, MIN(1.f, noise_magnitude));
+    glUniform1f(g_renderer->dyn_grad_noise_mag_loc, 0.1f);
     glUniform3fv(g_renderer->dyn_grad_colors, 5, &g_renderer->dynamic_bg_colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -809,7 +800,7 @@ void render_set_bg_color(const Color_t color) {
 void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, BackgroundType_t type) {
     g_renderer->bg_color = top_color;
     g_renderer->bg_color_secondary = bottom_color;
-    g_renderer->bg_type = type;
+    g_renderer->bg_type = BACKGROUND_DYNAMIC_GRADIENT;
 }
 
 static float calculate_color_luminance(const Color_t *color) {
