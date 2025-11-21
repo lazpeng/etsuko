@@ -161,6 +161,7 @@ void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y);
+bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x, int32_t *out_mouse_y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Drawable_ImageData_t *data, Container_t *container,
@@ -174,6 +175,8 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
+bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x, int32_t *out_mouse_y);
+bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x, int32_t *out_mouse_y);
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);

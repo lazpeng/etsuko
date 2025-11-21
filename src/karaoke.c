@@ -467,67 +467,33 @@ static void check_user_input(const Karaoke_t *state) {
     } else if ( events_key_was_pressed(KEY_ARROW_RIGHT) ) {
         audio_seek_relative(+5);
     }
-    int32_t mouse_x, mouse_y;
-    // Handle mouse clicks
-    if ( events_get_mouse_click(&mouse_x, &mouse_y) ) {
-        // Check if the user clicked on the progress bar
-        {
-            double progress_bar_x, progress_bar_y;
-            ui_get_drawable_canon_pos(state->song_progressbar, &progress_bar_x, &progress_bar_y);
 
-            const int32_t padding_amount = 10;
-            const double base_y = progress_bar_y - padding_amount;
-            const double base_h = state->song_progressbar->bounds.h + padding_amount;
-
-            const bool clicked_x = mouse_x >= progress_bar_x && mouse_x <= progress_bar_x + state->song_progressbar->bounds.w;
-            const bool clicked_y = mouse_y >= base_y && mouse_y <= base_y + base_h;
-            if ( clicked_x && clicked_y ) {
-                const double distance_from_x = mouse_x - progress_bar_x;
-                const double distance = distance_from_x / state->song_progressbar->bounds.w;
-                audio_seek(audio_total_time() * distance);
-                // Reset viewport
-                state->lyrics_view->container->viewport_y = 0;
-            }
-        }
-        // Check if clicked on the play/pause button
-        {
-            double play_button_x, play_button_y;
-            ui_get_drawable_canon_pos(state->play_button, &play_button_x, &play_button_y);
-            const int32_t width = (int32_t)state->play_button->bounds.w, height = (int32_t)state->play_button->bounds.h;
-            if ( events_mouse_was_clicked_inside_area((int32_t)play_button_x, (int32_t)play_button_y, width, height) ) {
-                toggle_pause(state);
-            }
-        }
+    int32_t mouse_x;
+    // Check if the user clicked the progress bar
+    Bounds_t progress_bar_bounds;
+    if ( ui_mouse_clicked_drawable(state->song_progressbar, 10, &progress_bar_bounds, &mouse_x, NULL) ) {
+        const double distance_from_x = mouse_x - progress_bar_bounds.x;
+        const double distance = distance_from_x / state->song_progressbar->bounds.w;
+        audio_seek(audio_total_time() * distance);
+        // Reset viewport
+        state->lyrics_view->container->viewport_y = 0;
+    }
+    // Check if clicked on the play/pause button
+    // it doesn't matter which we choose because they're both at the same position with the same size
+    if ( ui_mouse_clicked_drawable(state->play_button, 0, NULL, NULL, NULL) ) {
+        toggle_pause(state);
     }
 
-    events_get_mouse_position(&mouse_x, &mouse_y);
-    {
-        // Check if the mouse is inside the song name area
-        double can_y;
-        ui_get_drawable_canon_pos(state->song_name_text, NULL, &can_y);
-
-        const double begin_x = state->song_info_container->bounds.x, begin_y = can_y;
-        ui_get_drawable_canon_pos(state->song_artist_album_text, NULL, &can_y);
-        const double end_x = begin_x + state->song_info_container->bounds.w,
-                     end_y = can_y + state->song_artist_album_text->bounds.h;
-
-        const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
-        const bool inside_area =
-            is_not_played || (mouse_x >= begin_x && mouse_x <= end_x && mouse_y >= begin_y && mouse_y <= end_y);
-
-        state->song_name_text->enabled = state->song_artist_album_text->enabled = !inside_area;
-        state->song_controls_container->enabled = inside_area;
+    if ( ui_mouse_hovering_container(state->song_info_container, NULL, NULL, NULL) ) {
+        state->song_name_text->enabled = state->song_artist_album_text->enabled = false;
+        state->song_controls_container->enabled = true;
+    } else {
+        state->song_name_text->enabled = state->song_artist_album_text->enabled = true;
+        state->song_controls_container->enabled = false;
     }
-    {
-        // Check if the mouse is inside the lyric container
-        double can_x, can_y;
-        ui_get_container_canon_pos(state->lyrics_view->container, &can_x, &can_y);
 
-        if ( mouse_x >= can_x && mouse_x <= can_x + state->lyrics_view->container->bounds.w && mouse_y >= can_y &&
-             mouse_y <= can_y + state->lyrics_view->container->bounds.h ) {
-            const double scrolled = events_get_mouse_scrolled();
-            ui_ex_lyrics_view_on_scroll(state->lyrics_view, scrolled);
-        }
+    if ( ui_mouse_hovering_container(state->lyrics_view->container, NULL, NULL, NULL) ) {
+        ui_ex_lyrics_view_on_scroll(state->lyrics_view, events_get_mouse_scrolled());
     }
 }
 

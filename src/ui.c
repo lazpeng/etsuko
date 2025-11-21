@@ -400,13 +400,13 @@ void ui_finish(Ui_t *ui) {
 
 void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
 
-void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, BackgroundType_t type) {
+void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, const BackgroundType_t type) {
     const Color_t primary_color = render_color_parse(primary);
     const Color_t secondary_color = render_color_parse(secondary);
     render_set_bg_gradient(primary_color, secondary_color, type);
 }
 
-void ui_sample_bg_colors_from_image(const unsigned char *bytes, int length) { render_sample_bg_colors_from_image(bytes, length); }
+void ui_sample_bg_colors_from_image(const unsigned char *bytes, const int length) { render_sample_bg_colors_from_image(bytes, length); }
 
 Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
@@ -433,6 +433,30 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
         *x = parent_x;
     if ( y != NULL )
         *y = parent_y;
+}
+
+bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
+                                 int32_t *out_mouse_y) {
+    double canon_x, canon_y;
+    ui_get_container_canon_pos(container, &canon_x, &canon_y);
+
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+
+    if ( out_canon_bounds ) {
+        out_canon_bounds->x = canon_x;
+        out_canon_bounds->y = canon_y;
+        out_canon_bounds->w = container->bounds.w;
+        out_canon_bounds->h = container->bounds.h;
+    }
+
+    if ( out_mouse_x )
+        *out_mouse_x = mouse_x;
+    if ( out_mouse_y )
+        *out_mouse_y = mouse_y;
+
+    return mouse_x >= canon_x && mouse_x <= canon_x + container->bounds.w && mouse_y >= canon_y &&
+           mouse_y <= canon_y + container->bounds.h;
 }
 
 static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
@@ -941,7 +965,39 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
 
 void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { drawable->color_mod = color_mod; }
 
-void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha) {
+bool ui_mouse_hovering_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
+                                int32_t *out_mouse_y) {
+    double canon_x, canon_y;
+    ui_get_drawable_canon_pos(drawable, &canon_x, &canon_y);
+
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+
+    if ( out_canon_bounds ) {
+        out_canon_bounds->x = canon_x;
+        out_canon_bounds->y = canon_y;
+        out_canon_bounds->w = drawable->bounds.w;
+        out_canon_bounds->h = drawable->bounds.h;
+    }
+
+    if ( out_mouse_x )
+        *out_mouse_x = mouse_x;
+    if ( out_mouse_y )
+        *out_mouse_y = mouse_y;
+
+    return mouse_x >= canon_x - padding && mouse_x <= canon_x + drawable->bounds.w + padding && mouse_y >= canon_y - padding &&
+           mouse_y <= canon_y + drawable->bounds.h + padding;
+}
+
+bool ui_mouse_clicked_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
+                               int32_t *out_mouse_y) {
+    if ( ui_mouse_hovering_drawable(drawable, padding, out_canon_bounds, out_mouse_x, out_mouse_y) ) {
+        return events_get_mouse_click(NULL, NULL);
+    }
+    return false;
+}
+
+void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) {
     if ( alpha == drawable->alpha_mod ) {
         return;
     }

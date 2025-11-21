@@ -5,6 +5,8 @@
 #ifndef ETSUKO_SONG_H
 #define ETSUKO_SONG_H
 
+#include <stdint.h>
+
 #include "constants.h"
 #include "container_utils.h"
 

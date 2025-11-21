@@ -807,7 +807,7 @@ void render_set_bg_color(const Color_t color) {
 void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, BackgroundType_t type) {
     g_renderer->bg_color = top_color;
     g_renderer->bg_color_secondary = bottom_color;
-    g_renderer->bg_type = BACKGROUND_AM_LIKE_GRADIENT; // type;
+    g_renderer->bg_type = BACKGROUND_NONE; // type;
 }
 
 static float calculate_color_luminance(const Color_t *color) {
