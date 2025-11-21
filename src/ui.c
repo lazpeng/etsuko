@@ -99,9 +99,9 @@ static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t 
     bounds.y += base_bounds->y;
 
     const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
-    render_draw_rounded_rect(&bounds, &data->bg_color, border_radius);
+    render_draw_rounded_rect(drawable->texture, &bounds, &data->bg_color, border_radius);
     bounds.w *= MIN(1.0, data->progress);
-    render_draw_rounded_rect(&bounds, &data->fg_color, border_radius);
+    render_draw_rounded_rect(drawable->texture, &bounds, &data->fg_color, border_radius);
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
@@ -694,6 +694,7 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
                                 const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
 
+    result->texture = render_make_null();
     result->custom_data = dup_progressbar_data(data);
     result->layout = *layout;
 

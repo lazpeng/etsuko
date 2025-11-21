@@ -12,6 +12,8 @@ typedef struct Texture_t {
     unsigned int id;
     int32_t width, height;
     float border_radius;
+    unsigned int vbo, vao;
+    int32_t buf_x, buf_y, buf_w, buf_h;
 } Texture_t;
 
 typedef struct Color_t {
@@ -71,17 +73,18 @@ void render_measure_text_size(const char *text, int32_t pixels, int32_t *w, int3
 int32_t render_measure_pt_from_em(double em);
 int32_t render_measure_pixels_from_em(double em);
 
+Texture_t *render_make_null(void);
 Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
-Shadow_t *render_make_shadow(const Texture_t *texture, const Bounds_t *src_bounds, float blur_radius, float fade_distance, int32_t offset);
+Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, float blur_radius, float fade_distance, int32_t offset);
 void render_destroy_texture(Texture_t *texture);
 const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
 Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
 Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
 Texture_t *render_restore_texture_target(void);
 
-void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, float border_radius);
-void render_draw_texture(const Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod, float fade_distance);
+void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, const Color_t *color, float border_radius);
+void render_draw_texture(Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod, float fade_distance);
 
 #endif // ETSUKO_RENDERER_H

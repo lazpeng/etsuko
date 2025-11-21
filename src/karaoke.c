@@ -285,10 +285,11 @@ void karaoke_setup(Karaoke_t *state) {
                                            .text = "etsuko v" VERSION,
                                            .font_type = FONT_UI,
                                            .em = 0.8,
-                                           .color = {255, 255, 255, 128},
+                                           .color = {255, 255, 255, 255},
                                        },
                                        ui_root_container(state->ui),
                                        &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
+    ui_drawable_set_alpha_immediate(state->version_text, 128);
 
     // Album art
     state->album_image = ui_make_image(
@@ -320,6 +321,7 @@ void karaoke_setup(Karaoke_t *state) {
                      &(Drawable_TextData_t){
                          .text = "00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
                      state->song_info_container, &(Layout_t){0});
+    ui_drawable_set_alpha_immediate(state->elapsed_time_text, 200);
 
     // Remaining time
     state->remaining_time_text = ui_make_text(
@@ -327,6 +329,7 @@ void karaoke_setup(Karaoke_t *state) {
         &(Drawable_TextData_t){
             .text = "-00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
         state->song_info_container, &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
+    ui_drawable_set_alpha_immediate(state->remaining_time_text, 200);
 
     // Progress bar
     state->song_progressbar = ui_make_progressbar(state->ui,
@@ -348,11 +351,12 @@ void karaoke_setup(Karaoke_t *state) {
     state->song_name_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
-            .text = song_get()->name, .font_type = FONT_UI, .em = 0.9, .color = {255, 255, 255, 150}, .draw_shadow = true},
+            .text = song_get()->name, .font_type = FONT_UI, .em = 0.9, .color = {255, 255, 255, 255}, .draw_shadow = true},
         state->song_info_container,
         &(Layout_t){.offset_y = 0.05,
                     .relative_to = state->song_progressbar,
                     .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
+    ui_drawable_set_alpha_immediate(state->song_name_text, 200);
 
     // Song artist and album
     char *artist_album_text;
@@ -361,11 +365,12 @@ void karaoke_setup(Karaoke_t *state) {
     state->song_artist_album_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
-            .text = artist_album_text, .font_type = FONT_UI, .em = 0.7, .color = {225, 225, 225, 255}, .draw_shadow = true},
+            .text = artist_album_text, .font_type = FONT_UI, .em = 0.7, .color = {255, 255, 255, 255}, .draw_shadow = true},
         state->song_info_container,
         &(Layout_t){.offset_y = 0.01,
                     .relative_to = state->song_name_text,
                     .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
+    ui_drawable_set_alpha_immediate(state->song_artist_album_text, 100);
     free(artist_album_text);
 
     // Song controls container
