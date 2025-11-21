@@ -360,10 +360,10 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
         const uint8_t alpha = MIN(128, drawable->alpha_mod);
-        render_draw_texture(drawable->shadow->texture, &shadow_bounds, alpha, 0.f, 0.f);
+        render_draw_texture(drawable->shadow->texture, &shadow_bounds, alpha, 0.f);
     }
 
-    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod, 0.f);
+    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod);
 }
 
 static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
@@ -625,7 +625,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
-            render_draw_texture(texture, &destination, 0xFF, 1.f, 0.f);
+            render_draw_texture(texture, &destination, 0xFF, 1.f);
             y += texture->height + data->line_padding;
             render_set_blend_mode(blend_mode);
 
@@ -654,7 +654,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         const int32_t text_pixels = render_measure_pixels_from_em(data->em);
         const int32_t offset = (int32_t)MAX(1.f, MIN(10.f, text_pixels * 0.1f));
         const float blur_radius = (float)data->em; // Make blur radius relative to text size in a shitty way
-        result->shadow = render_make_shadow(result->texture, &result->bounds, blur_radius, 0.f, offset);
+        result->shadow = render_make_shadow(result->texture, &result->bounds, blur_radius, offset);
     }
 
     return result;
@@ -683,8 +683,8 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     ui_reposition_drawable(ui, result);
 
     if ( data->draw_shadow ) {
-        const int32_t offset = 5;
-        result->shadow = render_make_shadow(result->texture, &result->bounds, 1.f, 0.0f, offset);
+        const int32_t offset = MAX(1, result->bounds.w * 0.01f);
+        result->shadow = render_make_shadow(result->texture, &result->bounds, 1.f, offset);
     }
     vec_add(container->child_drawables, result);
     return result;

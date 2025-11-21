@@ -73,8 +73,6 @@ typedef struct Renderer_t {
     GLint tex_border_radius_loc;
     GLint tex_rect_size_loc;
     GLint tex_color_mod_loc;
-    GLint tex_fade_edges_loc;
-    GLint tex_fade_distance_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -280,8 +278,6 @@ void render_init(void) {
     g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
     g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
     g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "colorModFactor");
-    g_renderer->tex_fade_edges_loc = glGetUniformLocation(g_renderer->texture_shader, "fadeEdges");
-    g_renderer->tex_fade_distance_loc = glGetUniformLocation(g_renderer->texture_shader, "fadeDistance");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
@@ -572,7 +568,7 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
     Texture_t *vertical_texture = render_restore_texture_target();
 
     const RenderTarget_t *second_target = render_make_texture_target(width, height);
-    
+
     glUniform2f(g_renderer->blur_direction_loc, 0.0f, 1.0f);
 
     glBindTexture(GL_TEXTURE_2D, vertical_texture->id);
@@ -597,6 +593,7 @@ Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radiu
 }
 
 void render_clear(void) {
+    // Return early if it's just a solid background
     if ( g_renderer->bg_type == BACKGROUND_NONE ) {
         float r, g, b, a;
         deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
@@ -612,7 +609,7 @@ void render_clear(void) {
         if ( g_renderer->bg_texture == NULL ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
-        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
+        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f);
     } else if ( g_renderer->bg_type == BACKGROUND_DYNAMIC_GRADIENT ) {
         draw_dynamic_gradient_bg();
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
@@ -1266,8 +1263,7 @@ void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod,
-                         const float fade_distance) {
+void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod) {
     if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
@@ -1290,8 +1286,6 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t a
     glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
     glUniform1f(g_renderer->tex_color_mod_loc, color_mod);
-    glUniform1i(g_renderer->tex_fade_edges_loc, fade_distance > 0.f);
-    glUniform1f(g_renderer->tex_fade_distance_loc, fade_distance);
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 
@@ -1313,20 +1307,19 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t a
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, const float blur_radius, const float fade_distance,
-                             const int32_t offset) {
+Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, const float blur_radius, const int32_t offset) {
     const int32_t padding = offset / 2; // Leave some pixels for the blur
     const int32_t width = (int32_t)src_bounds->w + offset + padding, height = (int32_t)src_bounds->h + offset + padding;
 
     render_make_texture_target(width, height);
     Bounds_t bounds = {.x = offset, .y = offset, .w = src_bounds->w, .h = src_bounds->h};
-    render_draw_texture(texture, &bounds, 255, 0.f, fade_distance);
+    render_draw_texture(texture, &bounds, 255, 0.f);
     // Erase the original texture
     const BlendMode_t saved_blend = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_ERASE);
 
     bounds.x = bounds.y = 0;
-    render_draw_texture(texture, &bounds, 0xFF, 1.f, 0.f);
+    render_draw_texture(texture, &bounds, 0xFF, 1.f);
 
     render_set_blend_mode(saved_blend);
 
