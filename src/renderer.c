@@ -13,9 +13,12 @@
 
 #include <unicode/utf8.h>
 
-#include <SDL2/SDL.h>
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 #include <math.h>
-#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef __EMSCRIPTEN__
 #include <GLES3/gl3.h>
@@ -38,8 +41,7 @@
 #define PROJECTION_MATRIX_SIZE (16)
 
 typedef struct Renderer_t {
-    SDL_Window *window;
-    SDL_GLContext gl_context;
+    GLFWwindow *window;
     Bounds_t viewport;
     stbtt_fontinfo ui_font_info, lyrics_font_info;
     unsigned char *ui_font_data, *lyrics_font_data;
@@ -52,6 +54,7 @@ typedef struct Renderer_t {
     Texture_t *bg_texture;
     BackgroundType_t bg_type;
     float dynamic_bg_colors[5][3];
+    bool dynamic_bg_colors_initialized;
 
     // OpenGL objects
     GLuint active_shader_program;
@@ -163,11 +166,11 @@ static void create_orthographic_matrix(const float left, const float right, cons
     matrix[15] = 1.0f;
 }
 
-static void create_quad_vertices(const float x, const float y, const float w, const float h, float *vertices) {
-    const float canon_vertices[] = {x, (y + h), 0.0f, 1.0f, x,       y, 0.0f, 0.0f, (x + w), y,       1.0f, 0.0f,
-                                    x, (y + h), 0.0f, 1.0f, (x + w), y, 1.0f, 0.0f, (x + w), (y + h), 1.0f, 1.0f};
+static void create_quad_vertices(const float x, const float y, const float w, const float h, float *dest_vertices) {
+    const float vertices[] = {x, (y + h), 0.0f, 1.0f, x,       y, 0.0f, 0.0f, (x + w), y,       1.0f, 0.0f,
+                              x, (y + h), 0.0f, 1.0f, (x + w), y, 1.0f, 0.0f, (x + w), (y + h), 1.0f, 1.0f};
 
-    memcpy(vertices, canon_vertices, sizeof(canon_vertices));
+    memcpy(dest_vertices, vertices, sizeof(vertices));
 }
 
 static void update_projection_matrix(void) {
@@ -195,6 +198,22 @@ static void mark_texture_configured(Texture_t *texture, const Bounds_t *at) {
     texture->buf_h = (int32_t)at->h;
 }
 
+#ifdef __EMSCRIPTEN__
+static EM_BOOL on_web_resize(const int eventType, const EmscriptenUiEvent *uiEvent, void *) {
+    if ( eventType == EMSCRIPTEN_EVENT_RESIZE ) {
+        const double dpr = emscripten_get_device_pixel_ratio();
+        const int width = (int)(uiEvent->windowInnerWidth * dpr);
+        const int height = (int)(uiEvent->windowInnerHeight * dpr);
+
+        glfwSetWindowSize(g_renderer->window, width, height);
+        emscripten_set_element_css_size("#canvas", uiEvent->windowInnerWidth, uiEvent->windowInnerHeight);
+
+        return EM_TRUE;
+    }
+    return EM_FALSE;
+}
+#endif
+
 void render_init(void) {
     if ( g_renderer != NULL ) {
         printf("Warning: renderer already initialized\n");
@@ -207,30 +226,43 @@ void render_init(void) {
     }
 
 #ifdef __EMSCRIPTEN__
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    const int pos = SDL_WINDOWPOS_CENTERED;
-    const int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
-    g_renderer->window = SDL_CreateWindow(DEFAULT_TITLE, pos, pos, DEFAULT_WIDTH, DEFAULT_HEIGHT, flags);
+    const double dpr = emscripten_get_device_pixel_ratio();
+    const double logical_w = emscripten_run_script_int("window.innerWidth");
+    const double logical_h = emscripten_run_script_int("window.innerHeight");
+    const int width = (int)(logical_w * dpr);
+    const int height = (int)(logical_h * dpr);
+#else
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+
+    const int width = DEFAULT_WIDTH;
+    const int height = DEFAULT_HEIGHT;
+#endif
+    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+
+    g_renderer->window = glfwCreateWindow(width, height, DEFAULT_TITLE, NULL, NULL);
     if ( g_renderer->window == NULL ) {
         error_abort("Failed to create window");
     }
 
-    g_renderer->gl_context = SDL_GL_CreateContext(g_renderer->window);
-    if ( g_renderer->gl_context == NULL ) {
-        printf("SDL Error: %s\n", SDL_GetError());
+#ifdef __EMSCRIPTEN__
+    // Force CSS size to match logical size, while window/buffer is scaled
+    // This is unfortunately necessary because under GLFW it seems you can't have the framebuffer and window at different
+    // sizes. I'm not sure what the problem is but while dirty, this works currently, and I'll leave to investigate this later
+    emscripten_set_element_css_size("#canvas", logical_w, logical_h);
+#endif
 
-        error_abort("Failed to create OpenGL context");
-    }
+    events_setup_callbacks(g_renderer->window);
+
+    glfwMakeContextCurrent(g_renderer->window);
 
 #ifndef __EMSCRIPTEN__
     glewExperimental = GL_TRUE;
@@ -240,7 +272,9 @@ void render_init(void) {
         error_abort("Failed to initialize GLEW");
     }
     glGetError();
-    SDL_GL_SetSwapInterval(1);
+    glfwSwapInterval(1);
+#else
+    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, false, on_web_resize);
 #endif
 
     g_renderer->bg_color = (Color_t){0, 0, 0, 255};
@@ -330,9 +364,8 @@ void render_finish(void) {
     glDeleteProgram(g_renderer->cloud_gradient_shader);
     glDeleteProgram(g_renderer->copy_shader);
 
-    // Destroy GL context
-    SDL_GL_DeleteContext(g_renderer->gl_context);
-    SDL_DestroyWindow(g_renderer->window);
+    // Destroy GL context (GLFW destroys context with window)
+    glfwDestroyWindow(g_renderer->window);
 
     // Cleanup
     free(g_renderer);
@@ -341,22 +374,22 @@ void render_finish(void) {
 
 void render_on_window_changed(void) {
     int32_t outW, outH;
-    SDL_GL_GetDrawableSize(g_renderer->window, &outW, &outH);
+    glfwGetFramebufferSize(g_renderer->window, &outW, &outH);
 
     int32_t window_w;
-    SDL_GetWindowSize(g_renderer->window, &window_w, NULL);
+    glfwGetWindowSize(g_renderer->window, &window_w, NULL);
 
     g_renderer->window_pixel_scale = (double)outW / (double)window_w;
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
-    float hdpi_temp, v_dpi_temp;
-    if ( SDL_GetDisplayDPI(0, NULL, &hdpi_temp, &v_dpi_temp) != 0 ) {
-        puts(SDL_GetError());
-        error_abort("Failed to get DPI");
-    }
-    g_renderer->h_dpi = hdpi_temp;
-    g_renderer->v_dpi = v_dpi_temp;
+    float x_scale, y_scale;
+    glfwGetWindowContentScale(g_renderer->window, &x_scale, &y_scale);
+
+    // Approximate DPI based on scale factor
+#define BASE_DPI 96.f
+    g_renderer->h_dpi = BASE_DPI * x_scale;
+    g_renderer->v_dpi = BASE_DPI * y_scale;
 
     g_renderer->viewport = (Bounds_t){.x = 0, .y = 0, .w = (double)outW, .h = (double)outH};
 
@@ -584,8 +617,9 @@ Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radiu
 }
 
 void render_clear(void) {
-    // Return early if it's just a solid background
-    if ( g_renderer->bg_type == BACKGROUND_NONE ) {
+    // Return early if it's just a solid background, or we haven't initialized all the required params to draw the bg yet
+    const bool bg_not_initialized = g_renderer->bg_type != BACKGROUND_GRADIENT && !g_renderer->dynamic_bg_colors_initialized;
+    if ( g_renderer->bg_type == BACKGROUND_NONE || bg_not_initialized ) {
         float r, g, b, a;
         deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
         glClearColor(r, g, b, a);
@@ -610,7 +644,7 @@ void render_clear(void) {
     }
 }
 
-void render_present(void) { SDL_GL_SwapWindow(g_renderer->window); }
+void render_present(void) { glfwSwapBuffers(g_renderer->window); }
 
 const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 
@@ -636,7 +670,7 @@ void render_load_font(const unsigned char *data, const int data_size, const Font
     }
 }
 
-void render_set_window_title(const char *title) { SDL_SetWindowTitle(g_renderer->window, title); }
+void render_set_window_title(const char *title) { glfwSetWindowTitle(g_renderer->window, title); }
 
 void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w, int32_t *h, const FontType_t kind) {
     const stbtt_fontinfo *font = kind == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
@@ -943,6 +977,8 @@ void render_sample_bg_colors_from_image(const unsigned char *bytes, const int le
         float *b = &g_renderer->dynamic_bg_colors[i][2];
         deconstruct_colors_opengl(&sorted[i].color, r, g, b, NULL);
     }
+    // Mark as initialized
+    g_renderer->dynamic_bg_colors_initialized = true;
 
     // Cleanup
     free(assignments);
@@ -1296,6 +1332,13 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t a
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void render_destroy_shadow(Shadow_t *shadow) {
+    if ( shadow->texture ) {
+        render_destroy_texture(shadow->texture);
+    }
+    free(shadow);
 }
 
 Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, const float blur_radius, const int32_t offset) {

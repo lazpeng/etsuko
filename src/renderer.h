@@ -77,6 +77,7 @@ Texture_t *render_make_null(void);
 Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
+void render_destroy_shadow(Shadow_t *shadow);
 Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, float blur_radius, int32_t offset);
 void render_destroy_texture(Texture_t *texture);
 const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);

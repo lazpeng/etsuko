@@ -111,15 +111,6 @@ static int load_async(Karaoke_t *state) {
         ui_load_font(state->load_ui_font.data, state->load_ui_font.data_size, FONT_UI);
         repository_free_resource(&state->load_ui_font);
     }
-    // Lyrics font
-    if ( state->load_lyrics_font.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
-    }
-    if ( state->load_lyrics_font.status == LOAD_DONE ) {
-        state->load_lyrics_font.status = LOAD_FINISHED;
-        ui_load_font(state->load_lyrics_font.data, state->load_lyrics_font.data_size, FONT_LYRICS);
-        repository_free_resource(&state->load_lyrics_font);
-    }
     // Song
     if ( state->load_song.status == LOAD_NOT_STARTED ) {
         repository_get_resource(config->song_file, NULL, &state->load_song);
@@ -152,13 +143,24 @@ static int load_async(Karaoke_t *state) {
         }
 
         if ( song_get()->font_override != NULL ) {
+            free(config->lyrics_font);
             config->lyrics_font = strdup(song_get()->font_override);
-            repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
         }
     } else if ( state->load_song.status != LOAD_FINISHED ) {
         return 0;
     }
     // Finish loading the song before we load the rest
+
+    // Lyrics font
+    // It's important we begin downloading this _after_ the song has been loaded so we know which is the correct font to fetch
+    if ( state->load_lyrics_font.status == LOAD_NOT_STARTED ) {
+        repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
+    }
+    if ( state->load_lyrics_font.status == LOAD_DONE ) {
+        state->load_lyrics_font.status = LOAD_FINISHED;
+        ui_load_font(state->load_lyrics_font.data, state->load_lyrics_font.data_size, FONT_LYRICS);
+        repository_free_resource(&state->load_lyrics_font);
+    }
 
     // Display progress
     if ( state->loading_progress_bar != NULL ) {
@@ -210,6 +212,7 @@ int karaoke_load_loop(Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
         return -1;
+    events_frame_end();
 
     if ( state->load_ui_font.status == LOAD_FINISHED && config_get()->show_loading_screen ) {
         if ( state->loading_progress_bar == NULL ) {
@@ -520,6 +523,10 @@ int karaoke_loop(const Karaoke_t *state) {
     update_play_pause_state(state);
     // Update the lyrics view
     ui_ex_lyrics_view_loop(state->ui, state->lyrics_view);
+
+    // Clear events after all checking has been done because under emscripten the events aren't polled inside glfw
+    // so we would clear all the events before we could see them
+    events_frame_end();
 
     ui_draw(state->ui);
     ui_end_loop();

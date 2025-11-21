@@ -2,16 +2,21 @@
 
 #include <stdio.h>
 
-#include <SDL2/SDL.h>
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 
 #include "error.h"
 #include "renderer.h"
 
+static void error_callback(const int error, const char *description) {
+    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
 int global_init(void) {
-    // Init sdl
-    if ( SDL_Init(SDL_INIT_VIDEO) != 0 ) {
-        puts(SDL_GetError());
-        error_abort("SDL_Init failed");
+    glfwSetErrorCallback(error_callback);
+
+    if ( !glfwInit() ) {
+        error_abort("glfwInit failed");
     }
 
     render_init();
@@ -20,6 +25,6 @@ int global_init(void) {
 }
 
 void global_finish(void) {
-    SDL_Quit();
     render_finish();
+    glfwTerminate();
 }

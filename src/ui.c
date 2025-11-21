@@ -359,7 +359,8 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
-        const uint8_t alpha = MIN(128, drawable->alpha_mod);
+        const int32_t max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
+        const uint8_t alpha = MIN(max_alpha, drawable->alpha_mod);
         render_draw_texture(drawable->shadow->texture, &shadow_bounds, alpha, 0.f);
     }
 
@@ -667,6 +668,14 @@ Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *conta
     return result;
 }
 
+static void apply_shadow_to_image(Drawable_t *drawable) {
+    if ( drawable->shadow ) {
+        render_destroy_shadow(drawable->shadow);
+    }
+    const int32_t offset = MAX(1, drawable->bounds.w * 0.01f);
+    drawable->shadow = render_make_shadow(drawable->texture, &drawable->bounds, 1.f, offset);
+}
+
 Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length, Drawable_ImageData_t *data,
                           Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
@@ -683,8 +692,7 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     ui_reposition_drawable(ui, result);
 
     if ( data->draw_shadow ) {
-        const int32_t offset = MAX(1, result->bounds.w * 0.01f);
-        result->shadow = render_make_shadow(result->texture, &result->bounds, 1.f, offset);
+        apply_shadow_to_image(result);
     }
     vec_add(container->child_drawables, result);
     return result;
@@ -708,8 +716,7 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         render_destroy_texture(drawable->texture);
     }
     if ( drawable->shadow != NULL ) {
-        render_destroy_texture(drawable->shadow->texture);
-        free(drawable->shadow);
+        render_destroy_shadow(drawable->shadow);
     }
     if ( drawable->custom_data != NULL ) {
         if ( drawable->type == DRAW_TYPE_TEXT ) {
@@ -826,7 +833,13 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         void *old_custom_data = drawable->custom_data;
         internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
-    } else if ( drawable->type == DRAW_TYPE_IMAGE || drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
+    } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
+        const Drawable_ImageData_t *data = drawable->custom_data;
+        ui_reposition_drawable(ui, drawable);
+        if ( data->draw_shadow ) {
+            apply_shadow_to_image(drawable);
+        }
+    } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
         ui_reposition_drawable(ui, drawable);
     } else {
         error_abort("Invalid drawable type");
