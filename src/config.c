@@ -45,6 +45,10 @@ static Config_t *get_default_config(void) {
     // config->song_file = strdup("stop crying your heart out.txt");
     config->song_file = strdup("yoake.txt");
     config->hide_past_lyrics = true;
+    config->draw_album_art_shadow = true;
+    config->draw_lyric_shadow = true;
+    config->show_loading_screen = true;
+    config->op_mode = APP_MODE_KARAOKE;
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

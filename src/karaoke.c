@@ -211,7 +211,7 @@ int karaoke_load_loop(Karaoke_t *state) {
     if ( events_has_quit() )
         return -1;
 
-    if ( state->load_ui_font.status == LOAD_FINISHED ) {
+    if ( state->load_ui_font.status == LOAD_FINISHED && config_get()->show_loading_screen ) {
         if ( state->loading_progress_bar == NULL ) {
             state->loading_progress_bar = ui_make_progressbar(state->ui,
                                                               &(Drawable_ProgressBarData_t){
@@ -296,7 +296,7 @@ void karaoke_setup(Karaoke_t *state) {
         state->ui, state->load_album_art.data, state->load_album_art.data_size,
         &(Drawable_ImageData_t){
             .border_radius_em = 2.0,
-            .draw_shadow = true,
+            .draw_shadow = config_get()->draw_album_art_shadow,
         },
         state->left_container,
         &(Layout_t){

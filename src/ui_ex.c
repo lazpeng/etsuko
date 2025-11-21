@@ -104,7 +104,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .wrap_width_threshold = 0.85,
                                     .color = color,
                                     .alignment = alignment,
-                                    .draw_shadow = true};
+                                    .draw_shadow = config_get()->draw_lyric_shadow};
         Layout_t layout = {
             .offset_y = LINE_VERTICAL_PADDING,
             .offset_x = offset_x,

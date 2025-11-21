@@ -16,6 +16,9 @@ typedef struct {
     char *song_file;
     Config_OpMode_t op_mode;
     bool hide_past_lyrics;
+    bool draw_album_art_shadow;
+    bool draw_lyric_shadow;
+    bool show_loading_screen;
 } Config_t;
 
 Config_t *config_get(void);
