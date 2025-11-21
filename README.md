@@ -135,3 +135,8 @@ than the default, a *fontOverride=* can be specified in the header as well.
 This repository includes code in the public domain from the following projects:
 * nothings/stb: https://github.com/nothings/stb
 * lieff/minimp3: https://github.com/lieff/minimp3
+
+Also includes shaders written by Inigo Quilez, released under Creative Commons Attribution-NonCommercial-ShareAlike
+3.0 Unported License ([original](https://www.shadertoy.com/view/wdyczG)), slightly modified to work in the program's context and under the selected OpenGL version:
+* contrib/am gradient.frag.glsl
+* contrib/cloud gradient.frag.glsl
