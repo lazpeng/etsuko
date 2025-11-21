@@ -74,6 +74,20 @@ static const char incbin_rand_gradient_frag_shader[] = {
     ,'\0'
 };
 
+static const char incbin_am_gradient_vert_shader[] = {
+#embed "shaders/am gradient.vert.glsl"
+    ,'\0'
+};
+static const char incbin_am_gradient_frag_shader[] = {
+#embed "shaders/am gradient.frag.glsl"
+    ,'\0'
+};
+
+static const char incbin_cloud_gradient_frag_shader[] = {
+#embed "shaders/cloud gradient.frag.glsl"
+    ,'\0'
+};
+
 #endif
 
 #ifdef RESOURCE_INCLUDE_IMAGES

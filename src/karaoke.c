@@ -197,6 +197,7 @@ static int load_async(Karaoke_t *state) {
     }
     if ( state->load_album_art.status == LOAD_DONE ) {
         free(song_get()->album_art_path);
+        ui_sample_bg_colors_from_image(state->load_album_art.data, state->load_album_art.data_size);
         state->load_album_art.status = LOAD_FINISHED;
     }
 
@@ -333,7 +334,7 @@ void karaoke_setup(Karaoke_t *state) {
                                                       .progress = 0,
                                                       .border_radius_em = 0.3,
                                                       .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
-                                                      .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 255},
+                                                      .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 50},
                                                   },
                                                   state->song_info_container,
                                                   &(Layout_t){.offset_y = 0.02,

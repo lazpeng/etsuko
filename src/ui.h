@@ -82,8 +82,7 @@ typedef struct Drawable_t {
     uint8_t alpha_mod;
     Vector_t *animations;
     float color_mod;
-    Texture_t *shadow;
-    int32_t shadow_offset;
+    Shadow_t *shadow;
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -157,13 +156,15 @@ void ui_draw(const Ui_t *ui);
 void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
 void ui_set_bg_gradient(uint32_t primary, uint32_t secondary, BackgroundType_t type);
+void ui_sample_bg_colors_from_image(const unsigned char *bytes, int length);
 void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Drawable_ImageData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Drawable_ImageData_t *data, Container_t *container,
+                          const Layout_t *layout);
 Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);

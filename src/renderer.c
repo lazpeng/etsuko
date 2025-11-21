@@ -52,6 +52,7 @@ typedef struct Renderer_t {
     double window_pixel_scale;
     Texture_t *bg_texture;
     BackgroundType_t bg_type;
+    float dynamic_bg_colors[5][3];
 
     // OpenGL objects
     GLuint VAO, VBO;
@@ -59,6 +60,8 @@ typedef struct Renderer_t {
     GLuint rect_shader;
     GLuint gradient_shader;
     GLuint dyn_gradient_shader;
+    GLuint am_gradient_shader;
+    GLuint cloud_gradient_shader;
     GLuint rand_gradient_shader;
     GLuint blur_shader;
     GLuint copy_shader;
@@ -89,6 +92,9 @@ typedef struct Renderer_t {
     GLint rand_grad_time_loc;
     GLint rand_grad_noise_scale_loc;
     GLint rand_grad_resolution_loc;
+    GLint dyn_grad_time_loc;
+    GLint dyn_grad_noise_mag_loc;
+    GLint dyn_grad_colors;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
@@ -105,7 +111,6 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
         glGetShaderInfoLog(shader, 512, NULL, log);
         const char *const type_str = type == GL_VERTEX_SHADER ? "vert" : "frag";
         printf("Shader compilation failed for %s.%s:\n%s\n", name, type_str, log);
-        printf("source: %s\n", source);
         error_abort("Shader compilation failed");
     }
 
@@ -270,6 +275,10 @@ void render_init(void) {
         create_shader_program(buffer, incbin_gradient_vert_shader, incbin_gradient_frag_shader, "gradient");
     g_renderer->dyn_gradient_shader =
         create_shader_program(buffer, incbin_dyn_gradient_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
+    g_renderer->am_gradient_shader =
+        create_shader_program(buffer, incbin_am_gradient_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
+    g_renderer->cloud_gradient_shader =
+        create_shader_program(buffer, incbin_am_gradient_vert_shader, incbin_cloud_gradient_frag_shader, "cloud_gradient");
     g_renderer->rand_gradient_shader =
         create_shader_program(buffer, incbin_rand_gradient_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
     g_renderer->blur_shader = create_shader_program(buffer, incbin_blur_vert_shader, incbin_blur_frag_shader, "blur");
@@ -302,6 +311,11 @@ void render_init(void) {
     g_renderer->rand_grad_time_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uTime");
     g_renderer->rand_grad_noise_scale_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uNoiseScale");
     g_renderer->rand_grad_resolution_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uResolution");
+
+    // Get uniform locations for the dynamic gradient shader
+    g_renderer->dyn_grad_time_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_time");
+    g_renderer->dyn_grad_noise_mag_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_noise_magnitude");
+    g_renderer->dyn_grad_colors = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_colors");
 
     // Get uniform locations for blur shader
     g_renderer->blur_texture_loc = glGetUniformLocation(g_renderer->blur_shader, "u_texture");
@@ -372,42 +386,14 @@ void render_on_window_changed(void) {
 }
 
 static void deconstruct_colors_opengl(const Color_t *color, float *r, float *g, float *b, float *a) {
-    *r = (float)color->r / 255.0f;
-    *g = (float)color->g / 255.0f;
-    *b = (float)color->b / 255.0f;
-    *a = (float)color->a / 255.0f;
-}
-
-static float hueToRgb(const float p, const float q, float t) {
-    if ( t < 0 )
-        t += 1;
-    if ( t > 1 )
-        t -= 1;
-    if ( t < 1.f / 6 )
-        return p + (q - p) * 6 * t;
-    if ( t < 1.f / 2 )
-        return q;
-    if ( t < 2.f / 3 )
-        return p + (q - p) * (2.f / 3 - t) * 6;
-    return p;
-}
-
-static void hslToRgb(const float h, const float s, const float l, float *dst) {
-    float r, g, b;
-
-    if ( s == 0 ) {
-        r = g = b = l;
-    } else {
-        const float q = l < 0.5f ? l * (1 + s) : l + s - l * s;
-        const float p = 2 * l - q;
-        r = hueToRgb(p, q, h + 1.f / 3);
-        g = hueToRgb(p, q, h);
-        b = hueToRgb(p, q, h - 1.f / 3);
-    }
-
-    dst[0] = r;
-    dst[1] = g;
-    dst[2] = b;
+    if ( r )
+        *r = (float)color->r / 255.0f;
+    if ( g )
+        *g = (float)color->g / 255.0f;
+    if ( b )
+        *b = (float)color->b / 255.0f;
+    if ( a )
+        *a = (float)color->a / 255.0f;
 }
 
 static Texture_t *internal_create_random_gradient_background_texture(void) {
@@ -424,7 +410,7 @@ static Texture_t *internal_create_random_gradient_background_texture(void) {
     noise_magnitude = noise_magnitude * (1.f - progress) + target_magnitude * progress;
 
     const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const RenderTarget_t *target = render_make_texture_target(width, height);
+    render_make_texture_target(width, height);
 
     glUseProgram(g_renderer->rand_gradient_shader);
 
@@ -440,8 +426,7 @@ static Texture_t *internal_create_random_gradient_background_texture(void) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *result = target->texture;
-    render_restore_texture_target();
+    Texture_t *result = render_restore_texture_target();
     render_set_blend_mode(saved_blend);
 
     return result;
@@ -451,7 +436,7 @@ static Texture_t *internal_create_dynamic_gradient_background_texture(void) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    const float rate = 0.005f;
+    const float rate = 0.05f;
     static float progress = 0.f;
     static float noise_magnitude = 0.1f;
 
@@ -461,29 +446,13 @@ static Texture_t *internal_create_dynamic_gradient_background_texture(void) {
     noise_magnitude = noise_magnitude * (1.f - progress) + target_magnitude * progress;
 
     const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const RenderTarget_t *target = render_make_texture_target(width, height);
-
-    static bool colors_initialized = false;
-    static float colors[5][3] = {
-        {0.5f, 0.5f, 0.5f}, {0.2f, 0.5f, 0.1f}, {0.7f, 0.8f, 0.2f}, {0.3f, 0.2f, 0.1f}, {0.1f, 0.4f, 0.7f},
-    };
-    if ( !colors_initialized ) {
-        memset(colors, 0, sizeof(colors));
-        srand(time(NULL)); // NOLINT(*-msc51-cpp)
-        for ( int i = 0; i < 5; i++ ) {
-            const float h = (float)(rand() % 255) / 255.f;               // NOLINT(*-msc50-cpp)
-            const float s = (float)(rand() % 255) / 255.f * 0.2f + 0.3f; // NOLINT(*-msc50-cpp)
-            const float l = (float)(rand() % 255) / 255.f * 0.2f + 0.7f; // NOLINT(*-msc50-cpp)
-            hslToRgb(h, s, l, &colors[i][0]);
-        }
-        colors_initialized = true;
-    }
+    render_make_texture_target(width, height);
 
     glUseProgram(g_renderer->dyn_gradient_shader);
 
-    glUniform1f(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_time"), (float)events_get_elapsed_time());
-    glUniform1f(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_noise_magnitude"), noise_magnitude);
-    glUniform3fv(glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_colors"), 5, &colors[0][0]);
+    glUniform1f(g_renderer->dyn_grad_time_loc, (float)events_get_elapsed_time() / 5.f);
+    glUniform1f(g_renderer->dyn_grad_noise_mag_loc, MIN(1.f, noise_magnitude));
+    glUniform3fv(g_renderer->dyn_grad_colors, 5, &g_renderer->dynamic_bg_colors[0][0]);
 
     static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
                                    -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
@@ -494,8 +463,39 @@ static Texture_t *internal_create_dynamic_gradient_background_texture(void) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *result = target->texture;
-    render_restore_texture_target();
+    Texture_t *result = render_restore_texture_target();
+    render_set_blend_mode(saved_blend);
+
+    return result;
+}
+
+static Texture_t *internal_create_am_gradient_background_texture(BackgroundType_t type) {
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
+    render_set_blend_mode(BLEND_MODE_NONE);
+
+    const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
+    render_make_texture_target(width, height);
+
+    if ( type == BACKGROUND_AM_LIKE_GRADIENT ) {
+        glUseProgram(g_renderer->am_gradient_shader);
+    } else {
+        glUseProgram(g_renderer->cloud_gradient_shader);
+    }
+
+    glUniform1f(glGetUniformLocation(g_renderer->am_gradient_shader, "iTime"), (float)events_get_elapsed_time());
+    glUniform3f(glGetUniformLocation(g_renderer->am_gradient_shader, "iResolution"), 1.f, 1.f, 0.f);
+    glUniform3fv(glGetUniformLocation(g_renderer->am_gradient_shader, "iColors"), 5, &g_renderer->dynamic_bg_colors[0][0]);
+
+    static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+                                   -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindVertexArray(g_renderer->VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_renderer->VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    Texture_t *result = render_restore_texture_target();
     render_set_blend_mode(saved_blend);
 
     return result;
@@ -528,9 +528,7 @@ static Texture_t *internal_create_gradient_background_texture(void) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *texture = target->texture;
-
-    render_restore_texture_target();
+    Texture_t *texture = render_restore_texture_target();
     render_set_blend_mode(saved_blend);
     return texture;
 }
@@ -564,20 +562,17 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *vertical_texture = first_target->texture;
-    render_restore_texture_target();
+    Texture_t *vertical_texture = render_restore_texture_target();
 
-    const RenderTarget_t *second_target = render_make_texture_target(width, height);
+    render_make_texture_target(width, height);
     glUniform2f(g_renderer->blur_direction_loc, 0.0f, 1.0f);
     glBindTexture(GL_TEXTURE_2D, vertical_texture->id);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *horizontal_texture = second_target->texture;
+    Texture_t *horizontal_texture = render_restore_texture_target();
     horizontal_texture->border_radius = source->border_radius;
-    render_restore_texture_target();
     render_destroy_texture(vertical_texture);
 
-    // Restore
     render_set_blend_mode(saved_blend);
     return horizontal_texture;
 }
@@ -589,8 +584,14 @@ Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radiu
 }
 
 void render_clear(void) {
-    float r, g, b, a;
-    deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
+    if ( g_renderer->bg_type == BACKGROUND_NONE ) {
+        float r, g, b, a;
+        deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
+        glClearColor(r, g, b, a);
+        glClear(GL_COLOR_BUFFER_BIT);
+        return;
+    }
+
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -606,6 +607,11 @@ void render_clear(void) {
         render_destroy_texture(bg_texture);
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
         Texture_t *bg_texture = internal_create_random_gradient_background_texture();
+        render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
+
+        render_destroy_texture(bg_texture);
+    } else if ( g_renderer->bg_type == BACKGROUND_AM_LIKE_GRADIENT || g_renderer->bg_type == BACKGROUND_CLOUD_GRADIENT ) {
+        Texture_t *bg_texture = internal_create_am_gradient_background_texture(g_renderer->bg_type);
         render_draw_texture(bg_texture, &(Bounds_t){0}, 255, 1.f, 0.f);
 
         render_destroy_texture(bg_texture);
@@ -741,7 +747,7 @@ const RenderTarget_t *render_make_texture_target(const int32_t width, const int3
     return target;
 }
 
-void render_restore_texture_target(void) {
+Texture_t *render_restore_texture_target(void) {
     if ( g_renderer->render_target == NULL ) {
         error_abort("No render target to restore");
     }
@@ -761,14 +767,19 @@ void render_restore_texture_target(void) {
         glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->render_target->fbo);
     }
 
+    Texture_t *texture = current->texture;
+
     glDeleteFramebuffers(1, &current->fbo);
     // Assume the texture is going to be freed on its own, or else there's no point to making a
     // render target in the first place.
     free(current);
+
+    return texture;
 }
 
 void render_destroy_texture(Texture_t *texture) {
-    glDeleteTextures(1, &texture->id);
+    if ( texture->id != 0 )
+        glDeleteTextures(1, &texture->id);
     free(texture);
 }
 
@@ -796,7 +807,154 @@ void render_set_bg_color(const Color_t color) {
 void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, BackgroundType_t type) {
     g_renderer->bg_color = top_color;
     g_renderer->bg_color_secondary = bottom_color;
-    g_renderer->bg_type = type;
+    g_renderer->bg_type = BACKGROUND_AM_LIKE_GRADIENT; // type;
+}
+
+static float calculate_color_luminance(const Color_t *color) {
+    return 0.299f * (float)color->r + 0.587f * (float)color->g + 0.114f * (float)color->b;
+}
+
+void render_sample_bg_colors_from_image(const unsigned char *bytes, const int length) {
+    int width, height, channels;
+    unsigned char *image_data = stbi_load_from_memory(bytes, length, &width, &height, &channels, 3);
+
+    if ( !image_data ) {
+        fprintf(stderr, "Failed to load background image for color sampling\n");
+        return;
+    }
+
+    // Sample pixels from the image (use stride for large images)
+    const int total_pixels = width * height;
+    const int sample_stride = total_pixels > 10000 ? (int)sqrt(total_pixels / 10000.0) : 1;
+
+    Color_t *samples = malloc(sizeof(Color_t) * (total_pixels / (sample_stride * sample_stride) + 1000));
+    int sample_count = 0;
+
+    for ( int y = 0; y < height; y += sample_stride ) {
+        for ( int x = 0; x < width; x += sample_stride ) {
+            const int idx = (y * width + x) * 3;
+            const uint8_t r = image_data[idx + 0];
+            const uint8_t g = image_data[idx + 1];
+            const uint8_t b = image_data[idx + 2];
+
+            const float lum = calculate_color_luminance(&(Color_t){r, g, b, 0});
+
+            // Filter out very dark or very bright colors
+            if ( lum > 15.0f && lum < 240.0f ) {
+                samples[sample_count].r = r;
+                samples[sample_count].g = g;
+                samples[sample_count].b = b;
+                sample_count++;
+            }
+        }
+    }
+
+    // If we filtered out too much, relax the constraint
+    if ( sample_count < 50 ) {
+        sample_count = 0;
+        for ( int y = 0; y < height; y += sample_stride ) {
+            for ( int x = 0; x < width; x += sample_stride ) {
+                const int idx = (y * width + x) * 3;
+                samples[sample_count].r = image_data[idx + 0];
+                samples[sample_count].g = image_data[idx + 1];
+                samples[sample_count].b = image_data[idx + 2];
+                sample_count++;
+            }
+        }
+    }
+
+    if ( sample_count == 0 ) {
+        free(samples);
+        stbi_image_free(image_data);
+        return;
+    }
+
+    // Find 5 dominant colors
+#define K 5
+    Color_t centroids[K];
+    int *assignments = calloc(1, sizeof(int) * sample_count);
+
+    // Initialize centroids by spreading them across the sample space
+    for ( int i = 0; i < K; i++ ) {
+        const int idx = (i * sample_count / K + sample_count / (K * 2)) % sample_count;
+        centroids[i] = samples[idx];
+    }
+
+    // Run k-means iterations
+    for ( int iter = 0; iter < 15; iter++ ) {
+        // Assignment step: assign each sample to nearest centroid
+        for ( int i = 0; i < sample_count; i++ ) {
+            int best_k = 0;
+            float best_dist = INFINITY;
+
+            for ( int k = 0; k < K; k++ ) {
+                const int dr = (int)samples[i].r - (int)centroids[k].r;
+                const int dg = (int)samples[i].g - (int)centroids[k].g;
+                const int db = (int)samples[i].b - (int)centroids[k].b;
+                const float dist = (float)(dr * dr + dg * dg + db * db);
+
+                if ( dist < best_dist ) {
+                    best_dist = dist;
+                    best_k = k;
+                }
+            }
+            assignments[i] = best_k;
+        }
+
+        // Update step: recalculate centroids
+        float sums[K][3] = {{0}};
+        int counts[K] = {0};
+
+        for ( int i = 0; i < sample_count; i++ ) {
+            const int k = assignments[i];
+            sums[k][0] += (float)samples[i].r;
+            sums[k][1] += (float)samples[i].g;
+            sums[k][2] += (float)samples[i].b;
+            counts[k]++;
+        }
+
+        for ( int k = 0; k < K; k++ ) {
+            if ( counts[k] > 0 ) {
+                centroids[k].r = (unsigned char)(sums[k][0] / (float)counts[k] + 0.5f);
+                centroids[k].g = (unsigned char)(sums[k][1] / (float)counts[k] + 0.5f);
+                centroids[k].b = (unsigned char)(sums[k][2] / (float)counts[k] + 0.5f);
+            }
+        }
+    }
+
+    typedef struct {
+        Color_t color;
+        float luminance;
+    } ColorLum;
+
+    ColorLum sorted[K];
+    for ( int i = 0; i < K; i++ ) {
+        sorted[i].color = centroids[i];
+        sorted[i].luminance = calculate_color_luminance(&centroids[i]);
+    }
+
+    // bubble sort
+    for ( int i = 0; i < K - 1; i++ ) {
+        for ( int j = 0; j < K - 1 - i; j++ ) {
+            if ( sorted[j].luminance > sorted[j + 1].luminance ) {
+                const ColorLum temp = sorted[j];
+                sorted[j] = sorted[j + 1];
+                sorted[j + 1] = temp;
+            }
+        }
+    }
+
+    for ( int i = 0; i < K; i++ ) {
+        float *r = &g_renderer->dynamic_bg_colors[i][0];
+        float *g = &g_renderer->dynamic_bg_colors[i][1];
+        float *b = &g_renderer->dynamic_bg_colors[i][2];
+        deconstruct_colors_opengl(&sorted[i].color, r, g, b, NULL);
+    }
+
+    // Cleanup
+    free(assignments);
+    free(samples);
+    stbi_image_free(image_data);
 }
 
 void render_set_blend_mode(const BlendMode_t mode) {
@@ -1109,18 +1267,34 @@ void render_draw_texture(const Texture_t *texture, const Bounds_t *at, const int
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-Texture_t *render_make_shadow(const Texture_t *texture, const float blur_radius, const float fade_distance) {
-    const int32_t width = texture->width, height = texture->height;
-    const RenderTarget_t *target = render_make_texture_target(width, height);
-    const Bounds_t bounds = {.w = width, .h = height};
-    render_draw_texture(texture, &bounds, 255, 0.f, 0.005f);
-    Texture_t *result = target->texture;
-    render_restore_texture_target();
+Shadow_t *render_make_shadow(const Texture_t *texture, const Bounds_t *src_bounds, const float blur_radius,
+                             const float fade_distance, const int32_t offset) {
+    const int32_t padding = offset / 2; // Leave some pixels for the blur
+    const int32_t width = (int32_t)src_bounds->w + offset + padding, height = (int32_t)src_bounds->h + offset + padding;
+
+    render_make_texture_target(width, height);
+    Bounds_t bounds = {.x = offset, .y = offset, .w = src_bounds->w, .h = src_bounds->h};
+    render_draw_texture(texture, &bounds, 255, 0.f, fade_distance);
+    // Erase the original texture
+    const BlendMode_t saved_blend = render_get_blend_mode();
+    render_set_blend_mode(BLEND_MODE_ERASE);
+
+    bounds.x = bounds.y = 0;
+    render_draw_texture(texture, &bounds, 0xFF, 1.f, 0.f);
+
+    render_set_blend_mode(saved_blend);
+
+    Texture_t *result = render_restore_texture_target();
 
     result->border_radius = texture->border_radius;
     if ( blur_radius > 0.f ) {
         result = render_blur_texture_replace(result, blur_radius);
     }
 
-    return result;
+    Shadow_t *shadow = calloc(1, sizeof(*shadow));
+    shadow->offset = offset;
+    shadow->texture = result;
+    shadow->bounds = (Bounds_t){.w = width, .h = height};
+
+    return shadow;
 }

@@ -24,6 +24,8 @@ typedef enum Song_BgType_t {
     BG_SOLID,
     BG_DYNAMIC_GRADIENT,
     BG_RANDOM_GRADIENT,
+    BG_AM_LIKE_GRADIENT,
+    BG_CLOUD_GRADIENT,
 } Song_BgType_t;
 
 typedef struct Song_Line_t {

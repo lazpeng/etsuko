@@ -23,6 +23,12 @@ typedef struct Bounds_t {
     double scale_mod;
 } Bounds_t;
 
+typedef struct Shadow_t {
+    Texture_t *texture;
+    Bounds_t bounds;
+    int32_t offset;
+} Shadow_t;
+
 typedef struct RenderTarget_t {
     Texture_t *texture;
     struct RenderTarget_t *prev_target;
@@ -36,7 +42,9 @@ typedef enum BackgroundType_t {
     BACKGROUND_NONE = 0,
     BACKGROUND_GRADIENT,
     BACKGROUND_DYNAMIC_GRADIENT,
-    BACKGROUND_RANDOM_GRADIENT
+    BACKGROUND_RANDOM_GRADIENT,
+    BACKGROUND_AM_LIKE_GRADIENT,
+    BACKGROUND_CLOUD_GRADIENT,
 } BackgroundType_t;
 
 typedef enum FontType_t { FONT_UI = 0, FONT_LYRICS = 1 } FontType_t;
@@ -53,6 +61,7 @@ double render_get_pixel_scale(void);
 void render_set_window_title(const char *title);
 void render_set_bg_color(Color_t color);
 void render_set_bg_gradient(Color_t top_color, Color_t bottom_color, BackgroundType_t type);
+void render_sample_bg_colors_from_image(const unsigned char *bytes, int length);
 void render_set_blend_mode(BlendMode_t mode);
 BlendMode_t render_get_blend_mode(void);
 Color_t render_color_parse(uint32_t color);
@@ -65,12 +74,12 @@ int32_t render_measure_pixels_from_em(double em);
 Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 Texture_t *render_make_dummy_image(double border_radius_em);
-Texture_t *render_make_shadow(const Texture_t *texture, float blur_radius, float fade_distance);
+Shadow_t *render_make_shadow(const Texture_t *texture, const Bounds_t *src_bounds, float blur_radius, float fade_distance, int32_t offset);
 void render_destroy_texture(Texture_t *texture);
 const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
 Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
 Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
-void render_restore_texture_target(void);
+Texture_t *render_restore_texture_target(void);
 
 void render_draw_rounded_rect(const Bounds_t *bounds, const Color_t *color, float border_radius);
 void render_draw_texture(const Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod, float fade_distance);
