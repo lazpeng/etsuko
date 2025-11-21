@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(etsuko C)
 
-set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(etsuko src/main.c
@@ -41,7 +41,7 @@ set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w
 set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
 
-target_compile_features(etsuko PRIVATE c_std_17)
+target_compile_features(etsuko PRIVATE c_std_23)
 
 if (EMSCRIPTEN)
     message(STATUS "Configuring for Emscripten/WebAssembly")
