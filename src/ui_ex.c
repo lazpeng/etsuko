@@ -24,7 +24,7 @@
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
-    return strncmp(line->full_text, "", 1) == 0 && line->base_duration > 1.5;
+    return str_is_empty(line->full_text) && line->base_duration > 5;
 }
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
@@ -270,8 +270,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     if ( view->container->viewport_y < threshold ) {
         ui_drawable_set_alpha(drawable, 0);
     } else {
-        int32_t distance =
-            calculate_distance(view, index, view->current_active_index); // abs(view->current_active_index - (int32_t)index);
+        int32_t distance = calculate_distance(view, index, view->current_active_index);
         if ( is_line_intermission(view, view->current_active_index) ) {
             distance = LINE_FADE_MAX_DISTANCE;
         }
