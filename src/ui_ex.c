@@ -189,6 +189,17 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
+static void check_line_hover(const LyricsView_t *view, Drawable_t *drawable, const int32_t index) {
+    if ( ui_mouse_hovering_drawable(drawable, 0, NULL, NULL, NULL) ) {
+        ui_drawable_set_alpha_immediate(drawable, calculate_alpha(0));
+    }
+    if ( ui_mouse_clicked_drawable(drawable, 0, NULL, NULL, NULL) ) {
+        const Song_Line_t *line = view->song->lyrics_lines->data[index];
+        audio_seek(line->base_start_time);
+        view->container->viewport_y = 0;
+    }
+}
+
 static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     Drawable_t *drawable = view->line_drawables->data[index];
     if ( index > 0 ) {
@@ -233,9 +244,11 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
     } else if ( view->layout_dirty ) {
         ui_reposition_drawable(ui, drawable);
     }
+
+    check_line_hover(view, drawable, index);
 }
 
-static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
+static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
     const LineState_t new_state = LINE_HIDDEN;
@@ -263,6 +276,8 @@ static void set_line_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
             distance = LINE_FADE_MAX_DISTANCE;
         }
         ui_drawable_set_alpha(drawable, calculate_alpha(distance));
+        // If it's visible, let the user click on it to wind back to that line
+        check_line_hover(view, drawable, index);
     }
 }
 
@@ -346,7 +361,7 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
                 }
             }
             // else just set it hidden (or afterward when it finally should disappear)
-            set_line_hidden(ui, view, i);
+            set_line_hidden(view, i);
         }
     }
 

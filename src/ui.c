@@ -412,7 +412,7 @@ Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y);
+    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y, true);
 
     if ( x != NULL )
         *x = parent_x + drawable->bounds.x;
@@ -420,12 +420,14 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
         *y = parent_y + drawable->bounds.y;
 }
 
-void ui_get_container_canon_pos(const Container_t *container, double *x, double *y) {
+void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset) {
     double parent_x = 0, parent_y = 0;
     const Container_t *parent = container;
     while ( parent != NULL ) {
         parent_x += parent->bounds.x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
+        if ( include_viewport_offset )
+            parent_y += parent->viewport_y;
         parent = parent->parent;
     }
 
@@ -438,7 +440,7 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
 bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                  int32_t *out_mouse_y) {
     double canon_x, canon_y;
-    ui_get_container_canon_pos(container, &canon_x, &canon_y);
+    ui_get_container_canon_pos(container, &canon_x, &canon_y, false);
 
     int32_t mouse_x, mouse_y;
     events_get_mouse_position(&mouse_x, &mouse_y);
