@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(etsuko C)
 
 set(CMAKE_C_STANDARD 23)
@@ -49,14 +49,13 @@ if (EMSCRIPTEN)
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
 
     target_compile_options(etsuko PRIVATE
-            "SHELL:-sUSE_SDL=2"
             "SHELL:-sUSE_ICU=1"
     )
 
     target_link_options(etsuko PRIVATE
-            "SHELL:-sUSE_SDL=2"
-            "SHELL:-sUSE_GLFW=0"
+            "SHELL:-sUSE_GLFW=3"
             "SHELL:-sUSE_ICU=1"
+            "SHELL:-lopenal"
 
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
             "SHELL:-sEXIT_RUNTIME=0"
@@ -72,19 +71,16 @@ if (EMSCRIPTEN)
             "SHELL:-sFILESYSTEM=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
-            #"SHELL:--use-preload-plugins"
-            #"SHELL:--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets"
     )
 
 else ()
     message(STATUS "Configuring regular desktop build")
 
-    find_package(SDL2 REQUIRED)
-    target_link_libraries(etsuko
-            PRIVATE
-            $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
-            $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
-    )
+    find_package(glfw3 REQUIRED)
+    target_link_libraries(etsuko PRIVATE glfw)
+
+    find_package(OpenAL REQUIRED)
+    target_link_libraries(etsuko PRIVATE OpenAL::OpenAL)
 
     find_package(OpenGL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenGL::GL)
@@ -130,7 +126,6 @@ else ()
 
     target_include_directories(etsuko PRIVATE
             ${CMAKE_SOURCE_DIR}/src
-            ${SDL2_INCLUDE_DIRS}
     )
 endif ()
 
