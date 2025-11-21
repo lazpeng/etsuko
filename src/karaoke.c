@@ -493,8 +493,9 @@ static void check_user_input(const Karaoke_t *state) {
         state->song_name_text->enabled = state->song_artist_album_text->enabled = false;
         state->song_controls_container->enabled = true;
     } else {
-        state->song_name_text->enabled = state->song_artist_album_text->enabled = true;
-        state->song_controls_container->enabled = false;
+        const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
+        state->song_name_text->enabled = state->song_artist_album_text->enabled = !is_not_played;
+        state->song_controls_container->enabled = is_not_played;
     }
 
     if ( ui_mouse_hovering_container(state->lyrics_view->container, NULL, NULL, NULL) ) {
