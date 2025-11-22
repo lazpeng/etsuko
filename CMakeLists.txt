@@ -50,6 +50,7 @@ if (EMSCRIPTEN)
 
     target_compile_options(etsuko PRIVATE
             "SHELL:-sUSE_ICU=1"
+            "SHELL:-Oz"
     )
 
     target_link_options(etsuko PRIVATE
@@ -67,7 +68,6 @@ if (EMSCRIPTEN)
 
             "SHELL:-Oz"
             "SHELL:-flto"
-            "SHELL:-g0"
             "SHELL:-sFILESYSTEM=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
