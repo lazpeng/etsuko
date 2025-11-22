@@ -32,6 +32,7 @@ typedef struct {
     int sample_rate;
     double total_time;
     uint64_t total_samples;
+    uint64_t last_first_decoded_sample;
     bool paused;
     bool stopped;
 } audio_state_t;
@@ -183,6 +184,9 @@ void audio_seek(const double time) {
 
     for ( int i = 0; i < NUM_BUFFERS; i++ ) {
         const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
+        if ( i == 0 ) {
+            g_audio.last_first_decoded_sample = g_audio.decoder.cur_sample;
+        }
         if ( read > 0 ) {
             const int format = g_audio.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
             alBufferData(g_audio.buffers[i], format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)), g_audio.sample_rate);
@@ -205,8 +209,7 @@ double audio_elapsed_time(void) {
         return 0.0;
     }
 
-    const uint64_t current_sample = g_audio.decoder.cur_sample;
-    return (double)current_sample / (double)g_audio.sample_rate / (double)g_audio.channels;
+    return (double)g_audio.last_first_decoded_sample / (double)g_audio.sample_rate / (double)g_audio.channels;
 }
 
 double audio_total_time(void) { return g_audio.total_time; }
@@ -220,12 +223,16 @@ void audio_loop(void) {
 
     ALint processed = 0;
     alGetSourcei(g_audio.source, AL_BUFFERS_PROCESSED, &processed);
+    bool first = true;
 
     while ( processed > 0 ) {
         ALuint buffer;
         alSourceUnqueueBuffers(g_audio.source, 1, &buffer);
         check_al_error("alSourceUnqueueBuffers");
-
+        if ( first ) {
+            g_audio.last_first_decoded_sample = g_audio.decoder.cur_sample;
+            first = false;
+        }
         const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
 
         if ( read > 0 ) {
