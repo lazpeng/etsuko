@@ -69,6 +69,7 @@ if (EMSCRIPTEN)
             "SHELL:-Oz"
             "SHELL:-flto"
             "SHELL:-sFILESYSTEM=0"
+            "SHELL:--closure=1"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
     )
@@ -100,8 +101,6 @@ else ()
     # -lm
     target_link_libraries(etsuko PRIVATE m)
 
-    # Add sanitizers only for Debug builds.
-    # For single-config generators check CMAKE_BUILD_TYPE, for multi-config use generator expressions.
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(etsuko PRIVATE "-fsanitize=address,undefined")
         target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
