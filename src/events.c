@@ -1,5 +1,6 @@
 #include "events.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static bool g_quit = false;
@@ -45,6 +46,8 @@ static void mouse_button_callback(GLFWwindow *window, const int button, const in
         g_mouse_x = (int32_t)(x * g_window_pixel_scale);
         g_mouse_y = (int32_t)(y * g_window_pixel_scale);
         g_mouse_clicked = true;
+
+        printf("mouse clicked at %d,%d\n", g_mouse_x, g_mouse_y);
     }
 }
 
@@ -55,7 +58,9 @@ static void cursor_position_callback(GLFWwindow *, const double x_pos, const dou
 
 static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_mouse_scroll += y_offset; }
 
-static void window_size_callback(GLFWwindow *, int, int) { g_window_resized = true; }
+static void window_size_callback(GLFWwindow *, int, int) {
+    g_window_resized = true;
+}
 
 void events_setup_callbacks(void *window) {
     GLFWwindow *w = window;
@@ -63,7 +68,7 @@ void events_setup_callbacks(void *window) {
     glfwSetMouseButtonCallback(w, mouse_button_callback);
     glfwSetCursorPosCallback(w, cursor_position_callback);
     glfwSetScrollCallback(w, scroll_callback);
-    glfwSetFramebufferSizeCallback(w, window_size_callback);
+    glfwSetWindowSizeCallback(w, window_size_callback);
 }
 
 void events_init(void) {}

@@ -35,6 +35,7 @@
 #define RESOURCE_INCLUDE_SHADERS
 #include "resource_includes.h"
 
+#define BASE_DPI 72.f
 // 1MB
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
 #define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
@@ -188,7 +189,7 @@ static void set_shader_program(GLuint program) {
 }
 
 static bool texture_needs_reconfigure(const Texture_t *texture, const Bounds_t *at) {
-    return (texture->buf_w != at->w || texture->buf_h != at->h || texture->buf_x != at->x || texture->buf_y != at->y);
+    return texture->buf_w != at->w || texture->buf_h != at->h || texture->buf_x != at->x || texture->buf_y != at->y;
 }
 
 static void mark_texture_configured(Texture_t *texture, const Bounds_t *at) {
@@ -201,12 +202,11 @@ static void mark_texture_configured(Texture_t *texture, const Bounds_t *at) {
 #ifdef __EMSCRIPTEN__
 static EM_BOOL on_web_resize(const int eventType, const EmscriptenUiEvent *uiEvent, void *) {
     if ( eventType == EMSCRIPTEN_EVENT_RESIZE ) {
-        const double dpr = emscripten_get_device_pixel_ratio();
-        const int width = (int)(uiEvent->windowInnerWidth * dpr);
-        const int height = (int)(uiEvent->windowInnerHeight * dpr);
+        const int width = uiEvent->windowInnerWidth;
+        const int height = uiEvent->windowInnerHeight;
 
         glfwSetWindowSize(g_renderer->window, width, height);
-        emscripten_set_element_css_size("#canvas", uiEvent->windowInnerWidth, uiEvent->windowInnerHeight);
+        emscripten_set_element_css_size("#canvas", width, height);
 
         return EM_TRUE;
     }
@@ -230,11 +230,8 @@ void render_init(void) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    const double dpr = emscripten_get_device_pixel_ratio();
-    const double logical_w = emscripten_run_script_int("window.innerWidth");
-    const double logical_h = emscripten_run_script_int("window.innerHeight");
-    const int width = (int)(logical_w * dpr);
-    const int height = (int)(logical_h * dpr);
+    const int width = emscripten_run_script_int("window.innerWidth");
+    const int height = emscripten_run_script_int("window.innerHeight");
 #else
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -257,7 +254,7 @@ void render_init(void) {
     // Force CSS size to match logical size, while window/buffer is scaled
     // This is unfortunately necessary because under GLFW it seems you can't have the framebuffer and window at different
     // sizes. I'm not sure what the problem is but while dirty, this works currently, and I'll leave to investigate this later
-    emscripten_set_element_css_size("#canvas", logical_w, logical_h);
+    emscripten_set_element_css_size("#canvas", width, height);
 #endif
 
     events_setup_callbacks(g_renderer->window);
@@ -376,10 +373,9 @@ void render_on_window_changed(void) {
     int32_t outW, outH;
     glfwGetFramebufferSize(g_renderer->window, &outW, &outH);
 
-    int32_t window_w;
-    glfwGetWindowSize(g_renderer->window, &window_w, NULL);
-
-    g_renderer->window_pixel_scale = (double)outW / (double)window_w;
+    g_renderer->window_pixel_scale = emscripten_get_device_pixel_ratio();
+    printf("pixel scale: %.2f\n", g_renderer->window_pixel_scale);
+    printf("outW: %d outH: %d\n", outW, outH);
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
@@ -387,7 +383,6 @@ void render_on_window_changed(void) {
     glfwGetWindowContentScale(g_renderer->window, &x_scale, &y_scale);
 
     // Approximate DPI based on scale factor
-#define BASE_DPI 96.f
     g_renderer->h_dpi = BASE_DPI * x_scale;
     g_renderer->v_dpi = BASE_DPI * y_scale;
 
@@ -717,7 +712,7 @@ int32_t render_measure_pixels_from_em(const double em) {
 
 int32_t render_measure_pt_from_em(const double em) {
     const double pixels = render_measure_pixels_from_em(em);
-    const int32_t pt_size = (int32_t)lround(pixels * 72.0 / g_renderer->h_dpi);
+    const int32_t pt_size = (int32_t)lround(pixels * BASE_DPI / g_renderer->h_dpi);
     return pt_size;
 }
 

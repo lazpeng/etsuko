@@ -212,14 +212,13 @@ int karaoke_load_loop(Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
         return -1;
-    events_frame_end();
 
     if ( state->load_ui_font.status == LOAD_FINISHED && config_get()->show_loading_screen ) {
         if ( state->loading_progress_bar == NULL ) {
             state->loading_progress_bar = ui_make_progressbar(state->ui,
                                                               &(Drawable_ProgressBarData_t){
                                                                   .progress = 0,
-                                                                  .border_radius_em = 1.0,
+                                                                  .border_radius_em = 0.8,
                                                                   .fg_color = (Color_t){.r = 200, .g = 200, .b = 200, .a = 255},
                                                                   .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
                                                               },
@@ -248,6 +247,7 @@ int karaoke_load_loop(Karaoke_t *state) {
     // Recalculate dynamic elements
     const int initialized = load_async(state);
 
+    events_frame_end();
     ui_draw(state->ui);
     ui_end_loop();
 
