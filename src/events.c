@@ -46,8 +46,6 @@ static void mouse_button_callback(GLFWwindow *window, const int button, const in
         g_mouse_x = (int32_t)(x * g_window_pixel_scale);
         g_mouse_y = (int32_t)(y * g_window_pixel_scale);
         g_mouse_clicked = true;
-
-        printf("mouse clicked at %d,%d\n", g_mouse_x, g_mouse_y);
     }
 }
 
