@@ -373,9 +373,14 @@ void render_on_window_changed(void) {
     int32_t outW, outH;
     glfwGetFramebufferSize(g_renderer->window, &outW, &outH);
 
+#ifdef __EMSCRIPTEN__
     g_renderer->window_pixel_scale = emscripten_get_device_pixel_ratio();
-    printf("pixel scale: %.2f\n", g_renderer->window_pixel_scale);
-    printf("outW: %d outH: %d\n", outW, outH);
+#else
+    int32_t window_w;
+    glfwGetWindowSize(g_renderer->window, &window_w, NULL);
+
+    g_renderer->window_pixel_scale = (double)outW / (double)window_w;
+#endif
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
