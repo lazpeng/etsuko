@@ -8,7 +8,7 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-#define VERSION "0.6.0.b"
+#define VERSION "0.6.0b"
 #define APP_NAME "etsuko"
 #define DEFAULT_TITLE APP_NAME " - Karaoke v" VERSION
 #define DEFAULT_WIDTH (1280)
