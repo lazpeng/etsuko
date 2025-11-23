@@ -12,7 +12,7 @@
 
 typedef struct Song_LineTiming_t {
     int32_t end_idx;
-    double start_time, duration;
+    double duration;
 } Song_LineTiming_t;
 
 typedef enum Song_LineAlignment_t {

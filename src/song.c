@@ -6,10 +6,11 @@
 
 #include "constants.h"
 #include "error.h"
+#include "str_utils.h"
 
 static Song_t *g_song;
 
-typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS } BlockType;
+typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS, BLOCK_ASS } BlockType;
 
 static void read_header(Song_t *song, const char *buffer, const size_t length) {
     const size_t equals = strcspn(buffer, "=");
@@ -161,21 +162,85 @@ static void read_timings(const Song_t *song, const char *buffer) {
     vec_add(song->lyrics_lines, line);
 }
 
-static char *buffer_gets(char *destination, const size_t size, const char *src, const size_t src_len, size_t *offset) {
-    if ( *offset >= src_len )
-        return NULL;
-
-    size_t i = 0;
-    while ( i < size - 1 && *offset < src_len ) {
-        const char c = src[*offset];
-        destination[i++] = c;
-        (*offset)++;
-
-        if ( c == '\n' )
-            break;
+static void read_ass_line_content(Song_Line_t *line, const char *start, const char *end) {
+    const int32_t brace = str_find(start, '{', 0, end - start);
+    if ( brace < 0 ) {
+        // No sub timings
+        const size_t len = end != NULL ? end - start : strlen(start);
+        line->full_text = strndup(start, len);
+        // return early
+        return;
     }
-    destination[i] = '\0';
-    return i > 0 ? destination : NULL;
+
+    const char *ptr = start;
+    StrBuffer_t *buffer = str_buf_init();
+    while ( ptr != end ) {
+        if ( *ptr != '{' ) {
+            printf("value of *ptr: %s value of start: %s\n", ptr, start);
+            error_abort("Invalid sub timing: *start does not start with a {");
+        }
+        // Now we read a milisecond value from inside the braces that tell us for how long this part of the string
+        // should remain highlighted from the base start offset
+        const int32_t closing_brace = str_find(ptr, '}', 1+2, end-ptr);
+        // Unfortunately we have to dup this shit because the stdlib is dumb
+        char *dup = strndup(ptr+1+2, closing_brace-1-2); // Also skip 2 chars which is the \k before the number
+        const int64_t ms = strtoll(dup, NULL, 10);
+        free(dup);
+
+        if ( line->num_timings >= MAX_TIMINGS_PER_LINE ) {
+            error_abort("Number of max timings per line exceeded. Maybe consider increasing this number");
+        }
+        Song_LineTiming_t *timing = &line->timings[line->num_timings++];
+        timing->duration = (double)ms / 1000.0;
+        // Find when this sub timing ends
+        const int32_t next_brace = str_find(ptr, '{', 1, end-ptr);
+        const char *prev_ptr = ptr;
+        ptr = next_brace < 0 ? end : ptr + next_brace;
+        timing->end_idx = ptr - prev_ptr;
+        // Copy the line contents into the buffer
+        str_buf_append(buffer, prev_ptr+1+closing_brace, ptr);
+    }
+
+    line->full_text = strndup(buffer->data, buffer->len);
+    str_buf_destroy(buffer);
+}
+
+static void read_ass(const Song_t *song, const char *buffer) {
+    if ( str_is_empty(buffer) )
+        return;
+
+    // VERY naively processes a .ass dialogue line as if it's completely correct and sanitized
+    Song_Line_t *line = calloc(1, sizeof(*line));
+    // Find the first : which is after Dialogue: and the first colon, and the first argument
+    // AND the hours portion of the first timing, which we ignore
+    const char *comma = strchr(buffer, ',');
+    const char *colon = strchr(comma + 1, ':');
+    // The next comma which denotes the start of the end timing
+    comma = strchr(colon, ',');
+    const double start_timing = convert_timing(colon + 1, comma - colon + 1);
+    // The next comma after that
+    comma = strchr(colon + 1, ',');
+    colon = strchr(comma + 1, ':');
+    const double end_timing = convert_timing(colon + 1, comma - colon + 1);
+    line->base_start_time = start_timing;
+    line->base_duration = end_timing - line->base_start_time;
+
+    // Now we skip more 7 commas in order to get to the final text
+    const int commas_to_skip = 7;
+    for ( int i = 0; i < commas_to_skip; i++ ) {
+        comma = strchr(comma + 1, ',');
+    }
+
+    // Now what's left is the actual line text
+    // Before, set the end to wherever is the properties part (or NULL if this line doesn't have any)
+    const char *properties = strchr(comma + 1, '#');
+    read_ass_line_content(line, comma + 1, properties);
+    // If we have any properties, read those now
+    if ( properties != NULL ) {
+        read_lyrics_opts(line, properties + 1);
+    }
+
+    vec_add(song->lyrics_lines, line);
 }
 
 void song_load(const char *filename, const char *src, const int src_size) {
@@ -190,7 +255,9 @@ void song_load(const char *filename, const char *src, const int src_size) {
     size_t offset = 0;
 
     BlockType current_block = BLOCK_HEADER;
-    while ( buffer_gets(buffer, BUFFER_SIZE, src, src_size, &offset) ) {
+    size_t bytes_read = 0;
+    while ( (bytes_read = str_buffered_read(buffer, BUFFER_SIZE, src, src_size, offset)) > 0 ) {
+        offset += bytes_read;
         buffer[strcspn(buffer, "\r")] = 0;
         buffer[strcspn(buffer, "\n")] = 0;
         const size_t len = strnlen(buffer, BUFFER_SIZE);
@@ -199,6 +266,8 @@ void song_load(const char *filename, const char *src, const int src_size) {
                 current_block = BLOCK_TIMINGS;
             } else if ( strncmp(buffer, "#lyrics", BUFFER_SIZE) == 0 ) {
                 current_block = BLOCK_LYRICS;
+            } else if ( strncmp(buffer, "#ass", BUFFER_SIZE) == 0 ) {
+                current_block = BLOCK_ASS;
             } else {
                 error_abort("Invalid block inside song file");
             }
@@ -214,6 +283,9 @@ void song_load(const char *filename, const char *src, const int src_size) {
             break;
         case BLOCK_TIMINGS:
             read_timings(g_song, buffer);
+            break;
+        case BLOCK_ASS:
+            read_ass(g_song, buffer);
             break;
         }
     }
