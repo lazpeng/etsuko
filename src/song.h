@@ -46,6 +46,7 @@ typedef struct Song_t {
     // Meta data
     char *id;
     char *file_path, *album_art_path;
+    char *credits;
     char *karaoke, *language, *hidden;
     Song_LineAlignment_t line_alignment;
     uint32_t bg_color;

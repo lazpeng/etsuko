@@ -24,6 +24,7 @@ typedef struct etsuko_LyricsView_t {
     LineState_t line_states[MAX_SONG_LINES];
     double prev_viewport_y;
     bool layout_dirty;
+    Drawable_t *credit_separator, *credits_prefix, *credits_content;
 } LyricsView_t;
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);

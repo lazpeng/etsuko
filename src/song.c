@@ -75,6 +75,8 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         } else {
             error_abort("Invalid background type for the song");
         }
+    } else if ( strncmp(buffer, "writtenBy", equals) == 0 ) {
+        song->credits = value;
     }
 }
 
@@ -265,6 +267,9 @@ void song_destroy(void) {
         }
         if ( g_song->font_override != NULL ) {
             free(g_song->font_override);
+        }
+        if ( g_song->credits != NULL ) {
+            free(g_song->credits);
         }
         // Free the song
         free(g_song);

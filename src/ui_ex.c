@@ -115,14 +115,56 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         }
         prev = ui_make_text(ui, &data, parent, &layout);
         vec_add(view->line_drawables, prev);
+
+        view->line_states[i] = LINE_NONE;
+        ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+        ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0});
+        ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = 0.05});
     }
 
-    for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
-        Drawable_t *drawable = view->line_drawables->data[i];
-        view->line_states[i] = LINE_NONE;
-        ui_animate_translation(drawable, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
-        ui_animate_fade(drawable, &(Animation_FadeInOutData_t){.duration = 1.0});
-        ui_animate_scale(drawable, &(Animation_ScaleData_t){.duration = 0.05});
+    if ( !str_is_empty(song->credits) ) {
+        Drawable_t *last = view->line_drawables->data[view->line_drawables->size - 1];
+        view->credit_separator = ui_make_rectangle(
+            ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}, .border_radius_em = 1.0},
+            view->container,
+            &(Layout_t){.offset_y = 0.05,
+                        .offset_x = 0,
+                        .width = 0.8,
+                        .height = 1,
+                        .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
+                                 LAYOUT_PROPORTIONAL_Y,
+                        .relative_to = last});
+        ui_animate_translation(view->credit_separator, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+
+        view->credits_prefix =
+            ui_make_text(ui,
+                         &(Drawable_TextData_t){.text = "Written by: ",
+                                                .draw_shadow = true,
+                                                .em = 0.8,
+                                                .font_type = FONT_UI,
+                                                .alignment = ALIGN_LEFT,
+                                                .color = {200, 200, 200, 255}},
+                         view->container,
+                         &(Layout_t){.offset_y = 0.01,
+                                     .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
+                                     .relative_to = view->credit_separator});
+        ui_drawable_set_alpha_immediate(view->credits_prefix, 150);
+        ui_animate_translation(view->credits_prefix, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+
+        view->credits_content =
+            ui_make_text(ui,
+                         &(Drawable_TextData_t){.text = song->credits,
+                                                .draw_shadow = true,
+                                                .em = 0.8,
+                                                .font_type = FONT_UI,
+                                                .alignment = ALIGN_LEFT,
+                                                .color = {200, 200, 200, 255}},
+                         view->container,
+                         &(Layout_t){.offset_y = 0, .offset_x = 0.001,
+                                     .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_PROPORTIONAL_POS,
+                                     .relative_to = view->credits_prefix});
+        ui_drawable_set_alpha_immediate(view->credits_prefix, 200);
+        ui_animate_translation(view->credits_content, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
     }
 
     return view;
@@ -251,6 +293,7 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
 static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
+    // TODO: Fix vertical padding when lines are hidden. The gap is bigger than for inactive lines
     const LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
@@ -368,6 +411,15 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
 
     // Now do a reverse loop setting all the hidden lines to stack on top of each other
     stack_hidden_line_recursive(ui, view, 0);
+
+    if ( view->layout_dirty ) {
+        if ( view->credit_separator )
+            ui_recompute_drawable(ui, view->credit_separator);
+        if ( view->credits_prefix )
+            ui_recompute_drawable(ui, view->credits_prefix);
+        if ( view->credits_content )
+            ui_recompute_drawable(ui, view->credits_content);
+    }
 
     view->prev_viewport_y = view->container->viewport_y;
 }

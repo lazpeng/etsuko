@@ -94,14 +94,19 @@ void ui_begin_loop(Ui_t *ui) {
 static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t *base_bounds) {
     const Drawable_ProgressBarData_t *data = drawable->custom_data;
 
-    Bounds_t bounds = drawable->bounds;
-    bounds.x += base_bounds->x;
-    bounds.y += base_bounds->y;
+    Bounds_t bounds = *base_bounds;
 
     const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
     render_draw_rounded_rect(drawable->texture, &bounds, &data->bg_color, border_radius);
     bounds.w *= MIN(1.0, data->progress);
     render_draw_rounded_rect(drawable->texture, &bounds, &data->fg_color, border_radius);
+}
+
+static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
+    const Drawable_RectangleData_t *data = drawable->custom_data;
+
+    const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+    render_draw_rounded_rect(drawable->texture, bounds, &data->color, border_radius);
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
@@ -137,7 +142,8 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
-    if ( layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO ) {
+    const bool maintain_aspect_ratio = layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO;
+    if ( maintain_aspect_ratio ) {
         // Decide based on the smaller axis
         const double aspect_ratio = out_bounds->w / out_bounds->h;
 
@@ -158,10 +164,10 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
-    if ( w != layout->width )
+    if ( layout->width != 0 || maintain_aspect_ratio )
         out_bounds->w = w;
 
-    if ( h != layout->height )
+    if ( layout->height != 0 || maintain_aspect_ratio )
         out_bounds->h = h;
 }
 
@@ -335,15 +341,6 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         return;
     }
 
-    if ( drawable->dynamic ) {
-        if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
-            draw_dynamic_progressbar(drawable, base_bounds);
-        } else {
-            error_abort("Unrecognized dynamic drawable");
-        }
-        return;
-    }
-
     struct AnimationDelta delta = {
         .final_bounds = drawable->bounds,
         .final_alpha = drawable->alpha_mod,
@@ -354,6 +351,17 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     Bounds_t rect = delta.final_bounds;
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
+
+    if ( drawable->dynamic ) {
+        if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
+            draw_dynamic_progressbar(drawable, &rect);
+        } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
+            draw_dynamic_rectangle(drawable, &rect);
+        } else {
+            error_abort("Unrecognized dynamic drawable");
+        }
+        return;
+    }
 
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
@@ -407,7 +415,9 @@ void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, const 
     render_set_bg_gradient(primary_color, secondary_color, type);
 }
 
-void ui_sample_bg_colors_from_image(const unsigned char *bytes, const int length) { render_sample_bg_colors_from_image(bytes, length); }
+void ui_sample_bg_colors_from_image(const unsigned char *bytes, const int length) {
+    render_sample_bg_colors_from_image(bytes, length);
+}
 
 Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
@@ -501,7 +511,7 @@ static void free_image_data(Drawable_ImageData_t *data) { free(data); }
 static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressBarData_t *data) {
     Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
-        error_abort("Failed to allocate image data");
+        error_abort("Failed to allocate progress bar data");
     }
     result->progress = data->progress;
     result->border_radius_em = data->border_radius_em;
@@ -510,7 +520,17 @@ static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressB
     return result;
 }
 
+static Drawable_RectangleData_t *dup_rectangle_data(const Drawable_RectangleData_t *data) {
+    Drawable_RectangleData_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate rectangle data");
+    }
+    result->color = data->color;
+    return result;
+}
+
 static void free_progressbar_data(Drawable_ProgressBarData_t *data) { free(data); }
+static void free_rectangle_data(Drawable_RectangleData_t *data) { free(data); }
 
 static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container, const int32_t start) {
     const double m_current_width = container->bounds.w;
@@ -711,6 +731,18 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
     return result;
 }
 
+Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_RECTANGLE, true);
+
+    result->texture = render_make_null();
+    result->custom_data = dup_rectangle_data(data);
+    result->layout = *layout;
+
+    ui_reposition_drawable(ui, result);
+    vec_add(container->child_drawables, result);
+    return result;
+}
+
 void ui_destroy_drawable(Drawable_t *drawable) {
     if ( drawable->texture != NULL ) {
         render_destroy_texture(drawable->texture);
@@ -728,8 +760,11 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
             Drawable_ProgressBarData_t *progress_bar_data = drawable->custom_data;
             free_progressbar_data(progress_bar_data);
+        } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
+            Drawable_RectangleData_t *rectangle_data = drawable->custom_data;
+            free_rectangle_data(rectangle_data);
         } else {
-            free(drawable->custom_data);
+            error_abort("Unknown drawable type");
         }
     }
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
@@ -839,7 +874,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);
         }
-    } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
+    } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR || drawable->type == DRAW_TYPE_RECTANGLE ) {
         ui_reposition_drawable(ui, drawable);
     } else {
         error_abort("Invalid drawable type");
