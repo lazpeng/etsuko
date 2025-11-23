@@ -51,6 +51,7 @@ if (EMSCRIPTEN)
     target_compile_options(etsuko PRIVATE
             "SHELL:-sUSE_ICU=1"
             "SHELL:-Oz"
+            "SHELL:-g0"
     )
 
     target_link_options(etsuko PRIVATE
@@ -60,13 +61,14 @@ if (EMSCRIPTEN)
 
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
             "SHELL:-sEXIT_RUNTIME=0"
-            "SHELL:-sASYNCIFY=1"
+            "SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
 
             #"SHELL:-sMIN_WEBGL_VERSION=2"
             "SHELL:-sMAX_WEBGL_VERSION=2"
 
             "SHELL:-Oz"
+            "SHELL:-g0"
             "SHELL:-flto"
             "SHELL:-sFILESYSTEM=0"
             "SHELL:--closure=1"
