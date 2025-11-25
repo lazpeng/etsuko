@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <unicode/utf8.h>
+
 #include "error.h"
 #include "events.h"
 #include "str_utils.h"
@@ -315,13 +317,32 @@ static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds
     }
 }
 
-struct AnimationDelta {
+static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet_t *regions) {
+    const Animation_DrawRegionData_t *data = animation->custom_data;
+    const double progress = animation->elapsed / animation->duration;
+    if ( progress < 1.0 ) {
+        for ( int i = 0; i < regions->num_regions; i++ ) {
+            // Naively consider that just the end indexes that are going to change
+            const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
+            // TODO: Figure out a way to include animating the y axis but for now leave it commented
+            // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
+            // final_regions[i][2] = data->prev_regions[i][2] + delta_x * (float)ease_out_cubic(progress);
+            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
+            // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
+        }
+    } else {
+        animation->active = false;
+    }
+}
+
+typedef struct AnimationDelta {
     Bounds_t final_bounds;
     int32_t final_alpha;
     float color_mod;
-};
+    DrawRegionOptSet_t draw_regions;
+} AnimationDelta;
 
-static void apply_animations(const Drawable_t *drawable, struct AnimationDelta *animation_delta) {
+static void apply_animations(const Drawable_t *drawable, AnimationDelta *animation_delta) {
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
         Animation_t *animation = drawable->animations->data[i];
         if ( animation->active ) {
@@ -331,6 +352,8 @@ static void apply_animations(const Drawable_t *drawable, struct AnimationDelta *
                 apply_fade_animation(animation, &animation_delta->final_alpha);
             } else if ( animation->type == ANIM_SCALE ) {
                 apply_scale_animation(animation, &animation_delta->final_bounds);
+            } else if ( animation->type == ANIM_DRAW_REGION ) {
+                apply_draw_region_animation(animation, &animation_delta->draw_regions);
             }
         }
     }
@@ -341,11 +364,11 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         return;
     }
 
-    struct AnimationDelta delta = {
-        .final_bounds = drawable->bounds,
-        .final_alpha = drawable->alpha_mod,
-        .color_mod = drawable->color_mod,
-    };
+    AnimationDelta delta = {.final_bounds = drawable->bounds,
+                            .final_alpha = drawable->alpha_mod,
+                            .color_mod = drawable->color_mod,
+                            .draw_regions = {0}};
+    delta.draw_regions = drawable->draw_regions;
     apply_animations(drawable, &delta);
 
     Bounds_t rect = delta.final_bounds;
@@ -363,16 +386,27 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         return;
     }
 
+    DrawTextureOpts_t opts = {0};
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
         const int32_t max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
         const uint8_t alpha = MIN(max_alpha, drawable->alpha_mod);
-        render_draw_texture(drawable->shadow->texture, &shadow_bounds, alpha, 0.f);
+        opts.alpha_mod = alpha;
+        opts.color_mod = 0.f;
+        render_draw_texture(drawable->shadow->texture, &shadow_bounds, &opts);
     }
 
-    render_draw_texture(drawable->texture, &rect, delta.final_alpha, delta.color_mod);
+    opts.color_mod = delta.color_mod;
+    if ( drawable->draw_underlay ) {
+        opts.alpha_mod = drawable->underlay_alpha;
+        render_draw_texture(drawable->texture, &rect, &opts);
+    }
+
+    opts.alpha_mod = delta.final_alpha;
+    opts.draw_regions = &delta.draw_regions;
+    render_draw_texture(drawable->texture, &rect, &opts);
 }
 
 static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
@@ -431,7 +465,7 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
         *y = parent_y + drawable->bounds.y;
 }
 
-void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset) {
+void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, const bool include_viewport_offset) {
     double parent_x = 0, parent_y = 0;
     const Container_t *parent = container;
     while ( parent != NULL ) {
@@ -488,6 +522,7 @@ static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     result->alignment = data->alignment;
     result->line_padding = data->line_padding;
     result->draw_shadow = data->draw_shadow;
+    result->compute_offsets = data->compute_offsets;
     return result;
 }
 
@@ -595,11 +630,80 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     return result;
 }
 
+/**
+ * Partially computes text offsets character by character. Some of the information is later populated by internal_make_text.
+ */
+static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line, const int32_t index,
+                                                  const int32_t byte_offset) {
+    const size_t text_size = strnlen(line, MAX_TEXT_SIZE);
+    const int32_t pixels_size = render_measure_pixels_from_em(data->em);
+
+    TextOffsetInfo_t *info = calloc(1, sizeof(*info));
+    if ( info == NULL ) {
+        error_abort("Failed to allocate text offset info");
+    }
+    vec_add(data->line_offsets, info);
+    info->line_idx = index;
+    info->char_offsets = vec_init();
+    info->start_byte_offset = byte_offset;
+
+    double x = 0;
+    UChar32 prev_c = -1;
+    for ( size_t i = 0; i < text_size; ) {
+        const size_t prev_i = i;
+
+        UChar32 c;
+        U8_NEXT(line, i, text_size, c);
+        CharBounds_t char_bounds;
+        render_measure_char_bounds(c, prev_c, pixels_size, &char_bounds, data->font_type);
+
+        CharOffsetInfo_t *char_info = calloc(1, sizeof(*char_info));
+        if ( char_info == NULL ) {
+            error_abort("Failed to allocate char offset info");
+        }
+        char_info->char_idx = (int32_t)prev_i;
+        char_info->char_idx = info->num_chars++;
+        char_info->height = char_bounds.font_height;
+        char_info->width = char_bounds.x1 - char_bounds.x0;
+        char_info->end_byte_offset = byte_offset + (int32_t)i;
+        char_info->x = x;
+        char_info->y = 0; // Will be computed later
+
+        x += char_bounds.advance + char_bounds.kerning;
+
+        info->end_byte_offset = byte_offset + (int32_t)i;
+        info->end_x = x + char_info->width;
+        info->end_y = char_info->height;
+
+        vec_add(info->char_offsets, char_info);
+
+        prev_c = c;
+    }
+}
+
 static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_TextData_t *data, const Container_t *container,
                                       const Layout_t *layout) {
     Texture_t *final_texture;
 
     data = dup_text_data(data);
+
+    if ( data->compute_offsets ) {
+        if ( data->line_offsets != NULL ) {
+            // TODO: Maybe check if we really need to recompute this
+            for ( size_t i = 0; i < data->line_offsets->size; i++ ) {
+                TextOffsetInfo_t *info = data->line_offsets->data[i];
+                for ( size_t j = 0; j < info->char_offsets->size; j++ ) {
+                    CharOffsetInfo_t *char_info = info->char_offsets->data[j];
+                    free(char_info);
+                }
+                vec_destroy(info->char_offsets);
+                free(info);
+            }
+            vec_destroy(data->line_offsets);
+        }
+        data->line_offsets = vec_init();
+    }
+
     const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
     if ( data->wrap_enabled && measure_text_wrap_stop(data, container, 0) < (int32_t)text_size ) {
         size_t start = 0;
@@ -612,6 +716,10 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             char *line_str = strndup(data->text + start, end - start);
             const int pixels_size = render_measure_pixels_from_em(data->em);
             Texture_t *texture = render_make_text(line_str, pixels_size, &data->color, data->font_type);
+
+            if ( data->compute_offsets ) {
+                internal_partial_compute_text_offsets(data, line_str, (int32_t)textures_vec->size, (int32_t)start);
+            }
             free(line_str);
 
             vec_add(textures_vec, texture);
@@ -628,6 +736,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
         final_texture = target->texture;
 
+        const DrawTextureOpts_t opts = {.color_mod = 1.f, .alpha_mod = 255};
         double x, y = 0;
         for ( size_t i = 0; i < textures_vec->size; i++ ) {
             Texture_t *texture = textures_vec->data[i];
@@ -641,13 +750,26 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
                 error_abort("Invalid alignment mode");
             }
 
+            if ( data->compute_offsets ) {
+                TextOffsetInfo_t *info = data->line_offsets->data[i];
+                info->start_x = x;
+                info->end_x += x;
+                info->start_y = y;
+                // info->end_y = y;
+            }
+
             Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
             // Disable blend on the texture so it doesn't lose alpha from blending multiple times
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
-            render_draw_texture(texture, &destination, 0xFF, 1.f);
+            render_draw_texture(texture, &destination, &opts);
             y += texture->height + data->line_padding;
+
+            if ( data->compute_offsets ) {
+                TextOffsetInfo_t *info = data->line_offsets->data[i];
+                info->end_y += data->line_padding;
+            }
             render_set_blend_mode(blend_mode);
 
             render_destroy_texture(texture);
@@ -658,6 +780,10 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     } else {
         const int32_t pixels_size = render_measure_pixels_from_em(data->em);
         final_texture = render_make_text(data->text, pixels_size, &data->color, data->font_type);
+
+        if ( data->compute_offsets ) {
+            internal_partial_compute_text_offsets(data, data->text, 0, 0);
+        }
     }
 
     if ( result == NULL ) {
@@ -943,6 +1069,16 @@ static Animation_ScaleData_t *dup_anim_scale_data(const Animation_ScaleData_t *d
     return result;
 }
 
+static Animation_DrawRegionData_t *dup_anim_draw_region_data(const Animation_DrawRegionData_t *data) {
+    Animation_DrawRegionData_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation draw region data");
+    }
+    result->duration = data->duration;
+
+    return result;
+}
+
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
     if ( target == NULL ) {
         error_abort("Target drawable is NULL");
@@ -1016,6 +1152,73 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
 
 void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { drawable->color_mod = color_mod; }
 
+void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
+    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
+    if ( animation != NULL ) {
+        Animation_DrawRegionData_t *data = animation->custom_data;
+        if ( animation->active )
+            return; // Wait for it to finish
+        // If it's the same, do nothing
+        // TODO: Currently we only check for the x1 values
+        bool different = false;
+        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+            if ( drawable->draw_regions.regions[i].x1_perc != draw_regions->regions[i].x1_perc ) {
+                different = true;
+                break;
+            }
+        }
+        if ( !different )
+            return;
+
+        // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
+        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+            data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+        }
+        data->draw_regions.num_regions = draw_regions->num_regions;
+        animation->elapsed = 0;
+        animation->active = true;
+    }
+
+    // Copy the real values to the drawable
+    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        drawable->draw_regions.regions[i] = draw_regions->regions[i];
+    }
+    drawable->draw_regions.num_regions = draw_regions->num_regions;
+}
+
+void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
+    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
+    if ( animation != NULL ) {
+        // Cancel animation if it's active
+        animation->active = false;
+        animation->elapsed = animation->duration;
+    }
+
+    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        drawable->draw_regions.regions[i].x0_perc = draw_regions->regions[i].x0_perc;
+        drawable->draw_regions.regions[i].x1_perc = draw_regions->regions[i].x1_perc;
+        drawable->draw_regions.regions[i].y0_perc = draw_regions->regions[i].y0_perc;
+        drawable->draw_regions.regions[i].y1_perc = draw_regions->regions[i].y1_perc;
+    }
+    drawable->draw_regions.num_regions = draw_regions->num_regions;
+}
+
+void ui_drawable_disable_draw_region(Drawable_t *drawable) {
+    // Reset to defaults
+    for ( int i = 0; i < drawable->draw_regions.num_regions; i++ ) {
+        drawable->draw_regions.regions[i].x0_perc = 0.f;
+        drawable->draw_regions.regions[i].x1_perc = 1.f;
+        drawable->draw_regions.regions[i].y0_perc = 0.f;
+        drawable->draw_regions.regions[i].y1_perc = 1.f;
+    }
+    drawable->draw_regions.num_regions = 0;
+}
+
+void ui_drawable_set_draw_underlay(Drawable_t *drawable, const bool draw, const uint8_t alpha) {
+    drawable->draw_underlay = draw;
+    drawable->underlay_alpha = alpha;
+}
+
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                 int32_t *out_mouse_y) {
     double canon_x, canon_y;
@@ -1074,6 +1277,25 @@ void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
 
     result->type = ANIM_SCALE;
     result->custom_data = dup_anim_scale_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+
+    vec_add(target->animations, result);
+}
+
+void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t *data) {
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_DRAW_REGION;
+    result->custom_data = dup_anim_draw_region_data(data);
     result->target = target;
     result->duration = data->duration;
     result->active = false;

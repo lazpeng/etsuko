@@ -11,8 +11,9 @@
 #include "container_utils.h"
 
 typedef struct Song_LineTiming_t {
-    int32_t end_idx;
+    int32_t start_idx, end_idx;
     double duration;
+    double cumulative_duration;
 } Song_LineTiming_t;
 
 typedef enum Song_LineAlignment_t {
@@ -54,6 +55,7 @@ typedef struct Song_t {
     double time_offset;
     char *font_override;
     Song_BgType_t bg_type;
+    bool has_sub_timings;
 } Song_t;
 
 void song_load(const char *filename, const char *src, int src_size);

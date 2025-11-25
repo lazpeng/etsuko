@@ -162,16 +162,24 @@ static void read_timings(const Song_t *song, const char *buffer) {
     vec_add(song->lyrics_lines, line);
 }
 
-static void read_ass_line_content(Song_Line_t *line, const char *start, const char *end) {
-    const int32_t brace = str_find(start, '{', 0, end - start);
+static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *start, const char *end) {
+    if ( end == NULL )
+        end = start + strlen(start);
+
+    line->alignment = song->line_alignment;
+
+    const int32_t brace = str_find(start, '{', 0, (int32_t)(end - start));
     if ( brace < 0 ) {
         // No sub timings
-        const size_t len = end != NULL ? end - start : strlen(start);
+        const size_t len = end - start;
         line->full_text = strndup(start, len);
         // return early
         return;
     }
 
+    song->has_sub_timings = true;
+    const Song_LineTiming_t *prev = NULL;
+    
     const char *ptr = start;
     StrBuffer_t *buffer = str_buf_init();
     while ( ptr != end ) {
@@ -179,9 +187,9 @@ static void read_ass_line_content(Song_Line_t *line, const char *start, const ch
             printf("value of *ptr: %s value of start: %s\n", ptr, start);
             error_abort("Invalid sub timing: *start does not start with a {");
         }
-        // Now we read a milisecond value from inside the braces that tell us for how long this part of the string
+        // Now we read a centisecond value from inside the braces that tell us for how long this part of the string
         // should remain highlighted from the base start offset
-        const int32_t closing_brace = str_find(ptr, '}', 1+2, end-ptr);
+        const int32_t closing_brace = str_find(ptr, '}', 1+2, (int32_t)(end-ptr));
         // Unfortunately we have to dup this shit because the stdlib is dumb
         char *dup = strndup(ptr+1+2, closing_brace-1-2); // Also skip 2 chars which is the \k before the number
         const int64_t ms = strtoll(dup, NULL, 10);
@@ -191,21 +199,25 @@ static void read_ass_line_content(Song_Line_t *line, const char *start, const ch
             error_abort("Number of max timings per line exceeded. Maybe consider increasing this number");
         }
         Song_LineTiming_t *timing = &line->timings[line->num_timings++];
-        timing->duration = (double)ms / 1000.0;
+        timing->duration = (double)ms / 100.0;
+        timing->cumulative_duration = prev != NULL ? prev->cumulative_duration + prev->duration : 0;
         // Find when this sub timing ends
-        const int32_t next_brace = str_find(ptr, '{', 1, end-ptr);
+        const int32_t next_brace = str_find(ptr, '{', 1, (int32_t)(end-ptr));
         const char *prev_ptr = ptr;
         ptr = next_brace < 0 ? end : ptr + next_brace;
-        timing->end_idx = ptr - prev_ptr;
+        timing->start_idx = prev != NULL ? prev->end_idx : 0;
+        timing->end_idx = timing->start_idx + (int32_t)(ptr - (prev_ptr + 1 + closing_brace));
         // Copy the line contents into the buffer
         str_buf_append(buffer, prev_ptr+1+closing_brace, ptr);
+
+        prev = timing;
     }
 
     line->full_text = strndup(buffer->data, buffer->len);
     str_buf_destroy(buffer);
 }
 
-static void read_ass(const Song_t *song, const char *buffer) {
+static void read_ass(Song_t *song, const char *buffer) {
     if ( str_is_empty(buffer) )
         return;
 
@@ -234,7 +246,7 @@ static void read_ass(const Song_t *song, const char *buffer) {
     // Now what's left is the actual line text
     // Before, set the end to wherever is the properties part (or NULL if this line doesn't have any)
     const char *properties = strchr(comma + 1, '#');
-    read_ass_line_content(line, comma + 1, properties);
+    read_ass_line_content(song, line, comma + 1, properties);
     // If we have any properties, read those now
     if ( properties != NULL ) {
         read_lyrics_opts(line, properties + 1);

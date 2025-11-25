@@ -5,8 +5,12 @@
 #ifndef ETSUKO_RENDERER_H
 #define ETSUKO_RENDERER_H
 
-#include <stdbool.h>
+#include "constants.h"
+
 #include <stdint.h>
+#include <unicode/utf8.h>
+
+#define MAX_DRAW_SUB_REGIONS (4)
 
 typedef struct Texture_t {
     unsigned int id;
@@ -26,14 +30,14 @@ typedef struct Bounds_t {
 } Bounds_t;
 
 typedef struct Shadow_t {
-    Texture_t *texture;
+    OWNING Texture_t *texture;
     Bounds_t bounds;
     int32_t offset;
 } Shadow_t;
 
 typedef struct RenderTarget_t {
-    Texture_t *texture;
-    struct RenderTarget_t *prev_target;
+    WEAK Texture_t *texture;
+    WEAK struct RenderTarget_t *prev_target;
     // Should not be used outside renderer
     unsigned int fbo;
     int viewport[4];
@@ -49,9 +53,40 @@ typedef enum BackgroundType_t {
     BACKGROUND_CLOUD_GRADIENT,
 } BackgroundType_t;
 
-typedef enum FontType_t { FONT_UI = 0, FONT_LYRICS = 1 } FontType_t;
+typedef enum FontType_t {
+    FONT_UI = 0,
+    FONT_LYRICS = 1
+} FontType_t;
 
-typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_ADD, BLEND_MODE_NONE, BLEND_MODE_ERASE } BlendMode_t;
+typedef enum BlendMode_t {
+    BLEND_MODE_BLEND = 0,
+    BLEND_MODE_ADD,
+    BLEND_MODE_NONE,
+    BLEND_MODE_ERASE
+} BlendMode_t;
+
+typedef struct CharBounds_t {
+    int32_t x0, y0, x1, y1;
+    double kerning;
+    double advance;
+    int32_t font_height;
+} CharBounds_t;
+
+typedef struct DrawRegionOpt_t {
+    float x0_perc, x1_perc;
+    float y0_perc, y1_perc;
+} DrawRegionOpt_t;
+
+typedef struct DrawRegionOptSet_t {
+    DrawRegionOpt_t regions[MAX_DRAW_SUB_REGIONS];
+    int32_t num_regions;
+} DrawRegionOptSet_t;
+
+typedef struct DrawTextureOpts_t {
+    int32_t alpha_mod;
+    float color_mod;
+    const DrawRegionOptSet_t *draw_regions;
+} DrawTextureOpts_t;
 
 void render_init(void);
 void render_finish(void);
@@ -72,7 +107,7 @@ void render_load_font(const unsigned char *data, int data_size, FontType_t type)
 void render_measure_text_size(const char *text, int32_t pixels, int32_t *w, int32_t *h, FontType_t kind);
 int32_t render_measure_pt_from_em(double em);
 int32_t render_measure_pixels_from_em(double em);
-
+void render_measure_char_bounds(UChar32 c, UChar32 prev_c, int32_t pixels, CharBounds_t *out_bounds, FontType_t font);
 Texture_t *render_make_null(void);
 Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
@@ -84,8 +119,7 @@ const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
 Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
 Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
 Texture_t *render_restore_texture_target(void);
-
-void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, const Color_t *color, float border_radius);
-void render_draw_texture(Texture_t *texture, const Bounds_t *at, int32_t alpha_mod, float color_mod);
+void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius);
+void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts);
 
 #endif // ETSUKO_RENDERER_H

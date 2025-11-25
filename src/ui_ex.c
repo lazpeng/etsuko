@@ -21,6 +21,7 @@
 #define LINE_SCALE_FACTOR_INACTIVE (0.75f)
 #define ALPHA_DISTANCE_BASE_CALC (100)
 #define ALPHA_DISTANCE_MIN_VALUE (25)
+#define REGION_ANIMATION_DURATION (0.2)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -104,7 +105,8 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .wrap_width_threshold = 0.85,
                                     .color = color,
                                     .alignment = alignment,
-                                    .draw_shadow = config_get()->draw_lyric_shadow};
+                                    .draw_shadow = config_get()->draw_lyric_shadow,
+                                    .compute_offsets = song->has_sub_timings};
         Layout_t layout = {
             .offset_y = LINE_VERTICAL_PADDING,
             .offset_x = offset_x,
@@ -120,6 +122,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
         ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = 0.05});
+        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION});
     }
 
     if ( !str_is_empty(song->credits) ) {
@@ -160,7 +163,8 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                                 .alignment = ALIGN_LEFT,
                                                 .color = {200, 200, 200, 255}},
                          view->container,
-                         &(Layout_t){.offset_y = 0, .offset_x = 0.001,
+                         &(Layout_t){.offset_y = 0,
+                                     .offset_x = 0.001,
                                      .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_PROPORTIONAL_POS,
                                      .relative_to = view->credits_prefix});
         ui_drawable_set_alpha_immediate(view->credits_prefix, 200);
@@ -168,40 +172,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     }
 
     return view;
-}
-
-static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
-    Drawable_t *drawable = view->line_drawables->data[index];
-
-    drawable->enabled = true;
-    ui_drawable_set_alpha_immediate(drawable, 0xFF);
-
-    ui_drawable_set_scale_factor(drawable, 1.f);
-
-    Drawable_t *prev_relative = NULL;
-    if ( prev_active >= 0 ) {
-        prev_relative = view->line_drawables->data[prev_active];
-    }
-
-    const LineState_t new_state = LINE_ACTIVE;
-    if ( view->line_states[index] != new_state ) {
-        view->line_states[index] = new_state;
-
-        drawable->layout.offset_y = 0;
-        if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-            drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
-        }
-        drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-        drawable->layout.relative_to = prev_relative;
-        ui_reposition_drawable(ui, drawable);
-
-        view->layout_dirty = true;
-    } else if ( prev_relative != drawable->layout.relative_to ) {
-        drawable->layout.relative_to = prev_relative;
-        ui_reposition_drawable(ui, drawable);
-
-        view->layout_dirty = true;
-    }
 }
 
 static int32_t calculate_alpha(const int32_t distance) {
@@ -229,6 +199,98 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     }
 
     return MAX(1, distance);
+}
+
+static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Song_t *song, const Song_Line_t *line) {
+    const Drawable_TextData_t *text_data = drawable->custom_data;
+
+    DrawRegionOptSet_t draw_regions = {0};
+    draw_regions.num_regions = (int32_t)text_data->line_offsets->size;
+
+    // Overshoot the time a little to compensate for the animation
+    const double audio_elapsed = audio_elapsed_time() + song->time_offset + REGION_ANIMATION_DURATION;
+    // Calculate how much of each line we need to show
+    for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
+        const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
+        const float line_width = (float)((offset_info->end_x - offset_info->start_x) / drawable->bounds.w);
+        // Calculate how much each segment should contribute to this line's fill
+        // Start with the offset from the part where the line starts depending on the alignment
+        float x1 = (float)(offset_info->start_x / drawable->bounds.w);
+        for ( int32_t s = 0; s < line->num_timings; s++ ) {
+            const Song_LineTiming_t *timing = &line->timings[s];
+            if ( timing->start_idx > offset_info->end_byte_offset )
+                break;
+            if ( timing->end_idx <= offset_info->start_byte_offset )
+                continue;
+            const int timing_end_idx = MIN(timing->end_idx, offset_info->end_byte_offset);
+            const int timing_start_idx = MAX(timing->start_idx, offset_info->start_byte_offset);
+            const int segment_length_in_current_line = timing_end_idx - timing_start_idx;
+            if ( segment_length_in_current_line < 0 )
+                continue;
+            const int current_line_length = offset_info->end_byte_offset - offset_info->start_byte_offset;
+            const double line_contribution = (double)segment_length_in_current_line / current_line_length;
+            const double elapsed_since_line = audio_elapsed - (line->base_start_time + timing->cumulative_duration);
+            if ( elapsed_since_line < 0 )
+                break;
+            const double segment_progress = MIN(1.f, elapsed_since_line / (timing->duration));
+
+            x1 += (float)(segment_progress * line_contribution * line_width);
+        }
+        draw_regions.regions[i].x1_perc = MIN(1.f, x1);
+
+        // x0 is always at the beginning
+        draw_regions.regions[i].x0_perc = 0.f;
+        // y0 is the beginning of this line
+        draw_regions.regions[i].y0_perc = (float)(offset_info->start_y / drawable->bounds.h);
+        // y1 is the end of this line
+        draw_regions.regions[i].y1_perc = (float)(offset_info->end_y / drawable->bounds.h);
+    }
+    ui_drawable_set_draw_region(drawable, &draw_regions);
+}
+
+static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
+    Drawable_t *drawable = view->line_drawables->data[index];
+
+    drawable->enabled = true;
+    ui_drawable_set_alpha_immediate(drawable, 0xFF);
+
+    ui_drawable_set_scale_factor(drawable, 1.f);
+
+    Drawable_t *prev_relative = NULL;
+    if ( prev_active >= 0 ) {
+        prev_relative = view->line_drawables->data[prev_active];
+    }
+
+    const Song_Line_t *line = view->song->lyrics_lines->data[index];
+
+    const LineState_t new_state = LINE_ACTIVE;
+    if ( view->line_states[index] != new_state ) {
+        // TODO: Maybe reset the animation/general draw region buffer
+        view->line_states[index] = new_state;
+
+        drawable->layout.offset_y = 0;
+        if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
+            drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
+        }
+        drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+        drawable->layout.relative_to = prev_relative;
+        ui_reposition_drawable(ui, drawable);
+
+        if ( view->song->has_sub_timings && line->num_timings > 0 ) {
+            ui_drawable_set_draw_underlay(drawable, true, calculate_alpha(0));
+        }
+
+        view->layout_dirty = true;
+    } else if ( prev_relative != drawable->layout.relative_to ) {
+        drawable->layout.relative_to = prev_relative;
+        ui_reposition_drawable(ui, drawable);
+
+        view->layout_dirty = true;
+    }
+
+    if ( view->song->has_sub_timings && line->num_timings > 0 ) {
+        calculate_sub_region_for_active_line(drawable, view->song, line);
+    }
 }
 
 static void check_line_hover(const LyricsView_t *view, Drawable_t *drawable, const int32_t index) {
@@ -275,6 +337,8 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         }
         drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 
+        ui_drawable_disable_draw_region(drawable);
+        ui_drawable_set_draw_underlay(drawable, false, 0);
         if ( prev_state == LINE_NONE ) {
             ui_drawable_set_scale_factor_immediate(drawable, LINE_SCALE_FACTOR_INACTIVE);
         } else {
@@ -305,6 +369,8 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
             drawable->layout.flags ^= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
         }
 
+        ui_drawable_disable_draw_region(drawable);
+        ui_drawable_set_draw_underlay(drawable, false, 0);
         ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
     }
 
@@ -330,6 +396,8 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
             const int32_t alpha = calculate_alpha(1);
+            ui_drawable_disable_draw_region(drawable);
+            ui_drawable_set_draw_underlay(drawable, false, 0);
             ui_drawable_set_alpha(drawable, alpha);
         } else {
             // Position the same as the drawable
@@ -365,6 +433,8 @@ static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *vie
 
     Drawable_t *drawable = view->line_drawables->data[idx];
     drawable->layout.relative_to = stack_hidden_line_recursive(ui, view, idx + 1);
+    ui_drawable_disable_draw_region(drawable);
+    ui_drawable_set_draw_underlay(drawable, false, 0);
     ui_reposition_drawable(ui, drawable);
 
     return drawable;

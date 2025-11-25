@@ -77,6 +77,8 @@ typedef struct Renderer_t {
     GLint tex_border_radius_loc;
     GLint tex_rect_size_loc;
     GLint tex_color_mod_loc;
+    GLint tex_num_regions_loc;
+    GLint tex_regions_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -181,7 +183,7 @@ static void update_projection_matrix(void) {
     create_orthographic_matrix(0.f, w, h, 0.f, g_renderer->projection_matrix);
 }
 
-static void set_shader_program(GLuint program) {
+static void set_shader_program(const GLuint program) {
     if ( g_renderer->active_shader_program != program ) {
         glUseProgram(program);
         g_renderer->active_shader_program = program;
@@ -309,6 +311,8 @@ void render_init(void) {
     g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
     g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
     g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "colorModFactor");
+    g_renderer->tex_num_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "num_regions");
+    g_renderer->tex_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "regions");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
@@ -490,7 +494,7 @@ static void draw_dynamic_gradient_bg(void) {
     render_set_blend_mode(saved_blend);
 }
 
-static void draw_am_like_bg(BackgroundType_t type) {
+static void draw_am_like_bg(const BackgroundType_t type) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
@@ -634,7 +638,8 @@ void render_clear(void) {
         if ( g_renderer->bg_texture == NULL ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
-        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, 255, 1.f);
+        static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
+        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, &opts);
     } else if ( g_renderer->bg_type == BACKGROUND_DYNAMIC_GRADIENT ) {
         draw_dynamic_gradient_bg();
     } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
@@ -719,6 +724,37 @@ int32_t render_measure_pt_from_em(const double em) {
     const double pixels = render_measure_pixels_from_em(em);
     const int32_t pt_size = (int32_t)lround(pixels * BASE_DPI / g_renderer->h_dpi);
     return pt_size;
+}
+
+void render_measure_char_bounds(const UChar32 c, const UChar32 prev_c, const int32_t pixels, CharBounds_t *out_bounds,
+                                const FontType_t font) {
+    const stbtt_fontinfo *font_info = font == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+
+    const float scale = stbtt_ScaleForMappingEmToPixels(font_info, (float)pixels);
+
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(font_info, &ascent, &descent, &lineGap);
+
+    const int height = (int)((ascent - descent + lineGap) * (double)scale);
+
+    int advance, lsb;
+    stbtt_GetCodepointHMetrics(font_info, c, &advance, &lsb);
+
+    double kerning = 0;
+    if ( prev_c != -1 ) {
+        kerning = stbtt_GetCodepointKernAdvance(font_info, prev_c, c) * (double)scale;
+    }
+
+    int32_t x0, y0, x1, y1;
+    stbtt_GetCodepointBitmapBoxSubpixel(font_info, c, scale, scale, 0, 0, &x0, &y0, &x1, &y1);
+
+    out_bounds->kerning = kerning;
+    out_bounds->x0 = x0;
+    out_bounds->y0 = y0;
+    out_bounds->x1 = x1;
+    out_bounds->y1 = y1;
+    out_bounds->advance = advance * (double)scale;
+    out_bounds->font_height = height;
 }
 
 static float *get_projection_matrix(void) {
@@ -831,7 +867,7 @@ void render_set_bg_color(const Color_t color) {
     g_renderer->bg_type = BACKGROUND_NONE;
 }
 
-void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, BackgroundType_t type) {
+void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, const BackgroundType_t type) {
     g_renderer->bg_color = top_color;
     g_renderer->bg_color_secondary = bottom_color;
     g_renderer->bg_type = type;
@@ -1246,7 +1282,8 @@ Texture_t *render_make_dummy_image(const double border_radius_em) {
     return texture;
 }
 
-void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, const Color_t *color, const float border_radius) {
+void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color,
+                              const float border_radius) {
     if ( bounds->w <= 0 ) {
         return;
     }
@@ -1261,10 +1298,10 @@ void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, 
     glUniform1f(g_renderer->rect_radius_loc, border_radius);
     glUniformMatrix4fv(g_renderer->rect_projection_loc, 1, GL_FALSE, get_projection_matrix());
 
-    glBindVertexArray(nulltex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, nulltex->vbo);
+    glBindVertexArray(null_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, null_tex->vbo);
 
-    if ( texture_needs_reconfigure(nulltex, bounds) ) {
+    if ( texture_needs_reconfigure(null_tex, bounds) ) {
         const float padding = border_radius;
         const float vertices[] = {(float)bounds->x - padding,
                                   (float)bounds->y - padding,
@@ -1290,7 +1327,7 @@ void render_draw_rounded_rect(const Texture_t *nulltex, const Bounds_t *bounds, 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t alpha_mod, const float color_mod) {
+void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts) {
     if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
@@ -1307,12 +1344,32 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const int32_t a
 
     set_shader_program(g_renderer->texture_shader);
 
+    int num_draw_regions = 0;
+    if ( opts->draw_regions != NULL ) {
+        num_draw_regions = opts->draw_regions->num_regions;
+    }
+
+    float regions[MAX_DRAW_SUB_REGIONS][4] = {0};
+    if ( num_draw_regions > 0 ) {
+        for ( int i = 0; i < num_draw_regions; i++ ) {
+            const DrawRegionOpt_t *region = &opts->draw_regions->regions[i];
+            regions[i][0] = region->x0_perc;
+            regions[i][1] = region->y0_perc;
+            regions[i][2] = region->x1_perc;
+            regions[i][3] = region->y1_perc;
+        }
+    }
+
     glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
-    glUniform1f(g_renderer->tex_alpha_loc, (float)alpha_mod / 255.0f);
+    glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
     glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
-    glUniform1f(g_renderer->tex_color_mod_loc, color_mod);
+    glUniform1f(g_renderer->tex_color_mod_loc, opts->color_mod);
+    glUniform1i(g_renderer->tex_num_regions_loc, num_draw_regions);
+    if ( num_draw_regions > 0 ) {
+        glUniform4fv(g_renderer->tex_regions_loc, 4, &regions[0][0]);
+    }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
 
@@ -1347,13 +1404,15 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
 
     render_make_texture_target(width, height);
     Bounds_t bounds = {.x = offset, .y = offset, .w = src_bounds->w, .h = src_bounds->h};
-    render_draw_texture(texture, &bounds, 255, 0.f);
+    DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 0.f};
+    render_draw_texture(texture, &bounds, &opts);
     // Erase the original texture
     const BlendMode_t saved_blend = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_ERASE);
 
+    opts.color_mod = 1.f;
     bounds.x = bounds.y = 0;
-    render_draw_texture(texture, &bounds, 0xFF, 1.f);
+    render_draw_texture(texture, &bounds, &opts);
 
     render_set_blend_mode(saved_blend);
 

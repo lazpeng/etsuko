@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 
+#include "constants.h"
 #include "container_utils.h"
 #include "renderer.h"
 
@@ -48,11 +49,16 @@ typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
-    Drawable_t *relative_to_size;
-    Drawable_t *relative_to;
+    WEAK Drawable_t *relative_to_size;
+    WEAK Drawable_t *relative_to;
 } Layout_t;
 
-typedef enum DrawableType_t { DRAW_TYPE_TEXT = 0, DRAW_TYPE_IMAGE, DRAW_TYPE_PROGRESS_BAR, DRAW_TYPE_RECTANGLE } DrawableType_t;
+typedef enum DrawableType_t {
+    DRAW_TYPE_TEXT = 0,
+    DRAW_TYPE_IMAGE,
+    DRAW_TYPE_PROGRESS_BAR,
+    DRAW_TYPE_RECTANGLE
+} DrawableType_t;
 
 typedef enum ContainerFlags_t {
     CONTAINER_NONE = 0,
@@ -61,9 +67,9 @@ typedef enum ContainerFlags_t {
 
 typedef struct Container_t {
     Bounds_t bounds;
-    struct Container_t *parent;
-    Vector_t *child_drawables;
-    Vector_t *child_containers;
+    WEAK struct Container_t *parent;
+    OWNING Vector_t *child_drawables;
+    OWNING Vector_t *child_containers;
     Layout_t layout;
     bool enabled;
     ContainerFlags_t flags;
@@ -73,38 +79,62 @@ typedef struct Container_t {
 
 typedef struct Drawable_t {
     DrawableType_t type;
-    Texture_t *texture;
+    OWNING Texture_t *texture;
     Bounds_t bounds;
-    void *custom_data;
-    Container_t *parent;
+    OWNING void *custom_data;
+    WEAK Container_t *parent;
     bool enabled, dynamic;
     Layout_t layout;
     uint8_t alpha_mod;
-    Vector_t *animations;
+    OWNING Vector_t *animations;
     float color_mod;
-    Shadow_t *shadow;
+    OWNING Shadow_t *shadow;
+    DrawRegionOptSet_t draw_regions;
+    uint8_t underlay_alpha;
+    bool draw_underlay;
 } Drawable_t;
 
 typedef enum AnimationType_t {
     ANIM_EASE_TRANSLATION = 0,
     ANIM_FADE_IN_OUT,
     ANIM_SCALE,
+    ANIM_DRAW_REGION,
 } AnimationType_t;
 
 typedef struct Animation_t {
     double duration, elapsed;
     AnimationType_t type;
-    void *custom_data;
-    Drawable_t *target;
+    OWNING void *custom_data;
+    WEAK Drawable_t *target;
     bool active;
 } Animation_t;
 
 // Options and custom data
-typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } DrawableAlignment_t;
+typedef enum DrawableAlignment_t {
+    ALIGN_LEFT = 0,
+    ALIGN_CENTER,
+    ALIGN_RIGHT
+} DrawableAlignment_t;
+
+typedef struct CharOffsetInfo_t {
+    int32_t char_idx;
+    int32_t start_byte_offset, end_byte_offset;
+    double x, y;
+    double width, height;
+} CharOffsetInfo_t;
+
+typedef struct TextOffsetInfo_t {
+    int32_t line_idx;
+    int32_t num_chars; // Not to be confused with bytes
+    int32_t start_byte_offset, end_byte_offset;
+    double start_x, end_x;
+    double start_y, end_y;
+    OWNING Vector_t *char_offsets; // of CharOffsetInfo_t
+} TextOffsetInfo_t;
 
 typedef struct Drawable_TextData_t {
     // Regular options
-    char *text;
+    OWNING char *text;
     FontType_t font_type;
     double em;
     Color_t color;
@@ -115,6 +145,8 @@ typedef struct Drawable_TextData_t {
     int32_t line_padding;
     DrawableAlignment_t alignment;
     bool draw_shadow;
+    OWNING Vector_t *line_offsets; // of TextOffsetInfo_t
+    bool compute_offsets;
 } Drawable_TextData_t;
 
 typedef struct Drawable_ImageData_t {
@@ -150,6 +182,11 @@ typedef struct Animation_ScaleData_t {
     double duration;
 } Animation_ScaleData_t;
 
+typedef struct Animation_DrawRegionData_t {
+    DrawRegionOptSet_t draw_regions;
+    double duration;
+} Animation_DrawRegionData_t;
+
 // Init and lifetime functions
 Ui_t *ui_init(void);
 void ui_finish(Ui_t *ui);
@@ -182,6 +219,10 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
+void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
+void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
+void ui_drawable_disable_draw_region(Drawable_t *drawable);
+void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                 int32_t *out_mouse_y);
 bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
@@ -194,5 +235,6 @@ void ui_destroy_container(Ui_t *ui, Container_t *container);
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data);
 void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data);
 void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data);
+void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t *data);
 
 #endif // ETSUKO_UI_H

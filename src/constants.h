@@ -20,4 +20,16 @@
 #define MAX_SONG_LINES (1024)
 #define DEFAULT_VEC_CAPACITY (16)
 
+// Just for documentation purposes
+/**
+ * This annotates, very poorly, that the struct owns the following pointer and is responsible for freeing it
+ * along with its own destroy() function
+ */
+#define OWNING
+/**
+ * This annotates that the struct holds only a weak reference to the pointer and is not responsible for
+ * freeing its associated memory
+ */
+#define WEAK
+
 #endif // ETSUKO_CONSTANTS_H
