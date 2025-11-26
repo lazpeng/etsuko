@@ -1157,37 +1157,14 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
 void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { drawable->color_mod = color_mod; }
 
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
-    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
+    double duration = 0.0;
+    const Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
     if ( animation != NULL ) {
-        Animation_DrawRegionData_t *data = animation->custom_data;
-        if ( animation->active )
-            return; // Wait for it to finish
-        // If it's the same, do nothing
-        // TODO: Currently we only check for the x1 values
-        bool different = false;
-        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-            if ( drawable->draw_regions.regions[i].x1_perc != draw_regions->regions[i].x1_perc ) {
-                different = true;
-                break;
-            }
-        }
-        if ( !different )
-            return;
-
-        // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
-        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-            data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
-        }
-        data->draw_regions.num_regions = draw_regions->num_regions;
-        animation->elapsed = 0;
-        animation->active = true;
+        const Animation_DrawRegionData_t *data = animation->custom_data;
+        duration = data->duration;
     }
 
-    // Copy the real values to the drawable
-    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-        drawable->draw_regions.regions[i] = draw_regions->regions[i];
-    }
-    drawable->draw_regions.num_regions = draw_regions->num_regions;
+    ui_drawable_set_draw_region_dur(drawable, draw_regions, duration);
 }
 
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
@@ -1244,11 +1221,11 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
 
 void ui_drawable_disable_draw_region(Drawable_t *drawable) {
     // Reset to defaults
-    for ( int i = 0; i < drawable->draw_regions.num_regions; i++ ) {
+    for ( int i = 0; i < MAX_DRAW_SUB_REGIONS; i++ ) {
         drawable->draw_regions.regions[i].x0_perc = 0.f;
-        drawable->draw_regions.regions[i].x1_perc = 1.f;
+        drawable->draw_regions.regions[i].x1_perc = 0.f;
         drawable->draw_regions.regions[i].y0_perc = 0.f;
-        drawable->draw_regions.regions[i].y1_perc = 1.f;
+        drawable->draw_regions.regions[i].y1_perc = 0.f;
     }
     drawable->draw_regions.num_regions = 0;
 }
