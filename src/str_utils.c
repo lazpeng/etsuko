@@ -60,8 +60,12 @@ void str_replace_char(char *str, const char old_c, const char new_c) {
     }
 }
 
-static void resize_str_buffer(StrBuffer_t *buf, size_t cap) {
-    buf->data = realloc(buf->data, cap);
+static void resize_str_buffer(StrBuffer_t *buf, const size_t cap) {
+    char *new_buf = realloc(buf->data, cap);
+    if ( new_buf == NULL ) {
+        error_abort("Failed to reallocate string buffer");
+    }
+    buf->data = new_buf;
     buf->cap = cap;
 }
 
@@ -76,7 +80,7 @@ StrBuffer_t *str_buf_init(void) {
 }
 
 void str_buf_append(StrBuffer_t *buf, const char *str, const char *end) {
-    size_t len = end != NULL ? (size_t)(end - str) : strnlen(str, MAX_STRLEN);
+    const size_t len = end != NULL ? (size_t)(end - str) : strnlen(str, MAX_STRLEN);
     if ( buf->len + len + 1 > buf->cap ) {
         resize_str_buffer(buf, (buf->len + len + 1) * 2);
     }
