@@ -48,6 +48,7 @@ static Config_t *get_default_config(void) {
     config->draw_lyric_shadow = true;
     config->show_loading_screen = true;
     config->op_mode = APP_MODE_KARAOKE;
+    config->enable_dynamic_fill = true;
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

@@ -66,10 +66,10 @@ typedef enum BlendMode_t {
 } BlendMode_t;
 
 typedef struct CharBounds_t {
-    int32_t x0, y0, x1, y1;
     double kerning;
     double advance;
-    int32_t font_height;
+    double width;
+    double font_height;
 } CharBounds_t;
 
 typedef struct DrawRegionOpt_t {

@@ -19,6 +19,7 @@ typedef struct {
     bool draw_album_art_shadow;
     bool draw_lyric_shadow;
     bool show_loading_screen;
+    bool enable_dynamic_fill;
 } Config_t;
 
 Config_t *config_get(void);

@@ -201,7 +201,7 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
-static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Song_t *song, const Song_Line_t *line) {
+static void calculate_sub_region_for_active_line_linear(Drawable_t *drawable, const Song_t *song, const Song_Line_t *line) {
     const Drawable_TextData_t *text_data = drawable->custom_data;
 
     DrawRegionOptSet_t draw_regions = {0};
@@ -209,6 +209,7 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
 
     // Overshoot the time a little to compensate for the animation
     const double audio_elapsed = audio_elapsed_time() + song->time_offset + REGION_ANIMATION_DURATION;
+    int32_t timing_offset_start = 0;
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
@@ -216,12 +217,14 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
         // Calculate how much each segment should contribute to this line's fill
         // Start with the offset from the part where the line starts depending on the alignment
         float x1 = (float)(offset_info->start_x / drawable->bounds.w);
-        for ( int32_t s = 0; s < line->num_timings; s++ ) {
+        for ( int32_t s = timing_offset_start; s < line->num_timings; s++ ) {
             const Song_LineTiming_t *timing = &line->timings[s];
             if ( timing->start_idx > offset_info->end_byte_offset )
                 break;
             if ( timing->end_idx <= offset_info->start_byte_offset )
                 continue;
+            timing_offset_start += 1;
+
             const int timing_end_idx = MIN(timing->end_idx, offset_info->end_byte_offset);
             const int timing_start_idx = MAX(timing->start_idx, offset_info->start_byte_offset);
             const int segment_length_in_current_line = timing_end_idx - timing_start_idx;
@@ -246,6 +249,68 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
         draw_regions.regions[i].y1_perc = (float)(offset_info->end_y / drawable->bounds.h);
     }
     ui_drawable_set_draw_region(drawable, &draw_regions);
+}
+
+static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable, const Song_t *song, const Song_Line_t *line) {
+    // A slight variation that highlights the entire portion of the segment
+    // Mainly intended when the timing is done per-syllable
+    const Drawable_TextData_t *text_data = drawable->custom_data;
+
+    DrawRegionOptSet_t draw_regions = {0};
+    draw_regions.num_regions = (int32_t)text_data->line_offsets->size;
+
+    // Overshoot the time a little to compensate for the animation
+    double last_segment_remaining = 0.0;
+    const double audio_elapsed = audio_elapsed_time() + song->time_offset;
+    int32_t timing_offset_start = 0;
+    // Calculate how much of each line we need to show
+    for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
+        const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
+        // Compensate for alignment
+        float x1 = (float)(offset_info->start_x / drawable->bounds.w);
+        for ( int32_t s = timing_offset_start; s < line->num_timings; s++ ) {
+            const Song_LineTiming_t *timing = &line->timings[s];
+            if ( timing->start_idx > offset_info->end_byte_offset )
+                break;
+            if ( timing->end_idx <= offset_info->start_byte_offset )
+                continue;
+            timing_offset_start += 1;
+
+            const int timing_end_idx = MIN(timing->end_idx, offset_info->end_byte_offset);
+            const int timing_start_idx = MAX(timing->start_idx, offset_info->start_byte_offset);
+            const int segment_length_in_current_line = timing_end_idx - timing_start_idx;
+            if ( segment_length_in_current_line <= 0 )
+                continue;
+
+            const double elapsed_since_segment = audio_elapsed - (line->base_start_time + timing->cumulative_duration);
+            if ( elapsed_since_segment <= 0.0 )
+                break;
+
+            // The secret here is that we calculate each letter boundary and always set the fill size to that
+            // for the whole duration of the segment
+            double segment_width = 0.0;
+            // TODO: This is wrong for multi-byte strings
+            const int32_t segment_start_in_line = MAX(0, timing->start_idx - offset_info->start_byte_offset);
+            for ( int ci = 0; ci < segment_length_in_current_line; ci++ ) {
+                const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[ci + segment_start_in_line];
+                segment_width += char_info->width;
+            }
+
+            const double segment_fill_contribution = segment_width / drawable->bounds.w;
+
+            x1 += (float)segment_fill_contribution;
+            last_segment_remaining = timing->duration - elapsed_since_segment;
+        }
+        draw_regions.regions[i].x1_perc = MIN(1.f, x1);
+
+        // x0 is always at the beginning
+        draw_regions.regions[i].x0_perc = 0.f;
+        // y0 is the beginning of this line
+        draw_regions.regions[i].y0_perc = (float)(offset_info->start_y / drawable->bounds.h);
+        // y1 is the end of this line
+        draw_regions.regions[i].y1_perc = (float)(offset_info->end_y / drawable->bounds.h);
+    }
+    ui_drawable_set_draw_region_dur(drawable, &draw_regions, MAX(REGION_ANIMATION_DURATION, last_segment_remaining));
 }
 
 static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
@@ -289,7 +354,11 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     }
 
     if ( view->song->has_sub_timings && line->num_timings > 0 ) {
-        calculate_sub_region_for_active_line(drawable, view->song, line);
+        if ( view->song->fill_type == SONG_LINE_FILL_LINEAR ) {
+            calculate_sub_region_for_active_line_linear(drawable, view->song, line);
+        } else if ( view->song->fill_type == SONG_LINE_FILL_FULL_WORD ) {
+            calculate_sub_region_for_active_line_full_word(drawable, view->song, line);
+        }
     }
 }
 

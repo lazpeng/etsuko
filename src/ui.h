@@ -129,6 +129,7 @@ typedef struct TextOffsetInfo_t {
     int32_t start_byte_offset, end_byte_offset;
     double start_x, end_x;
     double start_y, end_y;
+    double width, height;
     OWNING Vector_t *char_offsets; // of CharOffsetInfo_t
 } TextOffsetInfo_t;
 
@@ -221,6 +222,7 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
+void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, double duration);
 void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,

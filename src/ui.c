@@ -45,6 +45,7 @@ void ui_load_font(const unsigned char *data, const int data_size, const FontType
 static void animation_translation_data_destroy(Animation_EaseTranslationData_t *data) { free(data); }
 static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(data); }
 static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(data); }
+static void animation_draw_region_data_destroy(Animation_DrawRegionData_t *data) { free(data); }
 
 static void animation_destroy(Animation_t *animation) {
     if ( animation->custom_data != NULL ) {
@@ -54,6 +55,8 @@ static void animation_destroy(Animation_t *animation) {
             animation_fade_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_SCALE ) {
             animation_scale_data_destroy(animation->custom_data);
+        } else if ( animation->type == ANIM_DRAW_REGION ) {
+            animation_draw_region_data_destroy(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
         }
@@ -324,10 +327,9 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
         for ( int i = 0; i < regions->num_regions; i++ ) {
             // Naively consider that just the end indexes that are going to change
             const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
-            // TODO: Figure out a way to include animating the y axis but for now leave it commented
             // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
-            // final_regions[i][2] = data->prev_regions[i][2] + delta_x * (float)ease_out_cubic(progress);
-            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
+            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * ease_out_cubic(progress));
+            // TODO: Figure out a way to include animating the y axis but for now leave it commented
             // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
         }
     } else {
@@ -661,19 +663,21 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
         if ( char_info == NULL ) {
             error_abort("Failed to allocate char offset info");
         }
-        char_info->char_idx = (int32_t)prev_i;
+        char_info->start_byte_offset = (int32_t)prev_i;
         char_info->char_idx = info->num_chars++;
         char_info->height = char_bounds.font_height;
-        char_info->width = char_bounds.x1 - char_bounds.x0;
+        char_info->width = char_bounds.width;
         char_info->end_byte_offset = byte_offset + (int32_t)i;
         char_info->x = x;
         char_info->y = 0; // Will be computed later
 
-        x += char_bounds.advance + char_bounds.kerning;
-
         info->end_byte_offset = byte_offset + (int32_t)i;
-        info->end_x = x + char_info->width;
+        info->end_x = x;
         info->end_y = char_info->height;
+        info->width += char_bounds.width;
+        info->height = char_info->height;
+
+        x += char_info->width;
 
         vec_add(info->char_offsets, char_info);
 
@@ -1199,6 +1203,41 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
         drawable->draw_regions.regions[i].x1_perc = draw_regions->regions[i].x1_perc;
         drawable->draw_regions.regions[i].y0_perc = draw_regions->regions[i].y0_perc;
         drawable->draw_regions.regions[i].y1_perc = draw_regions->regions[i].y1_perc;
+    }
+    drawable->draw_regions.num_regions = draw_regions->num_regions;
+}
+
+void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const double duration) {
+    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
+    if ( animation != NULL ) {
+        Animation_DrawRegionData_t *data = animation->custom_data;
+        if ( animation->active )
+            return; // Wait for it to finish
+        // If it's the same, do nothing
+        // TODO: Currently we only check for the x1 values
+        bool different = false;
+        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+            if ( drawable->draw_regions.regions[i].x1_perc != draw_regions->regions[i].x1_perc ) {
+                different = true;
+                break;
+            }
+        }
+        if ( !different )
+            return;
+
+        // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
+        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+            data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+        }
+        data->draw_regions.num_regions = draw_regions->num_regions;
+        animation->elapsed = 0;
+        animation->duration = duration;
+        animation->active = true;
+    }
+
+    // Copy the real values to the drawable
+    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        drawable->draw_regions.regions[i] = draw_regions->regions[i];
     }
     drawable->draw_regions.num_regions = draw_regions->num_regions;
 }

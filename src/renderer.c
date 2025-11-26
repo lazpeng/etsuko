@@ -735,25 +735,19 @@ void render_measure_char_bounds(const UChar32 c, const UChar32 prev_c, const int
     int ascent, descent, lineGap;
     stbtt_GetFontVMetrics(font_info, &ascent, &descent, &lineGap);
 
-    const int height = (int)((ascent - descent + lineGap) * (double)scale);
+    const double height = (ascent - descent + lineGap) * (double)scale;
 
     int advance, lsb;
     stbtt_GetCodepointHMetrics(font_info, c, &advance, &lsb);
 
-    double kerning = 0;
-    if ( prev_c != -1 ) {
-        kerning = stbtt_GetCodepointKernAdvance(font_info, prev_c, c) * (double)scale;
+    double kerning = 0.0;
+    if ( prev_c > 0 ) {
+        kerning = stbtt_GetCodepointKernAdvance(font_info, prev_c, c);
     }
 
-    int32_t x0, y0, x1, y1;
-    stbtt_GetCodepointBitmapBoxSubpixel(font_info, c, scale, scale, 0, 0, &x0, &y0, &x1, &y1);
-
-    out_bounds->kerning = kerning;
-    out_bounds->x0 = x0;
-    out_bounds->y0 = y0;
-    out_bounds->x1 = x1;
-    out_bounds->y1 = y1;
+    out_bounds->kerning = kerning * (double)scale;
     out_bounds->advance = advance * (double)scale;
+    out_bounds->width = (kerning + advance) * (double)scale;
     out_bounds->font_height = height;
 }
 

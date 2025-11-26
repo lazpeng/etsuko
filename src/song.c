@@ -18,6 +18,7 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         return;
     char *value = strdup(buffer + equals + 1);
 
+    // TODO: Write a custom str_equals function so we can replace this shit. Maybe add case-insensitivity
     if ( strncmp(buffer, "name", equals) == 0 ) {
         song->name = value;
     } else if ( strncmp(buffer, "translatedName", equals) == 0 ) {
@@ -78,6 +79,14 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         }
     } else if ( strncmp(buffer, "writtenBy", equals) == 0 ) {
         song->credits = value;
+    } else if ( strncmp(buffer, "fillType", equals) == 0 ) {
+        if ( strncmp(value, "linear", 6) == 0 ) {
+            song->fill_type = SONG_LINE_FILL_LINEAR;
+        } else if ( strncmp(value, "fullWord", 8) == 0 ) {
+            song->fill_type = SONG_LINE_FILL_FULL_WORD;
+        }
+    } else if ( strncmp(buffer, "assumeFullSubTiming", equals) == 0 ) {
+        song->assume_full_sub_timing_when_absent = strncmp(value, "yes", 3) == 0;
     }
 }
 
@@ -173,6 +182,13 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         // No sub timings
         const size_t len = end - start;
         line->full_text = strndup(start, len);
+        if ( song->assume_full_sub_timing_when_absent ) {
+            Song_LineTiming_t *timing = &line->timings[line->num_timings++];
+            timing->duration = line->base_duration;
+            timing->start_idx = 0;
+            timing->end_idx = (int32_t)len;
+            timing->cumulative_duration = 0;
+        }
         // return early
         return;
     }
