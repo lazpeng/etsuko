@@ -125,7 +125,7 @@ It is generally expected to have an empty newline at the end of the file,
 or you may see an error.
 
 With the file created in the right format and pointed at in the config.c
-source file, upon rebuilding you may see the playback.
+source file, upon rebuilding and running you may get it to start playing.
 
 If your song needs a different font for displaying special characters (e.g.
 CJK or another non-latin language), or if you just want to use a font other
