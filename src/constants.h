@@ -20,7 +20,6 @@
 #define MAX_SONG_LINES (1024)
 #define DEFAULT_VEC_CAPACITY (16)
 
-// Just for documentation purposes
 /**
  * This annotates, very poorly, that the struct owns the following pointer and is responsible for freeing it
  * along with its own destroy() function
