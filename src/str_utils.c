@@ -89,13 +89,13 @@ void str_buf_append(StrBuffer_t *buf, const char *str, const char *end) {
     buf->data[buf->len] = '\0';
 }
 
-void str_buf_append_len(StrBuffer_t *buf, const char *str, size_t len) {
+void str_buf_append_len(StrBuffer_t *buf, const char *str, const size_t len) {
     if ( len == 0 )
         return;
     str_buf_append(buf, str, str + len);
 }
 
-void str_buf_append_ch(StrBuffer_t *buf, char ch) {
+void str_buf_append_ch(StrBuffer_t *buf, const char ch) {
     if ( buf->len + 2 > buf->cap ) {
         resize_str_buffer(buf, (buf->len + 2) * 2);
     }
@@ -112,7 +112,7 @@ void str_buf_destroy(StrBuffer_t *buf) {
     }
 }
 
-size_t str_buffered_read(char *destination, const size_t size, const char *src, const size_t src_len, size_t start_offset) {
+size_t str_buffered_read(char *destination, const size_t size, const char *src, const size_t src_len, const size_t start_offset) {
     if ( start_offset >= src_len )
         return 0;
 
