@@ -1,6 +1,6 @@
 out vec4 FragColor;
 
-in vec2 vUv;
+in vec2 fragCoord;
 
 uniform float u_time;
 uniform vec3 u_colors[5];
@@ -33,7 +33,7 @@ float snoise(vec2 v) {
 }
 
 void main() {
-    vec2 uv = vUv;
+    vec2 uv = fragCoord;
 
     // Fixed movement direction and speed
     float noise1 = snoise(uv + u_time * 0.1);

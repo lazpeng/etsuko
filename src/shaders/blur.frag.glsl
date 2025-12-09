@@ -1,4 +1,4 @@
-in vec2 v_texcoord;
+in vec2 TexCoord;
 out vec4 frag_color;
 
 uniform sampler2D u_texture;
@@ -9,11 +9,10 @@ void main() {
     const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
     vec2 tex_offset = u_blur_size / vec2(textureSize(u_texture, 0));
 
-    // Blur RGBA together, not just RGB
-    vec4 result = texture(u_texture, v_texcoord) * weights[0];
+    vec4 result = texture(u_texture, TexCoord) * weights[0];
     for (int i = 1; i < 5; i++) {
-        result += texture(u_texture, v_texcoord + u_direction * tex_offset * float(i)) * weights[i];
-        result += texture(u_texture, v_texcoord - u_direction * tex_offset * float(i)) * weights[i];
+        result += texture(u_texture, TexCoord + u_direction * tex_offset * float(i)) * weights[i];
+        result += texture(u_texture, TexCoord - u_direction * tex_offset * float(i)) * weights[i];
     }
 
     frag_color = result;

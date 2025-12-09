@@ -73,6 +73,7 @@ typedef struct Renderer_t {
     // Shader uniform locations
     GLint tex_projection_loc;
     GLint tex_alpha_loc;
+    GLint tex_use_bounds_loc;
     GLint tex_bounds_loc;
     GLint tex_border_radius_loc;
     GLint tex_rect_size_loc;
@@ -98,6 +99,9 @@ typedef struct Renderer_t {
     GLint dyn_grad_time_loc;
     GLint dyn_grad_noise_mag_loc;
     GLint dyn_grad_colors;
+    GLint aml_resolution_loc;
+    GLint aml_time_loc;
+    GLint aml_colors_loc;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
@@ -149,7 +153,7 @@ static GLuint create_shader_program(char *buffer, const char *vert_src, const ch
     if ( !success ) {
         char log[512];
         glGetProgramInfoLog(program, 512, NULL, log);
-        printf("Shader linking failed:\n%s\n", log);
+        printf("Shader linking failed for %s:\n%s\n", program_name, log);
         error_abort("Shader linking failed");
     }
 
@@ -288,48 +292,49 @@ void render_init(void) {
 
     // Compile shaders
     char *buffer = begin_shader_compilation();
-    g_renderer->texture_shader = create_shader_program(buffer, incbin_texture_vert_shader, incbin_texture_frag_shader, "tex");
-    g_renderer->rect_shader = create_shader_program(buffer, incbin_rect_vert_shader, incbin_rect_frag_shader, "rect");
+    g_renderer->texture_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_texture_frag_shader, "tex");
+    g_renderer->rect_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_rect_frag_shader, "rect");
     g_renderer->gradient_shader =
-        create_shader_program(buffer, incbin_gradient_vert_shader, incbin_gradient_frag_shader, "gradient");
+        create_shader_program(buffer, incbin_default_vert_shader, incbin_gradient_frag_shader, "gradient");
     g_renderer->dyn_gradient_shader =
-        create_shader_program(buffer, incbin_dyn_gradient_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
     g_renderer->am_gradient_shader =
-        create_shader_program(buffer, incbin_am_gradient_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
     g_renderer->cloud_gradient_shader =
-        create_shader_program(buffer, incbin_am_gradient_vert_shader, incbin_cloud_gradient_frag_shader, "cloud_gradient");
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_cloud_gradient_frag_shader, "cloud_gradient");
     g_renderer->rand_gradient_shader =
-        create_shader_program(buffer, incbin_rand_gradient_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
-    g_renderer->blur_shader = create_shader_program(buffer, incbin_blur_vert_shader, incbin_blur_frag_shader, "blur");
-    g_renderer->copy_shader = create_shader_program(buffer, incbin_copy_vert_shader, incbin_copy_frag_shader, "copy");
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
+    g_renderer->blur_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_blur_frag_shader, "blur");
+    g_renderer->copy_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_copy_frag_shader, "copy");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
-    g_renderer->tex_projection_loc = glGetUniformLocation(g_renderer->texture_shader, "projection");
-    g_renderer->tex_alpha_loc = glGetUniformLocation(g_renderer->texture_shader, "alpha");
-    g_renderer->tex_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "bounds");
-    g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "borderRadius");
-    g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "rectSize");
-    g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "colorModFactor");
-    g_renderer->tex_num_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "num_regions");
-    g_renderer->tex_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "regions");
+    g_renderer->tex_projection_loc = glGetUniformLocation(g_renderer->texture_shader, "u_projection");
+    g_renderer->tex_alpha_loc = glGetUniformLocation(g_renderer->texture_shader, "u_alpha");
+    g_renderer->tex_use_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "u_use_bounds");
+    g_renderer->tex_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "u_bounds");
+    g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "u_borderRadius");
+    g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "u_rectSize");
+    g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "u_colorModFactor");
+    g_renderer->tex_num_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_num_regions");
+    g_renderer->tex_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_regions");
 
     // Get uniform locations for rect shader
-    g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "projection");
-    g_renderer->rect_color_loc = glGetUniformLocation(g_renderer->rect_shader, "color");
-    g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "rectPos");
-    g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "rectSize");
-    g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "cornerRadius");
+    g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "u_projection");
+    g_renderer->rect_color_loc = glGetUniformLocation(g_renderer->rect_shader, "u_color");
+    g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "u_rectPos");
+    g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "u_rectSize");
+    g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "u_cornerRadius");
 
     // Get uniform locations for the gradient shader
-    g_renderer->gradient_top_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "topColor");
-    g_renderer->gradient_bottom_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "bottomColor");
-    g_renderer->gradient_projection_loc = glGetUniformLocation(g_renderer->gradient_shader, "projection");
+    g_renderer->gradient_top_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_topColor");
+    g_renderer->gradient_bottom_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_bottomColor");
+    g_renderer->gradient_projection_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_projection");
 
     // Get uniform locations for the random gradient shader
-    g_renderer->rand_grad_time_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uTime");
-    g_renderer->rand_grad_noise_scale_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uNoiseScale");
-    g_renderer->rand_grad_resolution_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "uResolution");
+    g_renderer->rand_grad_time_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_time");
+    g_renderer->rand_grad_noise_scale_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_noiseScale");
+    g_renderer->rand_grad_resolution_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_resolution");
 
     // Get uniform locations for the dynamic gradient shader
     g_renderer->dyn_grad_time_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_time");
@@ -341,6 +346,11 @@ void render_init(void) {
     g_renderer->blur_direction_loc = glGetUniformLocation(g_renderer->blur_shader, "u_direction");
     g_renderer->blur_size_loc = glGetUniformLocation(g_renderer->blur_shader, "u_blur_size");
     g_renderer->blur_projection_loc = glGetUniformLocation(g_renderer->blur_shader, "u_projection");
+
+    // Get uniform locations for the AM-like shader
+    g_renderer->aml_resolution_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iResolution");
+    g_renderer->aml_time_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iTime");
+    g_renderer->aml_colors_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iColors");
 }
 
 void render_finish(void) {
@@ -523,9 +533,9 @@ static void draw_am_like_bg(const BackgroundType_t type) {
         mark_texture_configured(g_renderer->bg_texture, &bounds);
     }
 
-    glUniform1f(glGetUniformLocation(shader_program, "iTime"), (float)events_get_elapsed_time());
-    glUniform3f(glGetUniformLocation(shader_program, "iResolution"), 1.f, 1.f, 0.f);
-    glUniform3fv(glGetUniformLocation(shader_program, "iColors"), 5, &g_renderer->dynamic_bg_colors[0][0]);
+    glUniform1f(g_renderer->aml_time_loc, (float)events_get_elapsed_time());
+    glUniform3f(g_renderer->aml_resolution_loc, 1.f, 1.f, 0.f);
+    glUniform3fv(g_renderer->aml_colors_loc, 5, &g_renderer->dynamic_bg_colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -1357,6 +1367,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
     glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
+    glUniform1i(g_renderer->tex_use_bounds_loc, 1);
     glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
     glUniform1f(g_renderer->tex_color_mod_loc, opts->color_mod);
