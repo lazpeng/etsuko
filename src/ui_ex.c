@@ -22,6 +22,7 @@
 #define ALPHA_DISTANCE_BASE_CALC (100)
 #define ALPHA_DISTANCE_MIN_VALUE (25)
 #define REGION_ANIMATION_DURATION (0.2)
+#define LINE_SCALE_FACTOR_INACTIVE_DURATION (0.2)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -119,10 +120,10 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         vec_add(view->line_drawables, prev);
 
         view->line_states[i] = LINE_NONE;
-        ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
-        ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0});
+        ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = 0.05});
-        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION});
+        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_SINE});
     }
 
     if ( !str_is_empty(song->credits) ) {
@@ -137,7 +138,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                         .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
                                  LAYOUT_PROPORTIONAL_Y,
                         .relative_to = last});
-        ui_animate_translation(view->credit_separator, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+        ui_animate_translation(view->credit_separator, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
 
         view->credits_prefix =
             ui_make_text(ui,
@@ -152,7 +153,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                      .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
                                      .relative_to = view->credit_separator});
         ui_drawable_set_alpha_immediate(view->credits_prefix, 150);
-        ui_animate_translation(view->credits_prefix, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+        ui_animate_translation(view->credits_prefix, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
 
         view->credits_content =
             ui_make_text(ui,
@@ -168,7 +169,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                      .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_PROPORTIONAL_POS,
                                      .relative_to = view->credits_prefix});
         ui_drawable_set_alpha_immediate(view->credits_prefix, 200);
-        ui_animate_translation(view->credits_content, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease = true});
+        ui_animate_translation(view->credits_content, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
     }
 
     return view;
@@ -289,10 +290,14 @@ static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable,
             // The secret here is that we calculate each letter boundary and always set the fill size to that
             // for the whole duration of the segment
             double segment_width = 0.0;
-            // TODO: This is wrong for multi-byte strings
+            // The code below assumes any line breaks are not made inside a utf-8 character (duh)
             const int32_t segment_start_in_line = MAX(0, timing->start_idx - offset_info->start_byte_offset);
-            for ( int ci = 0; ci < segment_length_in_current_line; ci++ ) {
-                const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[ci + segment_start_in_line];
+            for ( size_t ci = 0; ci < offset_info->char_offsets->size; ci++ ) {
+                const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[ci];
+                if ( char_info->start_byte_offset < segment_start_in_line )
+                    continue;
+                if ( char_info->start_byte_offset >= timing_end_idx )
+                    break;
                 segment_width += char_info->width;
             }
 
@@ -330,7 +335,6 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
 
     const LineState_t new_state = LINE_ACTIVE;
     if ( view->line_states[index] != new_state ) {
-        // TODO: Maybe reset the animation/general draw region buffer
         view->line_states[index] = new_state;
 
         drawable->layout.offset_y = 0;
@@ -411,7 +415,7 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         if ( prev_state == LINE_NONE ) {
             ui_drawable_set_scale_factor_immediate(drawable, LINE_SCALE_FACTOR_INACTIVE);
         } else {
-            ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
+            ui_drawable_set_scale_factor_dur(drawable, LINE_SCALE_FACTOR_INACTIVE, LINE_SCALE_FACTOR_INACTIVE_DURATION);
         }
         ui_reposition_drawable(ui, drawable);
 

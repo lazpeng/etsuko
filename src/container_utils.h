@@ -10,8 +10,10 @@
 #include <stdint.h>
 #endif
 
+#include "constants.h"
+
 typedef struct Vector_t {
-    void **data;
+    OWNING void **data;
     size_t size, capacity;
 } Vector_t;
 

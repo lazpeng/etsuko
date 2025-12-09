@@ -101,12 +101,21 @@ typedef enum AnimationType_t {
     ANIM_DRAW_REGION,
 } AnimationType_t;
 
+typedef enum AnimationEaseType_t {
+    ANIM_EASE_NONE = 0,
+    ANIM_EASE_OUT_CUBIC,
+    ANIM_EASE_OUT_SINE,
+    ANIM_EASE_OUT_QUAD,
+    ANIM_EASE_OUT_CIRC
+} AnimationEaseType_t;
+
 typedef struct Animation_t {
     double duration, elapsed;
     AnimationType_t type;
     OWNING void *custom_data;
     WEAK Drawable_t *target;
     bool active;
+    AnimationEaseType_t ease_func;
 } Animation_t;
 
 // Options and custom data
@@ -170,12 +179,13 @@ typedef struct Animation_EaseTranslationData_t {
     double from_x, from_y;
     double to_x, to_y;
     double duration;
-    bool ease;
+    AnimationEaseType_t ease_func;
 } Animation_EaseTranslationData_t;
 
 typedef struct Animation_FadeInOutData_t {
     int32_t from_alpha, to_alpha;
     double duration;
+    AnimationEaseType_t ease_func;
 } Animation_FadeInOutData_t;
 
 typedef struct Animation_ScaleData_t {
@@ -186,6 +196,7 @@ typedef struct Animation_ScaleData_t {
 typedef struct Animation_DrawRegionData_t {
     DrawRegionOptSet_t draw_regions;
     double duration;
+    AnimationEaseType_t ease_func;
 } Animation_DrawRegionData_t;
 
 // Init and lifetime functions
@@ -215,16 +226,19 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Drawable_t *drawable);
+// Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
+void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double duration);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, double duration);
 void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
+// User-interaction checks
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                 int32_t *out_mouse_y);
 bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,

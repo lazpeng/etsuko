@@ -7,13 +7,15 @@
 
 #include <stdbool.h>
 
+#include "constants.h"
+
 typedef enum Config_OpMode_t {
     APP_MODE_KARAOKE = 0,
 } Config_OpMode_t;
 
 typedef struct {
-    char *ui_font, *lyrics_font;
-    char *song_file;
+    OWNING char *ui_font, *lyrics_font;
+    OWNING char *song_file;
     Config_OpMode_t op_mode;
     bool hide_past_lyrics;
     bool draw_album_art_shadow;

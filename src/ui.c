@@ -273,7 +273,30 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     recalculate_container_alignment(ui, parent);
 }
 
+/* Easing functions */
+static double ease_out_sine(const double t) { return sin((t * M_PI) / 2.0); }
 static double ease_out_cubic(const double t) { return 1 - pow(1 - t, 3); }
+static double ease_out_quad(const double t) { return 1 - (1 - t) * (1 - t); }
+static double ease_out_circ(const double t) { return sqrt(1 - pow(1 - t, 2)); }
+
+static double apply_ease_func(const double progress, AnimationEaseType_t ease_func) {
+    switch ( ease_func ) {
+        case ANIM_EASE_NONE:
+            break;
+        case ANIM_EASE_OUT_CUBIC:
+            return ease_out_cubic(progress);
+        case ANIM_EASE_OUT_SINE:
+            return ease_out_sine(progress);
+        case ANIM_EASE_OUT_QUAD:
+            return ease_out_quad(progress);
+        case ANIM_EASE_OUT_CIRC:
+            return ease_out_circ(progress);
+        default:
+            break;
+    }
+
+    return progress;
+}
 
 static void apply_translation_animation(Animation_t *animation, Bounds_t *final_bounds) {
     const Animation_EaseTranslationData_t *data = animation->custom_data;
@@ -281,7 +304,7 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
     double progress = animation->elapsed / animation->duration;
 
     if ( progress < 1.0 ) {
-        progress = data->ease ? ease_out_cubic(progress) : progress;
+        progress = apply_ease_func(progress, animation->ease_func);
         const double y_delta = fabs(data->to_y - data->from_y);
         if ( fabs(y_delta) > 0.01 ) {
             const double amount = y_delta * progress - y_delta;
@@ -298,7 +321,7 @@ static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
     double progress = animation->elapsed / animation->duration;
 
     if ( progress < 1.0 ) {
-        progress = ease_out_cubic(progress);
+        progress = apply_ease_func(progress, animation->ease_func);
         const int32_t alpha_delta = data->to_alpha - data->from_alpha;
         const int32_t amount = data->from_alpha + (int32_t)(alpha_delta * progress);
         *final_alpha = amount;
@@ -322,13 +345,14 @@ static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds
 
 static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet_t *regions) {
     const Animation_DrawRegionData_t *data = animation->custom_data;
-    const double progress = animation->elapsed / animation->duration;
+    double progress = animation->elapsed / animation->duration;
     if ( progress < 1.0 ) {
+        progress = apply_ease_func(progress, animation->ease_func);
         for ( int i = 0; i < regions->num_regions; i++ ) {
             // Naively consider that just the end indexes that are going to change
             const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
             // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
-            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * ease_out_cubic(progress));
+            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
             // TODO: Figure out a way to include animating the y axis but for now leave it commented
             // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
         }
@@ -572,6 +596,7 @@ static void free_rectangle_data(Drawable_RectangleData_t *data) { free(data); }
 static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container, const int32_t start) {
     const double m_current_width = container->bounds.w;
     const double calculated_max_width = m_current_width * data->wrap_width_threshold;
+    // TODO: Make sure we don't wrap in the middle of a utf-8 multibyte character
 
     const int32_t size = (int32_t)strnlen(data->text, MAX_TEXT_SIZE);
     int32_t end_idx = start == 0 ? 0 : start + 1;
@@ -900,6 +925,14 @@ void ui_destroy_drawable(Drawable_t *drawable) {
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
         animation_destroy(drawable->animations->data[i]);
     }
+    // Find the drawable in the scene graph
+    Container_t *parent = drawable->parent;
+    for ( size_t i = 0; i < parent->child_drawables->size; i++ ) {
+        if ( parent->child_drawables->data[i] == drawable ) {
+            vec_remove(parent->child_drawables, i);
+            break;
+        }
+    }
     free(drawable);
 }
 
@@ -996,6 +1029,10 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
     const Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
         void *old_custom_data = drawable->custom_data;
+        if ( drawable->texture != NULL ) {
+            render_destroy_texture(drawable->texture);
+            drawable->texture = NULL;
+        }
         internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
@@ -1045,7 +1082,7 @@ static Animation_EaseTranslationData_t *dup_anim_translate_data(const Animation_
     result->to_x = data->to_x;
     result->to_y = data->to_y;
     result->duration = data->duration;
-    result->ease = data->ease;
+    result->ease_func = data->ease_func;
 
     return result;
 }
@@ -1058,6 +1095,7 @@ static Animation_FadeInOutData_t *dup_anim_fade_in_out_data(const Animation_Fade
     result->from_alpha = data->from_alpha;
     result->to_alpha = data->to_alpha;
     result->duration = data->duration;
+    result->ease_func = data->ease_func;
 
     return result;
 }
@@ -1079,46 +1117,9 @@ static Animation_DrawRegionData_t *dup_anim_draw_region_data(const Animation_Dra
         error_abort("Failed to allocate animation draw region data");
     }
     result->duration = data->duration;
+    result->ease_func = data->ease_func;
 
     return result;
-}
-
-void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
-    if ( target == NULL ) {
-        error_abort("Target drawable is NULL");
-    }
-
-    Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
-        error_abort("Failed to allocate animation");
-    }
-
-    result->type = ANIM_EASE_TRANSLATION;
-    result->custom_data = dup_anim_translate_data(data);
-    result->target = target;
-    result->duration = data->duration;
-    result->active = false;
-
-    vec_add(target->animations, result);
-}
-
-void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) {
-    if ( target == NULL ) {
-        error_abort("Target drawable is NULL");
-    }
-
-    Animation_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
-        error_abort("Failed to allocate animation");
-    }
-
-    result->type = ANIM_FADE_IN_OUT;
-    result->custom_data = dup_anim_fade_in_out_data(data);
-    result->target = target;
-    result->duration = data->duration;
-    result->active = false;
-
-    vec_add(target->animations, result);
 }
 
 void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
@@ -1128,7 +1129,6 @@ void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
-    // TODO: Add duration override
     Animation_t *animation = find_animation(drawable, ANIM_SCALE);
     if ( animation != NULL ) {
         Animation_ScaleData_t *data = animation->custom_data;
@@ -1150,6 +1150,24 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
     if ( animation != NULL ) {
         animation->elapsed = animation->duration;
         animation->active = false;
+    }
+    drawable->bounds.scale_mod = scale_mod;
+}
+
+void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double duration) {
+    const float scale_mod = scale - 1.f;
+    if ( scale_mod == drawable->bounds.scale_mod )
+        return;
+
+    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
+    if ( animation != NULL ) {
+        Animation_ScaleData_t *data = animation->custom_data;
+        data->from_scale = drawable->bounds.scale_mod;
+        data->to_scale = scale_mod;
+
+        animation->elapsed = 0.0;
+        animation->active = true;
+        animation->duration = duration;
     }
     drawable->bounds.scale_mod = scale_mod;
 }
@@ -1281,6 +1299,46 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) 
     drawable->alpha_mod = alpha;
 }
 
+void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_EASE_TRANSLATION;
+    result->custom_data = dup_anim_translate_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+    result->ease_func = data->ease_func;
+
+    vec_add(target->animations, result);
+}
+
+void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) {
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_FADE_IN_OUT;
+    result->custom_data = dup_anim_fade_in_out_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+    result->ease_func = data->ease_func;
+
+    vec_add(target->animations, result);
+}
+
 void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
     if ( target == NULL ) {
         error_abort("Target drawable is NULL");
@@ -1296,6 +1354,7 @@ void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
     result->target = target;
     result->duration = data->duration;
     result->active = false;
+    result->ease_func = ANIM_EASE_NONE;
 
     vec_add(target->animations, result);
 }
@@ -1315,6 +1374,7 @@ void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t
     result->target = target;
     result->duration = data->duration;
     result->active = false;
+    result->ease_func = data->ease_func;
 
     vec_add(target->animations, result);
 }

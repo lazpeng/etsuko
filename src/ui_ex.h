@@ -5,6 +5,7 @@
 #ifndef ETSUKO_RENDERER_EX_H
 #define ETSUKO_RENDERER_EX_H
 
+#include "constants.h"
 #include "song.h"
 #include "ui.h"
 
@@ -17,14 +18,14 @@ typedef enum LineState_t {
 } LineState_t;
 
 typedef struct etsuko_LyricsView_t {
-    Container_t *container;
-    const Song_t *song;
-    Vector_t *line_drawables;
+    OWNING Container_t *container;
+    WEAK const Song_t *song;
+    OWNING Vector_t *line_drawables;
     int32_t current_active_index;
     LineState_t line_states[MAX_SONG_LINES];
     double prev_viewport_y;
     bool layout_dirty;
-    Drawable_t *credit_separator, *credits_prefix, *credits_content;
+    OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
 } LyricsView_t;
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);

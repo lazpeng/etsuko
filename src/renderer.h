@@ -85,7 +85,7 @@ typedef struct DrawRegionOptSet_t {
 typedef struct DrawTextureOpts_t {
     int32_t alpha_mod;
     float color_mod;
-    const DrawRegionOptSet_t *draw_regions;
+    WEAK const DrawRegionOptSet_t *draw_regions;
 } DrawTextureOpts_t;
 
 void render_init(void);
