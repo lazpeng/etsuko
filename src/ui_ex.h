@@ -5,9 +5,12 @@
 #ifndef ETSUKO_RENDERER_EX_H
 #define ETSUKO_RENDERER_EX_H
 
+#include <stdint.h>
+
 #include "constants.h"
 #include "song.h"
 #include "ui.h"
+#include "container_utils.h"
 
 typedef enum LineState_t {
     LINE_NONE = 0, // Transient state
