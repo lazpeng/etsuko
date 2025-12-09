@@ -32,6 +32,8 @@ my own translations or the original obtained from public sources.**
 
 ## Build instructions
 
+### Desktop build
+
 This project uses CMake, so to build it on your local machine targeting the
 desktop configuration (not wasm), you can run:
 
@@ -52,7 +54,30 @@ cd ./build/desktop-release
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
-- GLEW, GLFW3, OpenAL and ICU dev libraries
+- GLEW, GLFW3 and OpenAL dev libraries
+
+On Linux and mac OS it's probably pretty straightforward to build, you can either install all the dependencies manually or use the vcpkg
+cmake target. On Windows it's a bit trickier and you'll probably want to use the vcpkg target.
+
+### Web build
+
+You need to configure the emscripten SDK and compile using cmake and the wasm-release target.
+
+You can then run the project from the generated etsuko.html file inside `build/wasm-release` using the emrun command, as such:
+
+```bash
+cd ./build/wasm-release/
+
+emrun ./etsuko.html
+```
+
+Note that a secret.h file defining CDN_BASE_PATH is required as a way to fetch song files from a (possibly) remote server, but you can
+just point it to localhost (and whatever port emrun uses on your machine) and it'll fetch the files from the same base path as the .html
+file is at the time of running the command. So for example, localhost:\<port\>/assets/my_song.txt is resolved to a file my_song.txt inside the ./assets/ folder
+in the same directory as etsuko.html. I just said the same thing twice.
+
+No dependencies other than emscripten itself is needed when building this target.
+***
 
 **Upon running, the program will probably fail and close because it needs a song
 to play. It uses a custom format described below.**
@@ -132,11 +157,12 @@ CJK or another non-latin language), or if you just want to use a font other
 than the default, a *fontOverride=* can be specified in the header as well.
 
 ***
-This repository includes code in the public domain from the following projects:
+This repository includes code in the public domain from the following projects, contained inside the contrib/ folder:
 * nothings/stb: https://github.com/nothings/stb
 * lieff/minimp3: https://github.com/lieff/minimp3
 
 Also includes shaders written by Inigo Quilez, released under Creative Commons Attribution-NonCommercial-ShareAlike
-3.0 Unported License ([original](https://www.shadertoy.com/view/wdyczG)), slightly modified to work in the program's context and under the selected OpenGL version:
-* contrib/am gradient.frag.glsl
-* contrib/cloud gradient.frag.glsl
+3.0 Unported License ([original](https://www.shadertoy.com/view/wdyczG)), slightly modified to work in the program's context
+and under the selected OpenGL version, and as such those modified shaders are available under the same license:
+* shaders/am gradient.frag.glsl
+* shaders/cloud gradient.frag.glsl
