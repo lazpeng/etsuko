@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "etsuko",
+  "version": "1.0.0",
+  "dependencies": [
+    "glfw3",
+    "openal-soft",
+    "glew",
+    {
+      "name": "opengl",
+      "platform": "windows"
+    }
+  ],
+  "builtin-baseline": "06479b4ca787d38e997c3f242b6c2e80911c85a2"
+}

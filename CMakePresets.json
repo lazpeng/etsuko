@@ -15,6 +15,13 @@
       }
     },
     {
+      "name": "vcpkg-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
       "name": "desktop-debug",
       "inherits": "base",
       "displayName": "Desktop Debug",
@@ -28,6 +35,24 @@
       "inherits": "base",
       "displayName": "Desktop Release",
       "binaryDir": "build/desktop-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "vcpkg-debug",
+      "inherits": ["base", "vcpkg-base"],
+      "displayName": "Desktop Debug (vcpkg)",
+      "binaryDir": "build/vcpkg-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "vcpkg-release",
+      "inherits": ["base", "vcpkg-base"],
+      "displayName": "Desktop Release (vcpkg)",
+      "binaryDir": "build/vcpkg-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -53,6 +78,14 @@
     {
       "name": "desktop-release",
       "configurePreset": "desktop-release"
+    },
+    {
+      "name": "vcpkg-debug",
+      "configurePreset": "vcpkg-debug"
+    },
+    {
+      "name": "vcpkg-release",
+      "configurePreset": "vcpkg-release"
     },
     {
       "name": "wasm-release",
