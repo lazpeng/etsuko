@@ -200,7 +200,6 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
     StrBuffer_t *buffer = str_buf_init();
     while ( ptr != end ) {
         if ( *ptr != '{' ) {
-            printf("value of *ptr: %s value of start: %s\n", ptr, start);
             error_abort("Invalid sub timing: *start does not start with a {");
         }
         // Now we read a centisecond value from inside the braces that tell us for how long this part of the string
@@ -208,14 +207,14 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         const int32_t closing_brace = str_find(ptr, '}', 1+2, (int32_t)(end-ptr));
         // Unfortunately we have to dup this shit because the stdlib is dumb
         char *dup = strndup(ptr+1+2, closing_brace-1-2); // Also skip 2 chars which is the \k before the number
-        const int64_t ms = strtoll(dup, NULL, 10);
+        const int64_t cs = strtoll(dup, NULL, 10);
         free(dup);
 
         if ( line->num_timings >= MAX_TIMINGS_PER_LINE ) {
             error_abort("Number of max timings per line exceeded. Maybe consider increasing this number");
         }
         Song_LineTiming_t *timing = &line->timings[line->num_timings++];
-        timing->duration = (double)ms / 100.0;
+        timing->duration = (double)cs / 100.0;
         timing->cumulative_duration = prev != NULL ? prev->cumulative_duration + prev->duration : 0;
         // Find when this sub timing ends
         const int32_t next_brace = str_find(ptr, '{', 1, (int32_t)(end-ptr));
