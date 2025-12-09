@@ -32,8 +32,8 @@ typedef enum Song_BgType_t {
 } Song_BgType_t;
 
 typedef enum Song_LineFillType_t {
-    SONG_LINE_FILL_LINEAR = 0,
-    SONG_LINE_FILL_FULL_WORD
+    SONG_LINE_FILL_FULL_WORD = 0,
+    SONG_LINE_FILL_LINEAR,
 } Song_LineFillType_t;
 
 typedef struct Song_Line_t {
