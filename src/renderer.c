@@ -671,9 +671,15 @@ void render_load_font(const unsigned char *data, const int data_size, const Font
 
     stbtt_fontinfo *info;
     if ( type == FONT_UI ) {
+        if ( g_renderer->ui_font_data ) {
+            free(g_renderer->ui_font_data);
+        }
         info = &g_renderer->ui_font_info;
         g_renderer->ui_font_data = data_copy;
     } else if ( type == FONT_LYRICS ) {
+        if ( g_renderer->lyrics_font_data ) {
+            free(g_renderer->lyrics_font_data);
+        }
         info = &g_renderer->lyrics_font_info;
         g_renderer->lyrics_font_data = data_copy;
     } else {
@@ -696,7 +702,8 @@ void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w
     int ascent, descent, lineGap;
     stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
 
-    *h = (int32_t)((ascent - descent + lineGap) * (double)scale);
+    if ( h )
+        *h = (int32_t)((ascent - descent + lineGap) * (double)scale);
 
     int width = 0;
     int32_t i = 0;
@@ -720,7 +727,8 @@ void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w
         prev_c = c;
     }
 
-    *w = (int32_t)(width * (double)scale);
+    if ( w )
+        *w = (int32_t)(width * (double)scale);
 }
 
 int32_t render_measure_pixels_from_em(const double em) {
@@ -858,11 +866,10 @@ Color_t render_color_parse(const uint32_t color) {
     return (Color_t){.r = r, .g = g, .b = b, .a = a};
 }
 
-Color_t render_color_darken(Color_t color) {
-    const double amount = 0.8;
-    color.r = (uint8_t)fmax(0, color.r * amount);
-    color.g = (uint8_t)fmax(0, color.g * amount);
-    color.b = (uint8_t)fmax(0, color.b * amount);
+Color_t render_color_darken(Color_t color, const double amount) {
+    color.r = (uint8_t)fmax(0, color.r * (1.0 - amount));
+    color.g = (uint8_t)fmax(0, color.g * (1.0 - amount));
+    color.b = (uint8_t)fmax(0, color.b * (1.0 - amount));
     return color;
 }
 

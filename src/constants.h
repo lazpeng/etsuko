@@ -31,4 +31,10 @@
  */
 #define WEAK
 
+/**
+ * This annotates that the pointer parameter following this keyword can be null and will be treated accordingly by
+ * the callee, such as not reading values from it or not writing results to it
+ */
+#define MAYBE_NULL
+
 #endif // ETSUKO_CONSTANTS_H
