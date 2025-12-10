@@ -9,7 +9,8 @@
     {
       "name": "opengl",
       "platform": "windows"
-    }
+    },
+    "icu"
   ],
   "builtin-baseline": "06479b4ca787d38e997c3f242b6c2e80911c85a2"
 }

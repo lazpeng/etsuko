@@ -47,14 +47,12 @@ if (EMSCRIPTEN)
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
 
     target_compile_options(etsuko PRIVATE
-            "SHELL:-sUSE_ICU=1"
             "SHELL:-Oz"
             "SHELL:-g0"
     )
 
     target_link_options(etsuko PRIVATE
             "SHELL:-sUSE_GLFW=3"
-            "SHELL:-sUSE_ICU=1"
             "SHELL:-lopenal"
 
             "SHELL:-sALLOW_MEMORY_GROWTH=1"
@@ -90,13 +88,8 @@ else ()
     target_link_libraries(etsuko PRIVATE GLEW::GLEW)
 
     # ICU
-    #find_path(ICU_INCLUDE_DIR unicode/utf8.h PATHS /opt/homebrew/opt/icu4c@78/include /usr/local/opt/icu4c/include)
-    #find_library(ICU_LIBRARY icuuc PATHS /opt/homebrew/opt/icu4c@78/lib /usr/local/opt/icu4c/lib)
-    #if (NOT ICU_INCLUDE_DIR OR NOT ICU_LIBRARY)
-    #    message(FATAL_ERROR "ICU not found")
-    #endif ()
-    #target_include_directories(etsuko PRIVATE ${ICU_INCLUDE_DIR})
-    #target_link_libraries(etsuko PRIVATE ${ICU_LIBRARY})
+    find_package(ICU REQUIRED)
+    target_link_libraries(etsuko PRIVATE ${ICU_LIBRARIES})
 
     # -lm
     target_link_libraries(etsuko PRIVATE m)

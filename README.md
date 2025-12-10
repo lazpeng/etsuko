@@ -54,7 +54,7 @@ cd ./build/desktop-release
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
-- GLEW, GLFW3 and OpenAL dev libraries
+- GLEW, GLFW3, OpenAL and ICU dev libraries
 
 On Linux and mac OS it's probably pretty straightforward to build, you can either install all the dependencies manually or use the vcpkg
 cmake target. On Windows it's a bit trickier and you'll probably want to use the vcpkg target.
