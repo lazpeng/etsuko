@@ -10,7 +10,7 @@
 
 static Song_t *g_song;
 
-typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS, BLOCK_ASS } BlockType;
+typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS, BLOCK_ASS, BLOCK_READINGS, BLOCK_UNKNOWN } BlockType;
 
 static void read_header(Song_t *song, const char *buffer, const size_t length) {
     const size_t equals = strcspn(buffer, "=");
@@ -18,75 +18,83 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         return;
     char *value = strdup(buffer + equals + 1);
 
-    // TODO: Write a custom str_equals function so we can replace this shit. Maybe add case-insensitivity
-    if ( strncmp(buffer, "name", equals) == 0 ) {
+    if ( str_equals_sized(buffer, "name", equals) ) {
         song->name = value;
-    } else if ( strncmp(buffer, "translatedName", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "translatedName", equals) ) {
         song->translated_name = value;
-    } else if ( strncmp(buffer, "album", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "album", equals) ) {
         song->album = value;
-    } else if ( strncmp(buffer, "artist", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "artist", equals) ) {
         song->artist = value;
-    } else if ( strncmp(buffer, "year", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "year", equals) ) {
         song->year = (int)strtol(value, NULL, 10);
         free(value);
-    } else if ( strncmp(buffer, "karaoke", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "karaoke", equals) ) {
         song->karaoke = value;
-    } else if ( strncmp(buffer, "language", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "language", equals) ) {
         song->language = value;
-    } else if ( strncmp(buffer, "hidden", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "hidden", equals) ) {
         song->hidden = value;
-    } else if ( strncmp(buffer, "albumArt", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "albumArt", equals) ) {
         song->album_art_path = value;
-    } else if ( strncmp(buffer, "filePath", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "filePath", equals) ) {
         song->file_path = value;
-    } else if ( strncmp(buffer, "bgColor", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "bgColor", equals) ) {
         song->bg_color = strtol(value, NULL, 16);
         free(value);
-    } else if ( strncmp(buffer, "bgColorSecondary", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "bgColorSecondary", equals) ) {
         song->bg_color_secondary = strtol(value, NULL, 16);
         free(value);
-    } else if ( strncmp(buffer, "alignment", equals) == 0 ) {
-        if ( strncmp(value, "left", 4) == 0 ) {
+    } else if ( str_equals_sized(buffer, "alignment", equals) ) {
+        if ( str_equals_right_sized(value, "left") ) {
             song->line_alignment = SONG_LINE_LEFT;
-        } else if ( strncmp(value, "center", 5) == 0 ) {
+        } else if ( str_equals_right_sized(value, "center") ) {
             song->line_alignment = SONG_LINE_CENTER;
-        } else if ( strncmp(value, "right", 5) == 0 ) {
+        } else if ( str_equals_right_sized(value, "right") ) {
             song->line_alignment = SONG_LINE_RIGHT;
         } else {
-            error_abort("Invalid song line alignment");
+            printf("Invalid song line alignment: %s\n", value);
         }
-    } else if ( strncmp(buffer, "offset", equals) == 0 ) {
+        free(value);
+    } else if ( str_equals_sized(buffer, "offset", equals) ) {
         song->time_offset = strtod(value, NULL);
         free(value);
-    } else if ( strncmp(buffer, "fontOverride", equals) == 0 ) {
+    } else if ( str_equals_sized(buffer, "fontOverride", equals) ) {
         song->font_override = value;
-    } else if ( strncmp(buffer, "bgType", equals) == 0 ) {
-        if ( strncmp(value, "simpleGradient", 14) == 0 ) {
+    } else if ( str_equals_sized(buffer, "bgType", equals) ) {
+        if ( str_equals_right_sized(value, "simpleGradient") ) {
             song->bg_type = BG_SIMPLE_GRADIENT;
-        } else if ( strncmp(value, "solid", 5) == 0 ) {
+        } else if ( str_equals_right_sized(value, "solid") ) {
             song->bg_type = BG_SOLID;
-        } else if ( strncmp(value, "dynamicGradient", 15) == 0 ) {
-            song->bg_type = BG_DYNAMIC_GRADIENT;
-        } else if ( strncmp(value, "randomGradient", 14) == 0 ) {
+        } else if ( str_equals_right_sized(value, "sands") ) {
+            song->bg_type = BG_SANDS_GRADIENT;
+        } else if ( str_equals_right_sized(value, "randomGradient") ) {
             song->bg_type = BG_RANDOM_GRADIENT;
-        } else if ( strncmp(value, "amLike", 6) == 0 ) {
+        } else if ( str_equals_right_sized(value, "amLike") ) {
             song->bg_type = BG_AM_LIKE_GRADIENT;
-        } else if ( strncmp(value, "cloud", 5) == 0 ) {
+        } else if ( str_equals_right_sized(value, "cloud") ) {
             song->bg_type = BG_CLOUD_GRADIENT;
         } else {
-            error_abort("Invalid background type for the song");
+            printf("Invalid background type: %s\n", value);
         }
-    } else if ( strncmp(buffer, "writtenBy", equals) == 0 ) {
+        free(value);
+    } else if ( str_equals_sized(buffer, "writtenBy", equals) ) {
         song->credits = value;
-    } else if ( strncmp(buffer, "fillType", equals) == 0 ) {
-        if ( strncmp(value, "linear", 6) == 0 ) {
+    } else if ( str_equals_sized(buffer, "fillType", equals) ) {
+        if ( str_equals_right_sized(value, "linear") ) {
             song->fill_type = SONG_LINE_FILL_LINEAR;
-        } else if ( strncmp(value, "fullWord", 8) == 0 ) {
+        } else if ( str_equals_right_sized(value, "fullWord") ) {
             song->fill_type = SONG_LINE_FILL_FULL_WORD;
         }
-    } else if ( strncmp(buffer, "assumeFullSubTiming", equals) == 0 ) {
-        song->assume_full_sub_timing_when_absent = strncmp(value, "yes", 3) == 0;
+        free(value);
+    } else if ( str_equals_sized(buffer, "assumeFullSubTiming", equals) ) {
+        song->assume_full_sub_timing_when_absent = str_equals_right_sized(value, "yes");
+        free(value);
+    } else {
+        char *option_name = strndup(buffer, equals);
+        printf("Unrecognized option: %s\n", option_name);
+        free(option_name);
+        free(value);
     }
 }
 
@@ -99,18 +107,19 @@ static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
 
     const char *equals = strchr(opts, '=');
     if ( equals != NULL ) {
-        if ( strncmp(opts, "alignment", equals - opts) == 0 ) {
-            if ( strncmp(equals + 1, "left", 4) == 0 ) {
+        if ( str_equals_sized(opts, "alignment", equals - opts) ) {
+            equals = equals + 1;
+            if ( str_equals_sized(equals, "left", comma - equals) ) {
                 line->alignment = SONG_LINE_LEFT;
-            } else if ( strncmp(equals + 1, "center", 5) == 0 ) {
+            } else if ( str_equals_sized(equals, "center", comma - equals) ) {
                 line->alignment = SONG_LINE_CENTER;
-            } else if ( strncmp(equals + 1, "right", 5) == 0 ) {
+            } else if ( str_equals_sized(equals, "right", comma - equals) ) {
                 line->alignment = SONG_LINE_RIGHT;
             } else {
                 error_abort("Invalid song line opt alignment");
             }
         }
-    } // else TODO: Not supported non-key-value options
+    }
 
     if ( comma != NULL ) {
         read_lyrics_opts(line, comma + 1);
@@ -150,7 +159,9 @@ static double convert_timing(const char *str, const size_t len) {
 }
 
 static void read_timings(const Song_t *song, const char *buffer) {
+    // TODO: Read timings after lyrics
     Song_Line_t *line = calloc(1, sizeof(*line));
+    line->readings = vec_init();
 
     const char *comma = strchr(buffer, ',');
     const size_t start_len = comma == NULL ? strlen(buffer) : (comma - buffer);
@@ -195,7 +206,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
 
     song->has_sub_timings = true;
     const Song_LineTiming_t *prev = NULL;
-    
+
     const char *ptr = start;
     StrBuffer_t *buffer = str_buf_init();
     while ( ptr != end ) {
@@ -238,6 +249,7 @@ static void read_ass(Song_t *song, const char *buffer) {
 
     // VERY naively processes a .ass dialogue line as if it's completely correct and sanitized
     Song_Line_t *line = calloc(1, sizeof(*line));
+    line->readings = vec_init();
     // Find the first : which is after Dialogue: and the first colon, and the first argument
     // AND the hours portion of the first timing, which we ignore
     const char *comma = strchr(buffer, ',');
@@ -270,6 +282,51 @@ static void read_ass(Song_t *song, const char *buffer) {
     vec_add(song->lyrics_lines, line);
 }
 
+static void read_readings(Song_t *song, const char *buffer, const int32_t len, const int32_t index) {
+    if ( len == 0 )
+        return;
+
+    // Format of the line is
+    // 1 - Lines are in the same exact order as the (original) lyrics
+    // 2 - We'll have pairs in the same order as the original line, where a bunch of characters in whatever language
+    // will map to a string of ascii characters that tell us how those characters are read (this is mostly for asian languages,
+    // or ones that use a writing system other than the latin alphabet).
+    // 3 - Pairs are in original=reading form, accepting spaces in both the original and reading portions
+    // and 4 - Separated by commas.
+    //
+    // Any parts of the line that are not declared in this segment will not be shown up on the software
+
+    // Where to find the given part of the lyric
+    int32_t lyric_idx = 0;
+
+    const Song_Line_t *line = song->lyrics_lines->data[index];
+    const int32_t lyric_len = (int32_t)strlen(line->full_text);
+
+    int32_t start = 0;
+    while ( start < len - 1 ) {
+        printf("start is %d\n", start);
+        int32_t end = str_find(buffer, ',', start, len);
+        if ( end < 0 )
+            end = (int32_t)len;
+
+        const int32_t eq = str_find(buffer, '=', start, end);
+
+        const int32_t idx = str_u8_find_str(line->full_text, buffer+start, lyric_idx, lyric_len, eq-start);
+        const int32_t part_count = str_u8_count(buffer, start, eq);
+
+        Song_LineReading_t *reading = calloc(1, sizeof(*reading));
+        reading->start_ch_idx = str_u8_count(line->full_text, 0, idx);
+        reading->end_ch_idx = reading->start_ch_idx + part_count;
+        // TODO: Make a function for this for fuck's sake
+        reading->reading_text = strndup(buffer+eq+1, end-eq-1);
+        vec_add(line->readings, reading);
+        printf("Sub-str (s: %d, e:%d) reads as: %s\n", reading->start_ch_idx, reading->end_ch_idx, reading->reading_text);
+
+        lyric_idx = idx + (eq-start);
+        start = end + 1;
+    }
+}
+
 void song_load(const char *filename, const char *src, const int src_size) {
     g_song = calloc(1, sizeof(*g_song));
     g_song->lyrics_lines = vec_init();
@@ -281,22 +338,36 @@ void song_load(const char *filename, const char *src, const int src_size) {
         error_abort("Failed to allocate buffer");
     size_t offset = 0;
 
+    // This controls whether the lyrics portion of the song is already
+    bool has_lyrics = false;
+
+    Vector_t *readings_vec = vec_init();
+
     BlockType current_block = BLOCK_HEADER;
     size_t bytes_read = 0;
+    int32_t index = 0;
     while ( (bytes_read = str_buffered_read(buffer, BUFFER_SIZE, src, src_size, offset)) > 0 ) {
         offset += bytes_read;
         buffer[strcspn(buffer, "\r")] = 0;
         buffer[strcspn(buffer, "\n")] = 0;
         const size_t len = strnlen(buffer, BUFFER_SIZE);
         if ( len > 0 && buffer[0] == '#' ) {
-            if ( strncmp(buffer, "#timings", BUFFER_SIZE) == 0 ) {
+            index = 0;
+
+            if ( str_equals_sized(buffer, "#timings", 8) ) {
                 current_block = BLOCK_TIMINGS;
-            } else if ( strncmp(buffer, "#lyrics", BUFFER_SIZE) == 0 ) {
+            } else if ( str_equals_sized(buffer, "#lyrics", 7) ) {
                 current_block = BLOCK_LYRICS;
-            } else if ( strncmp(buffer, "#ass", BUFFER_SIZE) == 0 ) {
+                has_lyrics = true;
+            } else if ( str_equals_sized(buffer, "#ass", 4) ) {
                 current_block = BLOCK_ASS;
+                has_lyrics = true;
+            } else if ( str_equals_sized(buffer, "#readings", 9) ) {
+                current_block = BLOCK_READINGS;
+                g_song->has_reading_info = true;
             } else {
-                error_abort("Invalid block inside song file");
+                printf("Unknown block type: %s\n", buffer);
+                current_block = BLOCK_UNKNOWN;
             }
             continue;
         }
@@ -314,13 +385,33 @@ void song_load(const char *filename, const char *src, const int src_size) {
         case BLOCK_ASS:
             read_ass(g_song, buffer);
             break;
+        case BLOCK_READINGS:
+            if ( has_lyrics ) {
+                // Process readings directly
+                read_readings(g_song, buffer, (int32_t)len, index);
+            } else {
+                vec_add(readings_vec, strdup(buffer));
+            }
+            break;
+        case BLOCK_UNKNOWN:
+            break;
         }
+    }
+
+    // Process things that have been postponed to until we have all the lyrics
+    for ( size_t i = 0; i < readings_vec->size; i++ ) {
+        char *line = readings_vec->data[i];
+        read_readings(g_song, line, (int32_t)strlen(line), (int32_t)i);
+        free(line);
     }
 
     if ( g_song->lyrics_lines->size > 0 ) {
         // Since the last line will have a 0 duration, set it here to a reasonable number so we can see the last line
         ((Song_Line_t *)g_song->lyrics_lines->data[g_song->lyrics_lines->size - 1])->base_duration = 100.0;
     }
+
+    // Clean up vecs
+    vec_destroy(readings_vec);
 }
 
 Song_t *song_get(void) { return g_song; }
@@ -329,8 +420,16 @@ void song_destroy(void) {
     if ( g_song != NULL ) {
         // Free lyrics lines
         for ( size_t i = 0; i < g_song->lyrics_lines->size; i++ ) {
-            free(((Song_Line_t *)g_song->lyrics_lines->data[i])->full_text);
-            free(g_song->lyrics_lines->data[i]);
+            Song_Line_t *line = g_song->lyrics_lines->data[i];
+            if ( line->readings != NULL ) {
+                for (size_t j = 0; j < line->readings->size; j++ ) {
+                    Song_LineReading_t *reading = line->readings->data[j];
+                    free(reading->reading_text);
+                    free(reading);
+                }
+            }
+            free(line->full_text);
+            free(line);
         }
         vec_destroy(g_song->lyrics_lines);
         // Free strings

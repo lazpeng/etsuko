@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <unicode/utf8.h>
+
 #include "constants.h"
 #include "error.h"
 
@@ -23,6 +25,63 @@ int32_t str_find(const char *src, const char c, const int32_t start, int32_t max
     }
 
     return -1;
+}
+
+int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, const int32_t max_len, const int32_t sub_len) {
+    const int32_t sub_count = str_u8_count(sub, 0, sub_len);
+    UChar32 first_sub_c;
+    int32_t sub_i = 0;
+    U8_NEXT(sub, sub_i, sub_len, first_sub_c);
+
+    int32_t i = 0;
+    while ( i < max_len ) {
+        const bool skip = i < start;
+        const int32_t start_i = i;
+        UChar32 c;
+        U8_NEXT(src, i, max_len, c);
+        if ( skip )
+            continue;
+
+        if ( c == first_sub_c ) {
+            const int32_t start_sub_i = sub_i;
+            bool found = true;
+
+            for ( int32_t count = 1; count < sub_count; count++ ) {
+                if ( sub_i >= sub_len - 1 ) {
+                    found = false;
+                    break;
+                }
+
+                UChar32 cur_c, sub_c;
+                U8_NEXT(src, i, max_len, cur_c);
+                U8_NEXT(sub, sub_i, sub_len, sub_c);
+
+                if ( cur_c != sub_c || sub_c < 0 || cur_c < 0 ) {
+                    sub_i = start_sub_i;
+                    found = false;
+                    break;
+                }
+            }
+
+            if ( found )
+                return start_i;
+        }
+    }
+
+    return -1;
+}
+
+int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len) {
+    int32_t count = 0;
+    int32_t i = start;
+
+    while ( i < max_len ) {
+        UChar32 c;
+        U8_NEXT(src, i, max_len, c);
+        count++;
+    }
+
+    return count;
 }
 
 char *str_get_filename(const char *path) {
@@ -53,11 +112,28 @@ bool str_is_empty(const char *str) {
     return strnlen(str, 1) < 1;
 }
 
-void str_replace_char(char *str, const char old_c, const char new_c) {
+int str_replace_char(char *str, const char old_c, const char new_c) {
+    int count = 0;
     for ( size_t i = 0; i < strnlen(str, MAX_STRLEN); i++ ) {
-        if ( str[i] == old_c )
+        if ( str[i] == old_c ) {
             str[i] = new_c;
+            count += 1;
+        }
     }
+
+    return count;
+}
+
+bool str_equals_sized(const char *a, const char *b, size_t len) {
+    size_t a_len = strnlen(a, len);
+    size_t b_len = strnlen(b, len);
+    if ( a_len != b_len || MIN(a_len, b_len) < len )
+        return false;
+    return memcmp(a, b, a_len) == 0;
+}
+
+bool str_equals_right_sized(const char *a, const char *b) {
+    return str_equals_sized(a, b, strlen(b));
 }
 
 static void resize_str_buffer(StrBuffer_t *buf, const size_t cap) {

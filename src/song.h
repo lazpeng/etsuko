@@ -25,7 +25,7 @@ typedef enum Song_LineAlignment_t {
 typedef enum Song_BgType_t {
     BG_SIMPLE_GRADIENT = 0,
     BG_SOLID,
-    BG_DYNAMIC_GRADIENT,
+    BG_SANDS_GRADIENT,
     BG_RANDOM_GRADIENT,
     BG_AM_LIKE_GRADIENT,
     BG_CLOUD_GRADIENT,
@@ -36,31 +36,38 @@ typedef enum Song_LineFillType_t {
     SONG_LINE_FILL_LINEAR,
 } Song_LineFillType_t;
 
+typedef struct Song_LineReading_t {
+    size_t start_ch_idx, end_ch_idx;
+    OWNING char *reading_text;
+} Song_LineReading_t;
+
 typedef struct Song_Line_t {
-    char *full_text;
+    OWNING char *full_text;
     double base_start_time, base_duration;
     Song_LineTiming_t timings[MAX_TIMINGS_PER_LINE];
     int32_t num_timings;
     Song_LineAlignment_t alignment;
+    OWNING Vector_t *readings; // Of Song_LineReading_t
 } Song_Line_t;
 
 typedef struct Song_t {
     // Data about the song
-    char *name, *translated_name, *artist, *album;
+    OWNING char *name, *translated_name, *artist, *album;
     int year;
-    Vector_t *lyrics_lines;
+    OWNING Vector_t *lyrics_lines; // of Song_Line_t
     // Meta data
-    char *id;
-    char *file_path, *album_art_path;
-    char *credits;
-    char *karaoke, *language, *hidden;
+    OWNING char *id;
+    OWNING char *file_path, *album_art_path;
+    OWNING char *credits;
+    OWNING char *karaoke, *language, *hidden;
     Song_LineAlignment_t line_alignment;
     uint32_t bg_color;
     uint32_t bg_color_secondary;
     double time_offset;
-    char *font_override;
+    OWNING char *font_override;
     Song_BgType_t bg_type;
     bool has_sub_timings;
+    bool has_reading_info;
     Song_LineFillType_t fill_type;
     /**
      * When this is enabled, add a single sub-timing with the same duration as the line itself when none is provided.
