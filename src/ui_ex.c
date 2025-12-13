@@ -435,7 +435,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
         drawable->layout.relative_to = NULL;
-        drawable->layout.offset_y = -LINE_VERTICAL_PADDING;
+        drawable->layout.offset_y = 0;//-LINE_VERTICAL_PADDING;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
         if ( drawable->layout.flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
