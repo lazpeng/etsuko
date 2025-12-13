@@ -130,8 +130,8 @@ static int load_async(Karaoke_t *state) {
             case BG_SIMPLE_GRADIENT:
                 bg_type = BACKGROUND_GRADIENT;
                 break;
-            case BG_DYNAMIC_GRADIENT:
-                bg_type = BACKGROUND_DYNAMIC_GRADIENT;
+            case BG_SANDS_GRADIENT:
+                bg_type = BACKGROUND_SANDS_GRADIENT;
                 break;
             case BG_RANDOM_GRADIENT:
                 bg_type = BACKGROUND_RANDOM_GRADIENT;

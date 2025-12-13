@@ -1,5 +1,4 @@
 uniform float u_time;
-uniform float u_noiseScale;
 uniform vec2 u_resolution;
 
 out vec4 FragColor;

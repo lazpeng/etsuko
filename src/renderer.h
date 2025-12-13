@@ -104,7 +104,7 @@ typedef enum BackgroundType_t {
     // Static gradient between the two specified colors
     BACKGROUND_GRADIENT,
     // A moving, cloud like gradient shader
-    BACKGROUND_DYNAMIC_GRADIENT,
+    BACKGROUND_SANDS_GRADIENT,
     // A shader that cycles between multiple pre-defined colors
     BACKGROUND_RANDOM_GRADIENT,
     // A shader that imitates Apple Music's background effect
