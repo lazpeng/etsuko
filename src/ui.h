@@ -57,7 +57,8 @@ typedef enum DrawableType_t {
     DRAW_TYPE_TEXT = 0,
     DRAW_TYPE_IMAGE,
     DRAW_TYPE_PROGRESS_BAR,
-    DRAW_TYPE_RECTANGLE
+    DRAW_TYPE_RECTANGLE,
+    DRAW_TYPE_CUSTOM_TEXTURE
 } DrawableType_t;
 
 typedef enum ContainerFlags_t {
@@ -92,6 +93,7 @@ typedef struct Drawable_t {
     DrawRegionOptSet_t draw_regions;
     uint8_t underlay_alpha;
     bool draw_underlay;
+    bool pending_recompute;
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -220,9 +222,11 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Draw
                           const Layout_t *layout);
 Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Drawable_t *drawable);
+double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);

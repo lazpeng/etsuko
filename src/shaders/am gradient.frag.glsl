@@ -75,5 +75,5 @@ void main()
 
     vec3 col = finalComp;
 
-    fragColor = vec4(col, 1.0);
+    fragColor = vec4(col * 0.5, 1.0);
 }

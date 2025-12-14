@@ -528,6 +528,8 @@ int karaoke_loop(const Karaoke_t *state) {
     update_song_progressbar(state);
     update_play_pause_state(state);
     // Update the lyrics view
+    if ( events_window_changed() )
+        ui_ex_lyrics_view_on_screen_change(state->ui, state->lyrics_view);
     ui_ex_lyrics_view_loop(state->ui, state->lyrics_view);
 
     // Clear events after all checking has been done because under emscripten the events aren't polled inside glfw

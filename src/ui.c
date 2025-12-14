@@ -387,7 +387,7 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
 }
 
 static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds) {
-    if ( !drawable->enabled ) {
+    if ( !drawable->enabled || drawable->pending_recompute ) {
         return;
     }
 
@@ -904,6 +904,19 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     return result;
 }
 
+Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout) {
+    Drawable_t *result = make_drawable(container, DRAW_TYPE_CUSTOM_TEXTURE, false);
+
+    result->texture = render_make_null();
+    result->custom_data = NULL;
+    result->layout = *layout;
+    result->pending_recompute = true;
+
+    ui_reposition_drawable(ui, result);
+    vec_add(container->child_drawables, result);
+    return result;
+}
+
 void ui_destroy_drawable(Drawable_t *drawable) {
     if ( drawable->texture != NULL ) {
         render_destroy_texture(drawable->texture);
@@ -924,6 +937,12 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
             Drawable_RectangleData_t *rectangle_data = drawable->custom_data;
             free_rectangle_data(rectangle_data);
+        } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
+            // Custom drawables can mantain weak references to pieces of custom data, but they must also save a pointer to it elsewhere
+            // and free it there
+            // Ideally whoever created the drawable should be the one to, ultimately, destroy it, or else it'll have a dangling pointer
+            // ready to do some use-after-free
+            // Gotta think this design a little better later
         } else {
             error_abort("Unknown drawable type");
         }
@@ -940,6 +959,10 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         }
     }
     free(drawable);
+}
+
+double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent) {
+    return parent->bounds.w * value;
 }
 
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
@@ -1049,6 +1072,9 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         }
     } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR || drawable->type == DRAW_TYPE_RECTANGLE ) {
         ui_reposition_drawable(ui, drawable);
+    } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
+        // It should recompute itself inside some loop() function somewhere
+        drawable->pending_recompute = true;
     } else {
         error_abort("Invalid drawable type");
     }

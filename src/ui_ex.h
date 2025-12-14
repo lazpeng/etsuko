@@ -23,7 +23,8 @@ typedef enum LineState_t {
 typedef struct etsuko_LyricsView_t {
     OWNING Container_t *container;
     WEAK const Song_t *song;
-    OWNING Vector_t *line_drawables;
+    OWNING Vector_t *line_drawables; // of Drawable_t
+    OWNING Vector_t *line_read_hints; // of Drawable_t
     int32_t current_active_index;
     LineState_t line_states[MAX_SONG_LINES];
     double prev_viewport_y;
@@ -33,6 +34,7 @@ typedef struct etsuko_LyricsView_t {
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);
 void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view);
+void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view);
 void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, double delta_y);
 void ui_ex_destroy_lyrics_view(LyricsView_t *view);
 

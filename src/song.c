@@ -302,12 +302,15 @@ static void read_readings(Song_t *song, const char *buffer, const int32_t len, c
     // Where to find the given part of the lyric
     int32_t lyric_idx = 0;
 
+    if ( (size_t)index >= song->lyrics_lines->size ) {
+        error_abort("read_readings: There are more reading hint lines than lyrics");
+    }
+
     const Song_Line_t *line = song->lyrics_lines->data[index];
     const int32_t lyric_len = (int32_t)strlen(line->full_text);
 
     int32_t start = 0;
     while ( start < len - 1 ) {
-        printf("start is %d\n", start);
         int32_t end = str_find(buffer, ',', start, len);
         if ( end < 0 )
             end = (int32_t)len;
@@ -323,7 +326,6 @@ static void read_readings(Song_t *song, const char *buffer, const int32_t len, c
         // TODO: Make a function for this for fuck's sake
         reading->reading_text = strndup(buffer+eq+1, end-eq-1);
         vec_add(line->readings, reading);
-        printf("Sub-str (s: %d, e:%d) reads as: %s\n", reading->start_ch_idx, reading->end_ch_idx, reading->reading_text);
 
         lyric_idx = idx + (eq-start);
         start = end + 1;
