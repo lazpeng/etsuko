@@ -233,6 +233,9 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         ptr = next_brace < 0 ? end : ptr + next_brace;
         timing->start_idx = prev != NULL ? prev->end_idx : 0;
         timing->end_idx = timing->start_idx + (int32_t)(ptr - (prev_ptr + 1 + closing_brace));
+        // Char counts
+        timing->start_char_idx = prev != NULL ? prev->end_char_idx : 0;
+        timing->end_char_idx = timing->start_char_idx + str_u8_count(ptr, 0, (int32_t)(ptr - (prev_ptr + 1 + closing_brace)));
         // Copy the line contents into the buffer
         str_buf_append(buffer, prev_ptr+1+closing_brace, ptr);
 

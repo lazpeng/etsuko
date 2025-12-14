@@ -22,6 +22,7 @@ typedef struct {
     bool draw_lyric_shadow;
     bool show_loading_screen;
     bool enable_dynamic_fill;
+    bool enable_reading_hints;
 } Config_t;
 
 Config_t *config_get(void);

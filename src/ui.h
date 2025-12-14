@@ -133,22 +133,19 @@ typedef struct CharOffsetInfo_t {
 } CharOffsetInfo_t;
 
 typedef struct TextOffsetInfo_t {
-    int32_t line_idx;
-    int32_t num_chars; // Not to be confused with bytes
+    int32_t num_chars, start_char_idx;
     int32_t start_byte_offset, end_byte_offset;
-    double start_x, end_x;
-    double start_y, end_y;
+    double start_x;
+    double start_y;
     double width, height;
     OWNING Vector_t *char_offsets; // of CharOffsetInfo_t
 } TextOffsetInfo_t;
 
 typedef struct Drawable_TextData_t {
-    // Regular options
     OWNING char *text;
     FontType_t font_type;
     double em;
     Color_t color;
-    // Wrap options
     int wrap_enabled;
     double wrap_width_threshold;
     double measure_at_em;

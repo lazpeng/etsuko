@@ -123,7 +123,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = 0.05});
-        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_SINE});
+        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_QUAD});
     }
 
     if ( !str_is_empty(song->credits) ) {
@@ -214,7 +214,7 @@ static void calculate_sub_region_for_active_line_linear(Drawable_t *drawable, co
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
-        const float line_width = (float)((offset_info->end_x - offset_info->start_x) / drawable->bounds.w);
+        const float line_width = (float)(offset_info->width / drawable->bounds.w);
         // Calculate how much each segment should contribute to this line's fill
         // Start with the offset from the part where the line starts depending on the alignment
         float x1 = (float)(offset_info->start_x / drawable->bounds.w);
@@ -247,7 +247,7 @@ static void calculate_sub_region_for_active_line_linear(Drawable_t *drawable, co
         // y0 is the beginning of this line
         draw_regions.regions[i].y0_perc = (float)(offset_info->start_y / drawable->bounds.h);
         // y1 is the end of this line
-        draw_regions.regions[i].y1_perc = (float)(offset_info->end_y / drawable->bounds.h);
+        draw_regions.regions[i].y1_perc = (float)(offset_info->height / drawable->bounds.h);
     }
     ui_drawable_set_draw_region(drawable, &draw_regions);
 }
@@ -260,7 +260,6 @@ static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable,
     DrawRegionOptSet_t draw_regions = {0};
     draw_regions.num_regions = (int32_t)text_data->line_offsets->size;
 
-    // Overshoot the time a little to compensate for the animation
     double last_segment_remaining = 0.0;
     const double audio_elapsed = audio_elapsed_time() + song->time_offset;
     int32_t timing_offset_start = 0;
@@ -271,14 +270,14 @@ static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable,
         float x1 = (float)(offset_info->start_x / drawable->bounds.w);
         for ( int32_t s = timing_offset_start; s < line->num_timings; s++ ) {
             const Song_LineTiming_t *timing = &line->timings[s];
-            if ( timing->start_idx > offset_info->end_byte_offset )
+            if ( timing->start_char_idx > offset_info->start_char_idx + offset_info->num_chars )
                 break;
-            if ( timing->end_idx <= offset_info->start_byte_offset )
-                continue;
-            timing_offset_start += 1;
 
-            const int timing_end_idx = MIN(timing->end_idx, offset_info->end_byte_offset);
-            const int timing_start_idx = MAX(timing->start_idx, offset_info->start_byte_offset);
+            if ( timing->end_char_idx <= offset_info->start_char_idx )
+                continue;
+
+            const int timing_end_idx = MIN(timing->end_char_idx, offset_info->start_char_idx + offset_info->num_chars);
+            const int timing_start_idx = MAX(timing->start_char_idx, offset_info->start_char_idx);
             const int segment_length_in_current_line = timing_end_idx - timing_start_idx;
             if ( segment_length_in_current_line <= 0 )
                 continue;
@@ -286,18 +285,17 @@ static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable,
             const double elapsed_since_segment = audio_elapsed - (line->base_start_time + timing->cumulative_duration);
             if ( elapsed_since_segment <= 0.0 )
                 break;
+            
+            timing_offset_start += 1;
 
             // The secret here is that we calculate each letter boundary and always set the fill size to that
             // for the whole duration of the segment
             double segment_width = 0.0;
             // The code below assumes any line breaks are not made inside a utf-8 character (duh)
-            const int32_t segment_start_in_line = MAX(0, timing->start_idx - offset_info->start_byte_offset);
-            for ( size_t ci = 0; ci < offset_info->char_offsets->size; ci++ ) {
-                const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[ci];
-                if ( char_info->start_byte_offset < segment_start_in_line )
-                    continue;
-                if ( char_info->start_byte_offset >= timing_end_idx )
-                    break;
+            const int32_t segment_start_in_line = MAX(0, timing->start_char_idx - offset_info->start_char_idx);
+            for ( int32_t ci = 0; ci < segment_length_in_current_line; ci++ ) {
+                size_t index = ci + segment_start_in_line;
+                const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[index];
                 segment_width += char_info->width;
             }
 
@@ -313,7 +311,7 @@ static void calculate_sub_region_for_active_line_full_word(Drawable_t *drawable,
         // y0 is the beginning of this line
         draw_regions.regions[i].y0_perc = (float)(offset_info->start_y / drawable->bounds.h);
         // y1 is the end of this line
-        draw_regions.regions[i].y1_perc = (float)(offset_info->end_y / drawable->bounds.h);
+        draw_regions.regions[i].y1_perc = (float)(offset_info->height / drawable->bounds.h);
     }
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, MAX(REGION_ANIMATION_DURATION, last_segment_remaining));
 }

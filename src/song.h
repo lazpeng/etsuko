@@ -12,6 +12,8 @@
 
 typedef struct Song_LineTiming_t {
     int32_t start_idx, end_idx;
+    int32_t start_char_idx;
+    int32_t end_char_idx;
     double duration;
     double cumulative_duration;
 } Song_LineTiming_t;

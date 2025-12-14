@@ -10,6 +10,7 @@
 #include "error.h"
 #include "events.h"
 #include "str_utils.h"
+#include "config.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -552,8 +553,25 @@ static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     return result;
 }
 
+static void free_text_line_offsets(Drawable_TextData_t *data) {
+    for ( size_t i = 0; i < data->line_offsets->size; i++ ) {
+        TextOffsetInfo_t *info = data->line_offsets->data[i];
+        for ( size_t j = 0; j < info->char_offsets->size; j++ ) {
+            CharOffsetInfo_t *char_info = info->char_offsets->data[j];
+            free(char_info);
+        }
+        vec_destroy(info->char_offsets);
+        free(info);
+    }
+    vec_destroy(data->line_offsets);
+    data->line_offsets = NULL;
+}
+
 static void free_text_data(Drawable_TextData_t *data) {
     free(data->text);
+    if ( data->line_offsets != NULL ) {
+        free_text_line_offsets(data);
+    }
     free(data);
 }
 
@@ -630,10 +648,9 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
                                    // the threshold,
                                    // hopefully it doesn't blow it by much
         } else {
-            const int32_t backup_end_idx = end_idx;
-            end_idx = tmp_end_idx;
-            if ( backup_end_idx == end_idx )
+            if ( end_idx == tmp_end_idx )
                 break;
+            end_idx = tmp_end_idx;
         }
     }
 
@@ -660,19 +677,21 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
 /**
  * Partially computes text offsets character by character. Some of the information is later populated by internal_make_text.
  */
-static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line, const int32_t index,
-                                                  const int32_t byte_offset) {
+static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line, const int32_t byte_offset) {
     const size_t text_size = strnlen(line, MAX_TEXT_SIZE);
     const int32_t pixels_size = render_measure_pixels_from_em(data->em);
+
+    const TextOffsetInfo_t *prev = data->line_offsets->size > 0 ? data->line_offsets->data[data->line_offsets->size - 1] : NULL;
 
     TextOffsetInfo_t *info = calloc(1, sizeof(*info));
     if ( info == NULL ) {
         error_abort("Failed to allocate text offset info");
     }
     vec_add(data->line_offsets, info);
-    info->line_idx = index;
     info->char_offsets = vec_init();
     info->start_byte_offset = byte_offset;
+    info->start_char_idx = prev != NULL ? prev->start_char_idx + prev->num_chars : 0;
+    info->num_chars = 0;
 
     double x = 0;
     UChar32 prev_c = -1;
@@ -681,6 +700,9 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
 
         UChar32 c;
         U8_NEXT(line, i, text_size, c);
+        if ( c < 0 )
+            break;
+
         CharBounds_t char_bounds;
         render_measure_char_bounds(c, prev_c, pixels_size, &char_bounds, data->font_type);
 
@@ -697,8 +719,6 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
         char_info->y = 0; // Will be computed later
 
         info->end_byte_offset = byte_offset + (int32_t)i;
-        info->end_x = x;
-        info->end_y = char_info->height;
         info->width += char_bounds.width;
         info->height = char_info->height;
 
@@ -715,20 +735,12 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     Texture_t *final_texture;
 
     data = dup_text_data(data);
+    const bool should_compute_offsets = data->compute_offsets && (config_get()->enable_dynamic_fill || config_get()->enable_reading_hints);
 
-    if ( data->compute_offsets ) {
+    if ( should_compute_offsets ) {
         if ( data->line_offsets != NULL ) {
             // TODO: Maybe check if we really need to recompute this
-            for ( size_t i = 0; i < data->line_offsets->size; i++ ) {
-                TextOffsetInfo_t *info = data->line_offsets->data[i];
-                for ( size_t j = 0; j < info->char_offsets->size; j++ ) {
-                    CharOffsetInfo_t *char_info = info->char_offsets->data[j];
-                    free(char_info);
-                }
-                vec_destroy(info->char_offsets);
-                free(info);
-            }
-            vec_destroy(data->line_offsets);
+            free_text_line_offsets(data);
         }
         data->line_offsets = vec_init();
     }
@@ -742,12 +754,12 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
 
         do {
             const size_t end = measure_text_wrap_stop(data, container, (int32_t)start);
-            char *line_str = strndup(data->text + start, end - start);
+            char *line_str = strndup(data->text + start, end + 1 - start);
             const int pixels_size = render_measure_pixels_from_em(data->em);
             Texture_t *texture = render_make_text(line_str, pixels_size, &data->color, data->font_type);
 
-            if ( data->compute_offsets ) {
-                internal_partial_compute_text_offsets(data, line_str, (int32_t)textures_vec->size, (int32_t)start);
+            if ( should_compute_offsets ) {
+                internal_partial_compute_text_offsets(data, line_str, (int32_t)start);
             }
             free(line_str);
 
@@ -782,9 +794,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             if ( data->compute_offsets ) {
                 TextOffsetInfo_t *info = data->line_offsets->data[i];
                 info->start_x = x;
-                info->end_x += x;
                 info->start_y = y;
-                // info->end_y = y;
             }
 
             Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
@@ -795,10 +805,6 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             render_draw_texture(texture, &destination, &opts);
             y += texture->height + data->line_padding;
 
-            if ( data->compute_offsets ) {
-                TextOffsetInfo_t *info = data->line_offsets->data[i];
-                info->end_y += data->line_padding;
-            }
             render_set_blend_mode(blend_mode);
 
             render_destroy_texture(texture);
@@ -810,8 +816,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         const int32_t pixels_size = render_measure_pixels_from_em(data->em);
         final_texture = render_make_text(data->text, pixels_size, &data->color, data->font_type);
 
-        if ( data->compute_offsets ) {
-            internal_partial_compute_text_offsets(data, data->text, 0, 0);
+        if ( should_compute_offsets ) {
+            internal_partial_compute_text_offsets(data, data->text, 0);
         }
     }
 
