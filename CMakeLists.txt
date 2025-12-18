@@ -87,10 +87,6 @@ else ()
     find_package(GLEW REQUIRED)
     target_link_libraries(etsuko PRIVATE GLEW::GLEW)
 
-    # ICU
-    find_package(ICU REQUIRED)
-    target_link_libraries(etsuko PRIVATE ${ICU_LIBRARIES})
-
     # -lm
     target_link_libraries(etsuko PRIVATE m)
 

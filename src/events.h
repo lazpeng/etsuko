@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum etsuko_Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_INVALID } etsuko_Key_t;
+typedef enum etsuko_Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_R, KEY_INVALID } etsuko_Key_t;
 
 // Init, finish and loop
 void events_init(void);

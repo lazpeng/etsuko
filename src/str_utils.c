@@ -84,6 +84,47 @@ int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len
     return count;
 }
 
+int32_t str_u8_next(const char *const bytes, size_t size, int32_t *index) {
+    int32_t i = *index;
+    if (i < 0 || (size_t)i >= size) return -1;
+
+    unsigned char c0 = (unsigned char)bytes[i];
+
+    // ASCII fast path
+    if (c0 < 0x80) {
+        *index = i + 1;
+        return c0;
+    }
+
+    // 2-byte
+    if ((c0 & 0xE0) == 0xC0) {
+        if (i + 2 > (int32_t)size) return -1;
+        *index = i + 2;
+        return ((c0 & 0x1F) << 6) | ((unsigned char)bytes[i + 1] & 0x3F);
+    }
+
+    // 3-byte
+    if ((c0 & 0xF0) == 0xE0) {
+        if (i + 3 > (int32_t)size) return -1;
+        *index = i + 3;
+        return ((c0 & 0x0F) << 12) |
+               (((unsigned char)bytes[i + 1] & 0x3F) << 6) |
+               ((unsigned char)bytes[i + 2] & 0x3F);
+    }
+
+    // 4-byte
+    if ((c0 & 0xF8) == 0xF0) {
+        if (i + 4 > (int32_t)size) return -1;
+        *index = i + 4;
+        return ((c0 & 0x07) << 18) |
+               (((unsigned char)bytes[i + 1] & 0x3F) << 12) |
+               (((unsigned char)bytes[i + 2] & 0x3F) << 6) |
+               ((unsigned char)bytes[i + 3] & 0x3F);
+    }
+
+    return -1;
+}
+
 char *str_get_filename(const char *path) {
     const char *last_slash = strrchr(path, '/');
     if ( last_slash == NULL ) {
@@ -124,17 +165,16 @@ int str_replace_char(char *str, const char old_c, const char new_c) {
     return count;
 }
 
-bool str_equals_sized(const char *a, const char *b, size_t len) {
-    size_t a_len = strnlen(a, len);
-    size_t b_len = strnlen(b, len);
-    if ( a_len != b_len || MIN(a_len, b_len) < len )
+bool str_equals_sized(const char *a, const char *b, const size_t len) {
+    const size_t a_len = strnlen(a, len);
+    const size_t b_len = strnlen(b, len);
+    if ( a_len != b_len || MIN(a_len, b_len) < len ) {
         return false;
+    }
     return memcmp(a, b, a_len) == 0;
 }
 
-bool str_equals_right_sized(const char *a, const char *b) {
-    return str_equals_sized(a, b, strlen(b));
-}
+bool str_equals_right_sized(const char *a, const char *b) { return str_equals_sized(a, b, strlen(b)); }
 
 static void resize_str_buffer(StrBuffer_t *buf, const size_t cap) {
     char *new_buf = realloc(buf->data, cap);
@@ -202,4 +242,42 @@ size_t str_buffered_read(char *destination, const size_t size, const char *src, 
     }
     destination[i] = '\0';
     return i;
+}
+
+bool str_ch_is_kanji(const UChar32 c) {
+    if ( (c >= 0x4E00 && c <= 0x9FAF) ||  // CJK Unified Ideographs
+         (c >= 0x3400 && c <= 0x4DBF) ) { // CJK Unified Ideographs Extension A
+        return true;
+    }
+    return false;
+}
+
+bool str_ch_is_hiragana(const UChar32 c) { return (c >= 0x3040 && c <= 0x309F); }
+
+bool str_ch_is_katakana(const UChar32 c) { return (c >= 0x30A0 && c <= 0x30FF); }
+
+bool str_ch_is_kana(const UChar32 c) { return str_ch_is_hiragana(c) || str_ch_is_katakana(c); }
+
+bool str_ch_is_japanese_particle(const UChar32 c) {
+    // は (wa/ha), が (ga), に (ni), を (wo), へ (he), の (no), で (de), も (mo)
+    switch ( c ) {
+    case 0x306F: // ha (wa)
+    case 0x304C: // ga
+    case 0x306B: // ni
+    case 0x3092: // wo
+    case 0x3078: // he
+    case 0x306E: // no
+    case 0x3067: // de
+    case 0x3082: // mo
+    case 0x3068: // to
+    case 0x3084: // ya
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool str_ch_is_japanese_comma_or_period(const UChar32 c) {
+    // 、(comma), 。(period)
+    return c == 0x3001 || c == 0x3002;
 }

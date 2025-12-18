@@ -10,8 +10,7 @@
 
 #include "contrib/stb_image.h"
 #include "contrib/stb_truetype.h"
-
-#include <unicode/utf8.h>
+#include "str_utils.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -624,7 +623,7 @@ void render_clear(void) {
     if ( g_renderer->bg_type == BACKGROUND_NONE || bg_not_initialized ) {
         float r, g, b, a;
         deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
-        glClearColor(r, g, b, a);
+        glClearColor(r, g, b, 255);
         glClear(GL_COLOR_BUFFER_BIT);
         return;
     }
@@ -696,11 +695,12 @@ void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w
     int width = 0;
     int32_t i = 0;
     const int32_t len = (int32_t)strlen(text);
-    UChar32 c = 0;
-    UChar32 prev_c = -1;
+    int32_t c = 0;
+    int32_t prev_c = -1;
 
     while ( i < len ) {
-        U8_NEXT(text, i, len, c);
+        // U8_NEXT(text, i, len, c);
+        c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
 
@@ -732,7 +732,7 @@ int32_t render_measure_pt_from_em(const double em) {
     return pt_size;
 }
 
-void render_measure_char_bounds(const UChar32 c, const UChar32 prev_c, const int32_t pixels, CharBounds_t *out_bounds,
+void render_measure_char_bounds(const int32_t c, const int32_t prev_c, const int32_t pixels, CharBounds_t *out_bounds,
                                 const FontType_t font) {
     const stbtt_fontinfo *font_info = font == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
 
@@ -1101,11 +1101,12 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     int width = 0;
     int32_t i = 0;
     const int32_t len = (int32_t)strlen(text);
-    UChar32 c = 0;
-    UChar32 prev_c = -1;
+    int32_t c = 0;
+    int32_t prev_c = -1;
 
     while ( i < len ) {
-        U8_NEXT(text, i, len, c);
+        // U8_NEXT(text, i, len, c);
+        c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
 
@@ -1128,7 +1129,8 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     prev_c = -1;
 
     while ( i < len ) {
-        U8_NEXT(text, i, len, c);
+        // U8_NEXT(text, i, len, c);
+        c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
 

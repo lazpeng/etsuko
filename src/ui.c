@@ -5,12 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <unicode/utf8.h>
-
+#include "config.h"
 #include "error.h"
 #include "events.h"
 #include "str_utils.h"
-#include "config.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -280,20 +278,20 @@ static double ease_out_cubic(const double t) { return 1 - pow(1 - t, 3); }
 static double ease_out_quad(const double t) { return 1 - (1 - t) * (1 - t); }
 static double ease_out_circ(const double t) { return sqrt(1 - pow(1 - t, 2)); }
 
-static double apply_ease_func(const double progress, AnimationEaseType_t ease_func) {
+static double apply_ease_func(const double progress, const AnimationEaseType_t ease_func) {
     switch ( ease_func ) {
-        case ANIM_EASE_NONE:
-            break;
-        case ANIM_EASE_OUT_CUBIC:
-            return ease_out_cubic(progress);
-        case ANIM_EASE_OUT_SINE:
-            return ease_out_sine(progress);
-        case ANIM_EASE_OUT_QUAD:
-            return ease_out_quad(progress);
-        case ANIM_EASE_OUT_CIRC:
-            return ease_out_circ(progress);
-        default:
-            break;
+    case ANIM_EASE_NONE:
+        break;
+    case ANIM_EASE_OUT_CUBIC:
+        return ease_out_cubic(progress);
+    case ANIM_EASE_OUT_SINE:
+        return ease_out_sine(progress);
+    case ANIM_EASE_OUT_QUAD:
+        return ease_out_quad(progress);
+    case ANIM_EASE_OUT_CIRC:
+        return ease_out_circ(progress);
+    default:
+        break;
     }
 
     return progress;
@@ -547,7 +545,7 @@ static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
     result->wrap_width_threshold = data->wrap_width_threshold;
     result->measure_at_em = data->measure_at_em;
     result->alignment = data->alignment;
-    result->line_padding = data->line_padding;
+    result->line_padding_em = data->line_padding_em;
     result->draw_shadow = data->draw_shadow;
     result->compute_offsets = data->compute_offsets;
     return result;
@@ -614,47 +612,109 @@ static void free_rectangle_data(Drawable_RectangleData_t *data) { free(data); }
 static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container, const int32_t start) {
     const double m_current_width = container->bounds.w;
     const double calculated_max_width = m_current_width * data->wrap_width_threshold;
-    // TODO: Make sure we don't wrap in the middle of a utf-8 multibyte character
 
-    const int32_t size = (int32_t)strnlen(data->text, MAX_TEXT_SIZE);
-    int32_t end_idx = start == 0 ? 0 : start + 1;
-    while ( true ) {
-        int32_t tmp_end_idx = str_find(data->text, ' ', end_idx + 1, -1);
-        if ( tmp_end_idx < 0 ) {
-            tmp_end_idx = size;
-        }
+    const char *text = data->text;
+    const int32_t size = (int32_t)strnlen(text, MAX_TEXT_SIZE);
 
-        if ( start == tmp_end_idx )
-            break;
+    if ( start >= size )
+        return size;
 
-        int32_t measure_pixels_size = 0;
-        if ( data->measure_at_em != 0 ) {
-            measure_pixels_size = render_measure_pixels_from_em(data->measure_at_em);
-        } else {
-            measure_pixels_size = render_measure_pixels_from_em(data->em);
-        }
-        int32_t w, h;
-        char *dup = strndup(data->text + start, tmp_end_idx - start);
-        render_measure_text_size(dup, measure_pixels_size, &w, &h, data->font_type);
-        free(dup);
+    /**
+     * Wrap logic should be as follows:
+     * - In regular, latin-script text, break on spaces (it is impossible for it to contain newlines in the first place)
+     * - In japanese text, try to break at the longest particle or punctuation point immediately after a kanji after we
+     * exceeded the maximum width. If that fails, break on the first kana (non-kanji) after we exceeded the max width.
+     * Obs.: if the second line is too small, and the whole thing still fits in 95% of the container width (no matter the
+     * max width that has been set), we don't break the line
+     */
 
-        if ( w > calculated_max_width ) {
-            // go with whatever was on previously
-            if ( end_idx != start ) {
-                // do nothing, draw using last good value
-                break;
-            }
-            end_idx = tmp_end_idx; // Go with what we have now, even if it surpasses
-                                   // the threshold,
-                                   // hopefully it doesn't blow it by much
-        } else {
-            if ( end_idx == tmp_end_idx )
-                break;
-            end_idx = tmp_end_idx;
-        }
+    int32_t measure_pixels_size = 0;
+    if ( data->measure_at_em != 0 ) {
+        measure_pixels_size = render_measure_pixels_from_em(data->measure_at_em);
+    } else {
+        measure_pixels_size = render_measure_pixels_from_em(data->em);
     }
 
-    return end_idx;
+    double current_line_width = 0;
+    int32_t current_idx = start;
+    int32_t last_safe_break_idx = -1;
+    int32_t last_particle_break_idx = -1;
+
+    int32_t prev_c = -1;
+    bool is_japanese_context = false;
+
+    while ( current_idx < size ) {
+        const int32_t char_start_idx = current_idx;
+        int32_t c;
+        c = str_u8_next(text, size, &current_idx);
+        if ( c < 0 )
+            break;
+
+        if ( !is_japanese_context ) {
+            if ( str_ch_is_kanji(c) || str_ch_is_kana(c) ) {
+                is_japanese_context = true;
+            }
+        }
+
+        CharBounds_t char_bounds;
+        render_measure_char_bounds(c, prev_c, measure_pixels_size, &char_bounds, data->font_type);
+        current_line_width += char_bounds.width;
+
+        if ( c == ' ' ) {
+            last_safe_break_idx = char_start_idx + 1;
+        } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_comma_or_period(c) ) {
+            if ( str_ch_is_japanese_comma_or_period(c) ) {
+                // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first character
+                // on the following line
+                last_particle_break_idx = current_idx;
+            } else {
+                last_particle_break_idx = char_start_idx;
+            }
+        }
+
+        if ( current_line_width > calculated_max_width ) {
+            if ( current_idx == size && current_line_width <= m_current_width * 0.95 ) {
+                return size;
+            }
+
+            if ( is_japanese_context && last_particle_break_idx != -1 && last_particle_break_idx > start ) {
+                return last_particle_break_idx;
+            }
+
+            if ( last_safe_break_idx != -1 && last_safe_break_idx > start ) {
+                return last_safe_break_idx;
+            }
+
+            if ( is_japanese_context ) {
+                bool last_was_kanji = str_ch_is_kanji(c);
+
+                while ( current_idx < size ) {
+                    int32_t next_c;
+                    const int32_t prev_current_idx = current_idx;
+                    // U8_NEXT(text, current_idx, size, next_c);
+                    next_c = str_u8_next(text, size, &current_idx);
+                    if ( next_c < 0 )
+                        break;
+
+                    if ( last_was_kanji && str_ch_is_kana(next_c) ) {
+                        return prev_current_idx;
+                    }
+
+                    last_was_kanji = str_ch_is_kanji(next_c);
+                }
+
+                // If we ran out of text, just return end.
+                return size;
+            }
+
+            // when not breaking japanese text
+            return (char_start_idx > start) ? (char_start_idx - 1) : (current_idx - 1);
+        }
+
+        prev_c = c;
+    }
+
+    return size;
 }
 
 static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type, const bool dynamic) {
@@ -694,12 +754,13 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
     info->num_chars = 0;
 
     double x = 0;
-    UChar32 prev_c = -1;
-    for ( size_t i = 0; i < text_size; ) {
-        const size_t prev_i = i;
+    int32_t prev_c = -1;
+    for ( int32_t i = 0; i < (int32_t)text_size; ) {
+        const int32_t prev_i = i;
 
-        UChar32 c;
-        U8_NEXT(line, i, text_size, c);
+        int32_t c;
+        // U8_NEXT(line, i, text_size, c);
+        c = str_u8_next(line, text_size, &i);
         if ( c < 0 )
             break;
 
@@ -710,15 +771,15 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
         if ( char_info == NULL ) {
             error_abort("Failed to allocate char offset info");
         }
-        char_info->start_byte_offset = (int32_t)prev_i;
+        char_info->start_byte_offset = prev_i;
         char_info->char_idx = info->num_chars++;
         char_info->height = char_bounds.font_height;
         char_info->width = char_bounds.width;
-        char_info->end_byte_offset = byte_offset + (int32_t)i;
+        char_info->end_byte_offset = byte_offset + i;
         char_info->x = x;
         char_info->y = 0; // Will be computed later
 
-        info->end_byte_offset = byte_offset + (int32_t)i;
+        info->end_byte_offset = byte_offset + i;
         info->width += char_bounds.width;
         info->height = char_info->height;
 
@@ -735,7 +796,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     Texture_t *final_texture;
 
     data = dup_text_data(data);
-    const bool should_compute_offsets = data->compute_offsets && (config_get()->enable_dynamic_fill || config_get()->enable_reading_hints);
+    const bool should_compute_offsets =
+        data->compute_offsets && (config_get()->enable_dynamic_fill || config_get()->enable_reading_hints);
 
     if ( should_compute_offsets ) {
         if ( data->line_offsets != NULL ) {
@@ -744,6 +806,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
         }
         data->line_offsets = vec_init();
     }
+
+    const int32_t line_padding = render_measure_pixels_from_em(data->line_padding_em);
 
     const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
     if ( data->wrap_enabled && measure_text_wrap_stop(data, container, 0) < (int32_t)text_size ) {
@@ -754,7 +818,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
 
         do {
             const size_t end = measure_text_wrap_stop(data, container, (int32_t)start);
-            char *line_str = strndup(data->text + start, end + 1 - start);
+            char *line_str = strndup(data->text + start, end - start);
             const int pixels_size = render_measure_pixels_from_em(data->em);
             Texture_t *texture = render_make_text(line_str, pixels_size, &data->color, data->font_type);
 
@@ -767,11 +831,11 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
 
             max_w = MAX(max_w, texture->width);
             if ( total_h != 0 ) {
-                total_h += data->line_padding;
+                total_h += line_padding;
             }
             total_h += texture->height;
 
-            start = end + 1;
+            start = end;
         } while ( start < text_size - 1 );
 
         const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
@@ -803,7 +867,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
             const BlendMode_t blend_mode = render_get_blend_mode();
             render_set_blend_mode(BLEND_MODE_NONE);
             render_draw_texture(texture, &destination, &opts);
-            y += texture->height + data->line_padding;
+            y += texture->height + line_padding;
 
             render_set_blend_mode(blend_mode);
 
@@ -938,11 +1002,9 @@ void ui_destroy_drawable(Drawable_t *drawable) {
             Drawable_RectangleData_t *rectangle_data = drawable->custom_data;
             free_rectangle_data(rectangle_data);
         } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
-            // Custom drawables can mantain weak references to pieces of custom data, but they must also save a pointer to it elsewhere
-            // and free it there
-            // Ideally whoever created the drawable should be the one to, ultimately, destroy it, or else it'll have a dangling pointer
-            // ready to do some use-after-free
-            // Gotta think this design a little better later
+            // Custom drawables can mantain weak references to pieces of custom data, but they must also save a pointer to it
+            // elsewhere and free it there Ideally whoever created the drawable should be the one to, ultimately, destroy it, or
+            // else it'll have a dangling pointer ready to do some use-after-free Gotta think this design a little better later
         } else {
             error_abort("Unknown drawable type");
         }
@@ -951,7 +1013,7 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         animation_destroy(drawable->animations->data[i]);
     }
     // Find the drawable in the scene graph
-    Container_t *parent = drawable->parent;
+    const Container_t *parent = drawable->parent;
     for ( size_t i = 0; i < parent->child_drawables->size; i++ ) {
         if ( parent->child_drawables->data[i] == drawable ) {
             vec_remove(parent->child_drawables, i);
@@ -961,9 +1023,7 @@ void ui_destroy_drawable(Drawable_t *drawable) {
     free(drawable);
 }
 
-double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent) {
-    return parent->bounds.w * value;
-}
+double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent) { return parent->bounds.w * value; }
 
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));

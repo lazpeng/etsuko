@@ -42,8 +42,8 @@ static Config_t *get_default_config(void) {
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
-    config->song_file = strdup("shikaku kakumei.txt");
-    config->hide_past_lyrics = false;
+    config->song_file = strdup("chronostasis.txt");
+    config->hide_past_lyrics = true;
     config->draw_album_art_shadow = true;
     config->draw_lyric_shadow = true;
     config->show_loading_screen = true;

@@ -15,6 +15,7 @@
 #include "contrib/minimp3_ex.h"
 
 #include "error.h"
+#include "constants.h"
 
 #define NUM_BUFFERS 4
 #define BUFFER_SIZE (4096 * 4)
@@ -47,6 +48,7 @@ static void check_al_error(const char *msg) {
 }
 
 void audio_init(void) {
+    // TODO: Maybe try to clear any buffers left on openal?
     g_audio.device = alcOpenDevice(NULL);
     if ( !g_audio.device ) {
         error_abort("Failed to open OpenAL device");
@@ -159,10 +161,12 @@ void audio_pause(void) {
     alSourcePause(g_audio.source);
 }
 
-void audio_seek(const double time) {
+void audio_seek(double time) {
     if ( g_audio.stopped ) {
         reset();
     }
+    // TODO: Check when time < 0
+    time = MAX(0.0, time);
 
     uint64_t sample_pos = (uint64_t)(time * (double)g_audio.sample_rate * (double)g_audio.channels);
 

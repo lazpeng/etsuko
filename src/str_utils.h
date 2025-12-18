@@ -5,8 +5,10 @@
 #ifndef ETSUKO_STR_UTILS_H
 #define ETSUKO_STR_UTILS_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
+
+#include <unicode/utf8.h>
 
 /**
  * Implements a basic string buffer with dynamic size that you can gradually
@@ -34,6 +36,10 @@ int32_t str_u8_find_str(const char *src, const char *sub, int32_t start, int32_t
  * Counts the number of utf8 encoded characters in a string, starting from the given index.
  */
 int32_t str_u8_count(const char *src, int32_t start, int32_t max_len);
+/**
+ * Finds the next utf8 encoded character in a string, starting from the given index.
+ */
+int32_t str_u8_next(const char *const bytes, size_t size, int32_t *index);
 /**
  * Returns the filename portion of a given path string, including the extension.
  * Example:
@@ -92,5 +98,12 @@ void str_buf_destroy(StrBuffer_t *buf);
  * Returns the number of bytes read.
  */
 size_t str_buffered_read(char *destination, size_t size, const char *src, size_t src_len, size_t start_offset);
+
+bool str_ch_is_kanji(UChar32 c);
+bool str_ch_is_hiragana(UChar32 c);
+bool str_ch_is_katakana(UChar32 c);
+bool str_ch_is_kana(UChar32 c);
+bool str_ch_is_japanese_particle(UChar32 c);
+bool str_ch_is_japanese_comma_or_period(UChar32 c);
 
 #endif // ETSUKO_STR_UTILS_H

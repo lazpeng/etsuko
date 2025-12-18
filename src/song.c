@@ -109,13 +109,15 @@ static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
     if ( equals != NULL ) {
         if ( str_equals_sized(opts, "alignment", equals - opts) ) {
             equals = equals + 1;
-            if ( str_equals_sized(equals, "left", comma - equals) ) {
+            if ( str_equals_right_sized(equals, "left") ) {
                 line->alignment = SONG_LINE_LEFT;
-            } else if ( str_equals_sized(equals, "center", comma - equals) ) {
+            } else if ( str_equals_right_sized(equals, "center") ) {
                 line->alignment = SONG_LINE_CENTER;
-            } else if ( str_equals_sized(equals, "right", comma - equals) ) {
+            } else if ( str_equals_right_sized(equals, "right") ) {
                 line->alignment = SONG_LINE_RIGHT;
             } else {
+                char *test = strndup(equals, comma - equals);
+                printf("align: '%s'\n", test);
                 error_abort("Invalid song line opt alignment");
             }
         }
@@ -213,6 +215,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         if ( *ptr != '{' ) {
             error_abort("Invalid sub timing: *start does not start with a {");
         }
+        // TODO: Refactor this hellish code wtf are these offsets
         // Now we read a centisecond value from inside the braces that tell us for how long this part of the string
         // should remain highlighted from the base start offset
         const int32_t closing_brace = str_find(ptr, '}', 1+2, (int32_t)(end-ptr));
@@ -235,7 +238,8 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         timing->end_idx = timing->start_idx + (int32_t)(ptr - (prev_ptr + 1 + closing_brace));
         // Char counts
         timing->start_char_idx = prev != NULL ? prev->end_char_idx : 0;
-        timing->end_char_idx = timing->start_char_idx + str_u8_count(ptr, 0, (int32_t)(ptr - (prev_ptr + 1 + closing_brace)));
+        // wtf is this shit
+        timing->end_char_idx = timing->start_char_idx + str_u8_count(prev_ptr+1+closing_brace, 0, (int32_t)(ptr - (prev_ptr + 1 + closing_brace)));
         // Copy the line contents into the buffer
         str_buf_append(buffer, prev_ptr+1+closing_brace, ptr);
 
@@ -348,6 +352,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
     Vector_t *readings_vec = vec_init();
 
+    bool old_lyrics_compat = false;
     BlockType current_block = BLOCK_HEADER;
     size_t bytes_read = 0;
     int32_t index = 0;
@@ -362,6 +367,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
             if ( str_equals_sized(buffer, "#timings", 8) ) {
                 current_block = BLOCK_TIMINGS;
             } else if ( str_equals_sized(buffer, "#lyrics", 7) ) {
+                old_lyrics_compat = true;
                 current_block = BLOCK_LYRICS;
                 has_lyrics = true;
             } else if ( str_equals_sized(buffer, "#ass", 4) ) {
@@ -410,7 +416,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
         free(line);
     }
 
-    if ( g_song->lyrics_lines->size > 0 ) {
+    if ( g_song->lyrics_lines->size > 0 && old_lyrics_compat ) {
         // Since the last line will have a 0 duration, set it here to a reasonable number so we can see the last line
         ((Song_Line_t *)g_song->lyrics_lines->data[g_song->lyrics_lines->size - 1])->base_duration = 100.0;
     }

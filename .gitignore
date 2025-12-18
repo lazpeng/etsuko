@@ -5,6 +5,7 @@ vcpkg_installed/
 .idea/
 .vs/
 .vscode/
+.zed/
 .cache/
 .DS_Store
 *.user

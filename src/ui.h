@@ -49,6 +49,7 @@ typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
+    // TODO: Converge into only one?
     WEAK Drawable_t *relative_to_size;
     WEAK Drawable_t *relative_to;
 } Layout_t;
@@ -151,11 +152,12 @@ typedef struct Drawable_TextData_t {
     int wrap_enabled;
     double wrap_width_threshold;
     double measure_at_em;
-    int32_t line_padding;
+    double line_padding_em;
     DrawableAlignment_t alignment;
     bool draw_shadow;
     OWNING Vector_t *line_offsets; // of TextOffsetInfo_t
     bool compute_offsets;
+    bool increased_line_padding;
 } Drawable_TextData_t;
 
 typedef struct Drawable_ImageData_t {

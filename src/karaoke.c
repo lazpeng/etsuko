@@ -414,6 +414,37 @@ void karaoke_setup(Karaoke_t *state) {
     state->pause_button->enabled = false;
 
     state->lyrics_view = ui_ex_make_lyrics_view(state->ui, state->right_container, song_get());
+
+    // Help text on the bottom left
+    // About how to show reading hints
+    Drawable_t *temp_text =
+        ui_make_text(state->ui,
+                     &(Drawable_TextData_t){
+                         .text = "R: Show/hide reading hints", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
+                     ui_root_container(state->ui),
+                     &(Layout_t){.offset_y = -0.005,
+                                 .offset_x = 0.005,
+                                 .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y});
+    ui_drawable_set_alpha_immediate(temp_text, 150);
+    // About seeking with arrow keys
+    temp_text = ui_make_text(
+        state->ui,
+        &(Drawable_TextData_t){
+            .text = "Arrow keys: Seek backward/forward", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
+        ui_root_container(state->ui),
+        &(Layout_t){.offset_y = -0.001,
+                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
+                    .relative_to = temp_text});
+    ui_drawable_set_alpha_immediate(temp_text, 150);
+    // About using space to play/pause
+    temp_text = ui_make_text(
+        state->ui,
+        &(Drawable_TextData_t){.text = "Space: Play/pause", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
+        ui_root_container(state->ui),
+        &(Layout_t){.offset_y = -0.001,
+                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
+                    .relative_to = temp_text});
+    ui_drawable_set_alpha_immediate(temp_text, 150);
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {

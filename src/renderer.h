@@ -8,7 +8,6 @@
 #include "constants.h"
 
 #include <stdint.h>
-#include <unicode/utf8.h>
 
 // The max number of sub regions that can be specified when drawing portions of a texture
 #define MAX_DRAW_SUB_REGIONS (4)
@@ -47,8 +46,8 @@ typedef struct Color_t {
 typedef struct Bounds_t {
     // Position and dimensions
     double x, y, w, h;
-    /** 
-     * Optional scale modification, with 0(the default)being the regular size, same as the dimensions,
+    /**
+     * Optional scale modification, with 0 (the default) being the regular size, same as the dimensions,
      * and any value lesser or greater than 0 (with the lower bound of -1, which would be equal
      * to zeroing the dimensions of the texture) will apply a scale mod to the final rendered texture.
      * Example: 0.75 scale_mod = 1.75 of the normal scale
@@ -63,7 +62,7 @@ typedef struct Bounds_t {
  * based on a given texture (usually upon creation) and that can hold additional info such as an offset
  * relative to the parent texture and its own bounds.
  * It's expected of the caller to supply the correct Bounds when drawing the shadow like a regular texture
- * (and drawing it before the texture itself so the effect looks correct), applying the offset manually.
+ * (and drawing it before the texture itself so the effect looks correct) and applying the offset manually.
  */
 typedef struct Shadow_t {
     // Texture of the shadow itself
@@ -290,7 +289,7 @@ int32_t render_measure_pixels_from_em(double em);
  * Calculates bounds (mostly dimensions) for the given character, optionally in relation to a previous character,
  * in a given font type and size
  */
-void render_measure_char_bounds(UChar32 c, UChar32 prev_c, int32_t pixels, CharBounds_t *out_bounds, FontType_t font);
+void render_measure_char_bounds(int32_t c, int32_t prev_c, int32_t pixels, CharBounds_t *out_bounds, FontType_t font);
 /**
  * Creates a null texture which is a no-op when attempting to draw it. Useful when constructing a dynamic drawable that cannot
  * be cached to a texture (or it's more expensive to do so) and thus must be drawn in some other method (probably below)
@@ -331,7 +330,7 @@ void render_destroy_shadow(Shadow_t *shadow);
 /**
  * Frees all resources associated with a texture. Does not destroy any shadows created from it, must be freed separately.
  */
-void render_destroy_texture(Texture_t *texture); 
+void render_destroy_texture(Texture_t *texture);
 /**
  * Creates a texture render target with the given width and height.
  * The provided dimensions will be the final size of the resulting texture.
