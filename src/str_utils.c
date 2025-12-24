@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <unicode/utf8.h>
-
 #include "constants.h"
 #include "error.h"
 
@@ -29,16 +27,14 @@ int32_t str_find(const char *src, const char c, const int32_t start, int32_t max
 
 int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, const int32_t max_len, const int32_t sub_len) {
     const int32_t sub_count = str_u8_count(sub, 0, sub_len);
-    UChar32 first_sub_c;
     int32_t sub_i = 0;
-    U8_NEXT(sub, sub_i, sub_len, first_sub_c);
+    int32_t first_sub_c = str_u8_next(sub, sub_len, &sub_i);
 
     int32_t i = 0;
     while ( i < max_len ) {
         const bool skip = i < start;
         const int32_t start_i = i;
-        UChar32 c;
-        U8_NEXT(src, i, max_len, c);
+        int32_t c = str_u8_next(src, max_len, &i);
         if ( skip )
             continue;
 
@@ -52,9 +48,8 @@ int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, c
                     break;
                 }
 
-                UChar32 cur_c, sub_c;
-                U8_NEXT(src, i, max_len, cur_c);
-                U8_NEXT(sub, sub_i, sub_len, sub_c);
+                int32_t cur_c = str_u8_next(src, max_len, &i);
+                int32_t sub_c = str_u8_next(sub, sub_len, &sub_i);
 
                 if ( cur_c != sub_c || sub_c < 0 || cur_c < 0 ) {
                     sub_i = start_sub_i;
@@ -76,8 +71,7 @@ int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len
     int32_t i = start;
 
     while ( i < max_len ) {
-        UChar32 c;
-        U8_NEXT(src, i, max_len, c);
+        str_u8_next(src, max_len, &i);
         count++;
     }
 
@@ -244,7 +238,7 @@ size_t str_buffered_read(char *destination, const size_t size, const char *src, 
     return i;
 }
 
-bool str_ch_is_kanji(const UChar32 c) {
+bool str_ch_is_kanji(const int32_t c) {
     if ( (c >= 0x4E00 && c <= 0x9FAF) ||  // CJK Unified Ideographs
          (c >= 0x3400 && c <= 0x4DBF) ) { // CJK Unified Ideographs Extension A
         return true;
@@ -252,13 +246,13 @@ bool str_ch_is_kanji(const UChar32 c) {
     return false;
 }
 
-bool str_ch_is_hiragana(const UChar32 c) { return (c >= 0x3040 && c <= 0x309F); }
+bool str_ch_is_hiragana(const int32_t c) { return (c >= 0x3040 && c <= 0x309F); }
 
-bool str_ch_is_katakana(const UChar32 c) { return (c >= 0x30A0 && c <= 0x30FF); }
+bool str_ch_is_katakana(const int32_t c) { return (c >= 0x30A0 && c <= 0x30FF); }
 
-bool str_ch_is_kana(const UChar32 c) { return str_ch_is_hiragana(c) || str_ch_is_katakana(c); }
+bool str_ch_is_kana(const int32_t c) { return str_ch_is_hiragana(c) || str_ch_is_katakana(c); }
 
-bool str_ch_is_japanese_particle(const UChar32 c) {
+bool str_ch_is_japanese_particle(const int32_t c) {
     // は (wa/ha), が (ga), に (ni), を (wo), へ (he), の (no), で (de), も (mo)
     switch ( c ) {
     case 0x306F: // ha (wa)
@@ -277,7 +271,7 @@ bool str_ch_is_japanese_particle(const UChar32 c) {
     }
 }
 
-bool str_ch_is_japanese_comma_or_period(const UChar32 c) {
+bool str_ch_is_japanese_comma_or_period(const int32_t c) {
     // 、(comma), 。(period)
     return c == 0x3001 || c == 0x3002;
 }

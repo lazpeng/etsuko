@@ -8,8 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <unicode/utf8.h>
-
 /**
  * Implements a basic string buffer with dynamic size that you can gradually
  * append to.
@@ -98,12 +96,29 @@ void str_buf_destroy(StrBuffer_t *buf);
  * Returns the number of bytes read.
  */
 size_t str_buffered_read(char *destination, size_t size, const char *src, size_t src_len, size_t start_offset);
-
-bool str_ch_is_kanji(UChar32 c);
-bool str_ch_is_hiragana(UChar32 c);
-bool str_ch_is_katakana(UChar32 c);
-bool str_ch_is_kana(UChar32 c);
-bool str_ch_is_japanese_particle(UChar32 c);
-bool str_ch_is_japanese_comma_or_period(UChar32 c);
+/**
+ * Checks whether the given unicode codepoint is a japanese kanji
+ */
+bool str_ch_is_kanji(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is a japanese hiragana character
+ */
+bool str_ch_is_hiragana(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is a japanese katakana character
+ */
+bool str_ch_is_katakana(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is either a japanese katakana or hiragana character
+ */
+bool str_ch_is_kana(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is a japanese particle
+ */
+bool str_ch_is_japanese_particle(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is a japanese comma or period
+ */
+bool str_ch_is_japanese_comma_or_period(int32_t c);
 
 #endif // ETSUKO_STR_UTILS_H

@@ -80,13 +80,6 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         free(value);
     } else if ( str_equals_sized(buffer, "writtenBy", equals) ) {
         song->credits = value;
-    } else if ( str_equals_sized(buffer, "fillType", equals) ) {
-        if ( str_equals_right_sized(value, "linear") ) {
-            song->fill_type = SONG_LINE_FILL_LINEAR;
-        } else if ( str_equals_right_sized(value, "fullWord") ) {
-            song->fill_type = SONG_LINE_FILL_FULL_WORD;
-        }
-        free(value);
     } else if ( str_equals_sized(buffer, "assumeFullSubTiming", equals) ) {
         song->assume_full_sub_timing_when_absent = str_equals_right_sized(value, "yes");
         free(value);

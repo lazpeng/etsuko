@@ -33,11 +33,6 @@ typedef enum Song_BgType_t {
     BG_CLOUD_GRADIENT,
 } Song_BgType_t;
 
-typedef enum Song_LineFillType_t {
-    SONG_LINE_FILL_FULL_WORD = 0,
-    SONG_LINE_FILL_LINEAR,
-} Song_LineFillType_t;
-
 typedef struct Song_LineReading_t {
     size_t start_ch_idx, end_ch_idx;
     OWNING char *reading_text;
@@ -70,7 +65,6 @@ typedef struct Song_t {
     Song_BgType_t bg_type;
     bool has_sub_timings;
     bool has_reading_info;
-    Song_LineFillType_t fill_type;
     /**
      * When this is enabled, add a single sub-timing with the same duration as the line itself when none is provided.
      * This enables some of the dynamic fill options to work (linear will, full-word won't)

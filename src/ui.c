@@ -45,6 +45,7 @@ static void animation_translation_data_destroy(Animation_EaseTranslationData_t *
 static void animation_fade_data_destroy(Animation_FadeInOutData_t *data) { free(data); }
 static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(data); }
 static void animation_draw_region_data_destroy(Animation_DrawRegionData_t *data) { free(data); }
+static void animation_scale_region_data_destroy(Animation_ScaleRegionData_t *data) { free(data); }
 
 static void animation_destroy(Animation_t *animation) {
     if ( animation->custom_data != NULL ) {
@@ -56,10 +57,15 @@ static void animation_destroy(Animation_t *animation) {
             animation_scale_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_DRAW_REGION ) {
             animation_draw_region_data_destroy(animation->custom_data);
+        } else if ( animation->type == ANIM_SCALE_REGION ) {
+            animation_scale_region_data_destroy(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
         }
     }
+
+    if ( animation->next != NULL )
+        animation_destroy(animation->next);
 
     free(animation);
 }
@@ -68,8 +74,26 @@ static void container_update_animations(const Container_t *container, const doub
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
 
-        for ( size_t j = 0; j < drawable->animations->size; j++ ) {
-            Animation_t *anim = drawable->animations->data[j];
+        for ( size_t j = 0; j < drawable->active_animations->size; j++ ) {
+            Animation_t *anim = drawable->active_animations->data[j];
+
+            if ( !anim->active ) {
+                // Check if we have a next animation to put in place of this one
+                Animation_t *next = anim->next;
+                animation_destroy(anim);
+                anim = NULL;
+
+                if ( next != NULL ) {
+                    anim = next;
+                    drawable->active_animations->data[j] = anim;
+                } else {
+                    // Do not go past this point if we have no next animation to add the elapsed time to
+                    // but first delete the animation from the vector
+                    vec_remove(drawable->active_animations, j);
+                    j -= 1;
+                    continue;
+                }
+            }
 
             if ( anim->elapsed < anim->duration ) {
                 anim->elapsed += delta_time;
@@ -360,16 +384,38 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
     }
 }
 
+static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptSet_t *regions) {
+    const Animation_ScaleRegionData_t *data = animation->custom_data;
+    double progress = animation->elapsed / animation->duration;
+    if ( progress < 1.0 ) {
+        progress = apply_ease_func(progress, data->ease_func);
+        // Consider this will be the num_region'th region of the final set
+        if ( regions->num_regions >= MAX_SCALE_SUB_REGIONS ) {
+            error_abort("apply_scale_region_animation: Max number of scale regions exceeded");
+        }
+        ScaleRegionOpt_t *opt = &regions->regions[regions->num_regions++];
+        opt->x0_perc = data->scale_region.x0_perc;
+        opt->x1_perc = data->scale_region.x1_perc;
+        opt->y0_perc = data->scale_region.y0_perc;
+        opt->y1_perc = data->scale_region.y1_perc;
+        opt->relative_scale = data->scale_region.relative_scale * progress;
+    } else {
+        animation->active = false;
+    }
+}
+
 typedef struct AnimationDelta {
     Bounds_t final_bounds;
     int32_t final_alpha;
     float color_mod;
     DrawRegionOptSet_t draw_regions;
+    ScaleRegionOptSet_t scale_regions;
 } AnimationDelta;
 
 static void apply_animations(const Drawable_t *drawable, AnimationDelta *animation_delta) {
-    for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-        Animation_t *animation = drawable->animations->data[i];
+    for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+        Animation_t *animation = drawable->active_animations->data[i];
+        // This is probably not needed anymore...
         if ( animation->active ) {
             if ( animation->type == ANIM_EASE_TRANSLATION ) {
                 apply_translation_animation(animation, &animation_delta->final_bounds);
@@ -379,6 +425,8 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
                 apply_scale_animation(animation, &animation_delta->final_bounds);
             } else if ( animation->type == ANIM_DRAW_REGION ) {
                 apply_draw_region_animation(animation, &animation_delta->draw_regions);
+            } else if ( animation->type == ANIM_SCALE_REGION ) {
+                apply_scale_region_animation(animation, &animation_delta->scale_regions);
             }
         }
     }
@@ -431,6 +479,7 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
+    opts.scale_regions = &delta.scale_regions;
     render_draw_texture(drawable->texture, &rect, &opts);
 }
 
@@ -664,8 +713,8 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
             last_safe_break_idx = char_start_idx + 1;
         } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_comma_or_period(c) ) {
             if ( str_ch_is_japanese_comma_or_period(c) ) {
-                // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first character
-                // on the following line
+                // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first
+                // character on the following line
                 last_particle_break_idx = current_idx;
             } else {
                 last_particle_break_idx = char_start_idx;
@@ -730,6 +779,7 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     result->alpha_mod = 0xFF;
     result->color_mod = 1.f;
     result->animations = vec_init();
+    result->active_animations = vec_init();
 
     return result;
 }
@@ -1009,6 +1059,9 @@ void ui_destroy_drawable(Drawable_t *drawable) {
             error_abort("Unknown drawable type");
         }
     }
+    for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+        animation_destroy(drawable->active_animations->data[i]);
+    }
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
         animation_destroy(drawable->animations->data[i]);
     }
@@ -1082,18 +1135,15 @@ static Animation_t *find_animation(const Drawable_t *drawable, const AnimationTy
     return NULL;
 }
 
-void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
-    const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
-
-    measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
-    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
-
-    if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
-        Animation_t *animation = find_animation(drawable, ANIM_EASE_TRANSLATION);
-        if ( animation != NULL ) {
-            reapply_translate_animation(animation, old_x, old_y);
+static Animation_t *find_active_animation(const Drawable_t *drawable, const AnimationType_t type) {
+    // Traverse backwards so we find the most recent animation
+    for ( int32_t i = drawable->active_animations->size - 1; i >= 0; i-- ) {
+        Animation_t *animation = drawable->active_animations->data[i];
+        if ( animation->type == type ) {
+            return animation;
         }
     }
+    return NULL;
 }
 
 void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
@@ -1214,6 +1264,97 @@ static Animation_DrawRegionData_t *dup_anim_draw_region_data(const Animation_Dra
     return result;
 }
 
+static Animation_ScaleRegionData_t *dup_anim_scale_region_data(const Animation_ScaleRegionData_t *data) {
+    Animation_ScaleRegionData_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation scale region data");
+    }
+    result->duration = data->duration;
+    result->default_apply = data->default_apply;
+    result->ease_func = data->ease_func;
+
+    return result;
+}
+
+/**
+ * Attempts to (re)apply the given animation to a certain drawable, applying the apply rule (with a possible override)
+ */
+static Animation_t *reapply_animation(const Drawable_t *drawable, const Animation_t *base_anim,
+                                      const AnimationApplyType_t apply_type) {
+    // First check if we won't actually apply the animation.
+    Animation_t *existing = find_active_animation(drawable, base_anim->type);
+    if ( apply_type == ANIM_APPLY_BLOCK && existing != NULL ) {
+        return NULL; // There's already one running and we should block until it's done
+    }
+    if ( apply_type == ANIM_APPLY_OVERRIDE && existing != NULL ) {
+        // Reuse the current animation, just reset the elapsed
+        existing->elapsed = 0.0;
+        existing->active = true;
+        return existing;
+    }
+    // duplicate the animation
+    Animation_t *animation = calloc(1, sizeof(*animation));
+    // copy everything from the base anim
+    memcpy(animation, base_anim, sizeof(*animation));
+    animation->elapsed = 0.0;
+    animation->active = true;
+    // then duplicate the data
+    animation->custom_data = NULL;
+    switch ( animation->type ) {
+    case ANIM_EASE_TRANSLATION:
+        animation->custom_data = dup_anim_translate_data(base_anim->custom_data);
+        break;
+    case ANIM_FADE_IN_OUT:
+        animation->custom_data = dup_anim_fade_in_out_data(base_anim->custom_data);
+        break;
+    case ANIM_SCALE:
+        animation->custom_data = dup_anim_scale_data(base_anim->custom_data);
+        break;
+    case ANIM_DRAW_REGION:
+        animation->custom_data = dup_anim_draw_region_data(base_anim->custom_data);
+        break;
+    case ANIM_SCALE_REGION:
+        animation->custom_data = dup_anim_scale_region_data(base_anim->custom_data);
+        break;
+    default:
+        error_abort("reapply_animation: Unrecognized animation type");
+    }
+    // Now depending on the apply type, we either append it right to the root of the active_animations vector, or as a next node
+    // to an existing one In the case of overriding, we should already have had an early return above if there's an animation
+    // currently playing so we avoid re-allocating the custom data and the struct itself, so it behaves the same as BLOCK (with no
+    // existing anim) or CONCURRENT (whatever is the case)
+    if ( apply_type == ANIM_APPLY_BLOCK || apply_type == ANIM_APPLY_CONCURRENT || apply_type == ANIM_APPLY_OVERRIDE ) {
+        vec_add(drawable->active_animations, animation);
+    } else if ( apply_type == ANIM_APPLY_SEQUENTIAL ) {
+        // Add the current animation to the linked list of "pending" animations
+        while ( existing->next != NULL ) {
+            existing = existing->next;
+        }
+        existing->next = animation;
+    } else {
+        error_abort("reapply_animation: Unrecognized animation type");
+    }
+
+    return animation;
+}
+
+void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
+    const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
+
+    measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
+    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
+
+    if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
+        Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);
+        if ( base_anim != NULL ) {
+            Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+            if ( animation != NULL ) {
+                reapply_translate_animation(animation, old_x, old_y);
+            }
+        }
+    }
+}
+
 void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     // Do this so that we can specify scale in a way that makes sense (that is, 1.0 for the default size, anything other as
     // a transformation)
@@ -1221,14 +1362,14 @@ void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
-    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
-    if ( animation != NULL ) {
-        Animation_ScaleData_t *data = animation->custom_data;
-        data->from_scale = drawable->bounds.scale_mod;
-        data->to_scale = scale_mod;
-
-        animation->elapsed = 0.0;
-        animation->active = true;
+    const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
+    if ( base_anim != NULL ) {
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            Animation_ScaleData_t *data = animation->custom_data;
+            data->from_scale = drawable->bounds.scale_mod;
+            data->to_scale = scale_mod;
+        }
     }
     drawable->bounds.scale_mod = scale_mod;
 }
@@ -1238,7 +1379,7 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
-    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
+    Animation_t *animation = find_active_animation(drawable, ANIM_SCALE);
     if ( animation != NULL ) {
         animation->elapsed = animation->duration;
         animation->active = false;
@@ -1251,15 +1392,15 @@ void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double 
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
-    Animation_t *animation = find_animation(drawable, ANIM_SCALE);
-    if ( animation != NULL ) {
-        Animation_ScaleData_t *data = animation->custom_data;
-        data->from_scale = drawable->bounds.scale_mod;
-        data->to_scale = scale_mod;
-
-        animation->elapsed = 0.0;
-        animation->active = true;
-        animation->duration = duration;
+    const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
+    if ( base_anim != NULL ) {
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            Animation_ScaleData_t *data = animation->custom_data;
+            data->from_scale = drawable->bounds.scale_mod;
+            data->to_scale = scale_mod;
+            data->duration = duration;
+        }
     }
     drawable->bounds.scale_mod = scale_mod;
 }
@@ -1268,17 +1409,20 @@ void ui_drawable_set_color_mod(Drawable_t *drawable, const float color_mod) { dr
 
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
     double duration = 0.0;
-    const Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
-    if ( animation != NULL ) {
-        const Animation_DrawRegionData_t *data = animation->custom_data;
-        duration = data->duration;
+    const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
+    if ( base_anim != NULL ) {
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            const Animation_DrawRegionData_t *data = animation->custom_data;
+            duration = data->duration;
+        }
     }
 
     ui_drawable_set_draw_region_dur(drawable, draw_regions, duration);
 }
 
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
-    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
+    Animation_t *animation = find_active_animation(drawable, ANIM_DRAW_REGION);
     if ( animation != NULL ) {
         // Cancel animation if it's active
         animation->active = false;
@@ -1295,11 +1439,9 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
 }
 
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const double duration) {
-    Animation_t *animation = find_animation(drawable, ANIM_DRAW_REGION);
-    if ( animation != NULL ) {
-        Animation_DrawRegionData_t *data = animation->custom_data;
-        if ( animation->active )
-            return; // Wait for it to finish
+    // TODO: Check if this logic is correct
+    Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
+    if ( base_anim != NULL ) {
         // If it's the same, do nothing
         // TODO: Currently we only check for the x1 values
         bool different = false;
@@ -1312,21 +1454,44 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
         if ( !different )
             return;
 
-        // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
-        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-            data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            Animation_DrawRegionData_t *data = animation->custom_data;
+            // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
+            for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+                data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+            }
+            data->draw_regions.num_regions = draw_regions->num_regions;
+            animation->duration = duration;
+
+            // TODO: Refactor this piece of code is duplicated
+            // Copy the real values to the drawable
+            for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+                drawable->draw_regions.regions[i] = draw_regions->regions[i];
+            }
+            drawable->draw_regions.num_regions = draw_regions->num_regions;
         }
-        data->draw_regions.num_regions = draw_regions->num_regions;
-        animation->elapsed = 0;
-        animation->duration = duration;
-        animation->active = true;
+    } else {
+        // Copy the real values to the drawable
+        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+            drawable->draw_regions.regions[i] = draw_regions->regions[i];
+        }
+        drawable->draw_regions.num_regions = draw_regions->num_regions;
+    }
+}
+
+void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) {
+    if ( alpha == drawable->alpha_mod ) {
+        return;
     }
 
-    // Copy the real values to the drawable
-    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-        drawable->draw_regions.regions[i] = draw_regions->regions[i];
+    Animation_t *fade_animation = find_active_animation(drawable, ANIM_FADE_IN_OUT);
+    if ( fade_animation != NULL ) {
+        // Cancel animation
+        fade_animation->elapsed = fade_animation->duration;
+        fade_animation->active = false;
     }
-    drawable->draw_regions.num_regions = draw_regions->num_regions;
+    drawable->alpha_mod = alpha;
 }
 
 void ui_drawable_disable_draw_region(Drawable_t *drawable) {
@@ -1343,6 +1508,23 @@ void ui_drawable_disable_draw_region(Drawable_t *drawable) {
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, const bool draw, const uint8_t alpha) {
     drawable->draw_underlay = draw;
     drawable->underlay_alpha = alpha;
+}
+
+void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, const double duration,
+                                      AnimationApplyType_t apply_type) {
+    const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE_REGION);
+    // TODO: This function doesn't do anything if there's no animation attached
+            puts("inside func");
+    if ( base_anim != NULL ) {
+        if ( apply_type == ANIM_APPLY_DEFAULT )
+            apply_type = base_anim->apply_type;
+        Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
+        if ( animation != NULL ) {
+            puts("this should have set the animation");
+            Animation_ScaleRegionData_t *data = animation->custom_data;
+            data->scale_region = *region;
+        }
+    }
 }
 
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
@@ -1377,20 +1559,6 @@ bool ui_mouse_clicked_drawable(const Drawable_t *drawable, const int padding, Bo
     return false;
 }
 
-void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) {
-    if ( alpha == drawable->alpha_mod ) {
-        return;
-    }
-
-    Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
-    if ( fade_animation != NULL ) {
-        // Cancel animation
-        fade_animation->elapsed = fade_animation->duration;
-        fade_animation->active = false;
-    }
-    drawable->alpha_mod = alpha;
-}
-
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
     if ( target == NULL ) {
         error_abort("Target drawable is NULL");
@@ -1407,6 +1575,7 @@ void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationD
     result->duration = data->duration;
     result->active = false;
     result->ease_func = data->ease_func;
+    result->apply_type = ANIM_APPLY_OVERRIDE;
 
     vec_add(target->animations, result);
 }
@@ -1467,6 +1636,28 @@ void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t
     result->duration = data->duration;
     result->active = false;
     result->ease_func = data->ease_func;
+    result->apply_type = ANIM_APPLY_BLOCK;
+
+    vec_add(target->animations, result);
+}
+
+void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData_t *data) {
+    if ( target == NULL ) {
+        error_abort("Target drawable is null");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_SCALE_REGION;
+    result->custom_data = dup_anim_scale_region_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+    result->ease_func = data->ease_func;
+    result->apply_type = data->default_apply;
 
     vec_add(target->animations, result);
 }

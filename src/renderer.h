@@ -11,6 +11,8 @@
 
 // The max number of sub regions that can be specified when drawing portions of a texture
 #define MAX_DRAW_SUB_REGIONS (4)
+// The max number of sub regions that can be scaled at the same time
+#define MAX_SCALE_SUB_REGIONS (4)
 
 /**
  * Represents a texture uploaded to the GPU using OpenGL, with some cached information about it
@@ -172,6 +174,27 @@ typedef struct DrawRegionOptSet_t {
     int32_t num_regions;
 } DrawRegionOptSet_t;
 
+/**
+ * Set of regions to apply scale in a geometry level, that is, we apply a transformation to the quad for the texture in
+ * the geometry shader before drawing it to the screen, leaving the rest unchanged.
+ * The relative_scale param behaves in the same way as the Bounds_t scale_mod, that is, 0 being the default and any value other than 0
+ * being a mod to the original value, e.g. a relative_scale of 0.5 is the same as 1.5 of the original scale, in other words, bigger than the default.
+ * A negative value yields a smaller final scale.
+ */
+typedef struct ScaleRegionOpt_t {
+    float x0_perc, x1_perc;
+    float y0_perc, y1_perc;
+    float relative_scale;
+} ScaleRegionOpt_t;
+
+/**
+ * Contains a set of ScaleRegionOpt_t that can be applied _at the same time_.
+ */
+typedef struct ScaleRegionOptSet_t {
+    ScaleRegionOpt_t regions[MAX_SCALE_SUB_REGIONS];
+    int32_t num_regions;
+} ScaleRegionOptSet_t;
+
 /*
  * Options that can be specified when drawing a texture using the renderer
  */
@@ -185,6 +208,8 @@ typedef struct DrawTextureOpts_t {
     float color_mod;
     // Optional set of draw regions to limit the visibility of parts of the texture
     WEAK const DrawRegionOptSet_t *draw_regions;
+    // Optional set of regions to scale inside the final texture
+    WEAK const ScaleRegionOptSet_t *scale_regions;
 } DrawTextureOpts_t;
 
 /**

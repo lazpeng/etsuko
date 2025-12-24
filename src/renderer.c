@@ -114,7 +114,18 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
     if ( !success ) {
         char log[512];
         glGetShaderInfoLog(shader, 512, NULL, log);
-        const char *const type_str = type == GL_VERTEX_SHADER ? "vert" : "frag";
+        const char *type_str = "unknown";
+        switch ( type ) {
+        case GL_VERTEX_SHADER:
+            type_str = "vert";
+            break;
+        case GL_FRAGMENT_SHADER:
+            type_str = "frag";
+            break;
+        case GL_GEOMETRY_SHADER:
+            type_str = "geom";
+            break;
+        }
         printf("Shader compilation failed for %s.%s:\n%s\n", name, type_str, log);
         error_abort("Shader compilation failed");
     }
@@ -1129,7 +1140,6 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     prev_c = -1;
 
     while ( i < len ) {
-        // U8_NEXT(text, i, len, c);
         c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
@@ -1351,14 +1361,12 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     }
 
     float regions[MAX_DRAW_SUB_REGIONS][4] = {0};
-    if ( num_draw_regions > 0 ) {
-        for ( int i = 0; i < num_draw_regions; i++ ) {
-            const DrawRegionOpt_t *region = &opts->draw_regions->regions[i];
-            regions[i][0] = region->x0_perc;
-            regions[i][1] = region->y0_perc;
-            regions[i][2] = region->x1_perc;
-            regions[i][3] = region->y1_perc;
-        }
+    for ( int i = 0; i < num_draw_regions; i++ ) {
+        const DrawRegionOpt_t *region = &opts->draw_regions->regions[i];
+        regions[i][0] = region->x0_perc;
+        regions[i][1] = region->y0_perc;
+        regions[i][2] = region->x1_perc;
+        regions[i][3] = region->y1_perc;
     }
 
     glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
@@ -1370,7 +1378,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glUniform1f(g_renderer->tex_color_mod_loc, opts->color_mod);
     glUniform1i(g_renderer->tex_num_regions_loc, num_draw_regions);
     if ( num_draw_regions > 0 ) {
-        glUniform4fv(g_renderer->tex_regions_loc, 4, &regions[0][0]);
+        glUniform4fv(g_renderer->tex_regions_loc, MAX_DRAW_SUB_REGIONS, &regions[0][0]);
     }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
