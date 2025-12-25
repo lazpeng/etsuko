@@ -50,6 +50,7 @@ static Config_t *get_default_config(void) {
     config->op_mode = APP_MODE_KARAOKE;
     config->enable_dynamic_fill = true;
     config->enable_reading_hints = true;
+    config->enable_pulse_effect = true;
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

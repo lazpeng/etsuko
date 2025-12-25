@@ -47,7 +47,7 @@ static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(dat
 static void animation_draw_region_data_destroy(Animation_DrawRegionData_t *data) { free(data); }
 static void animation_scale_region_data_destroy(Animation_ScaleRegionData_t *data) { free(data); }
 
-static void animation_destroy(Animation_t *animation) {
+static void animation_destroy(Animation_t *animation, bool recursive) {
     if ( animation->custom_data != NULL ) {
         if ( animation->type == ANIM_EASE_TRANSLATION ) {
             animation_translation_data_destroy(animation->custom_data);
@@ -64,8 +64,8 @@ static void animation_destroy(Animation_t *animation) {
         }
     }
 
-    if ( animation->next != NULL )
-        animation_destroy(animation->next);
+    if ( recursive && animation->next != NULL )
+        animation_destroy(animation->next, recursive);
 
     free(animation);
 }
@@ -80,7 +80,7 @@ static void container_update_animations(const Container_t *container, const doub
             if ( !anim->active ) {
                 // Check if we have a next animation to put in place of this one
                 Animation_t *next = anim->next;
-                animation_destroy(anim);
+                animation_destroy(anim, false); // Destroy only the current animation
                 anim = NULL;
 
                 if ( next != NULL ) {
@@ -387,21 +387,26 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
 static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptSet_t *regions) {
     const Animation_ScaleRegionData_t *data = animation->custom_data;
     double progress = animation->elapsed / animation->duration;
-    if ( progress < 1.0 ) {
-        progress = apply_ease_func(progress, data->ease_func);
-        // Consider this will be the num_region'th region of the final set
-        if ( regions->num_regions >= MAX_SCALE_SUB_REGIONS ) {
-            error_abort("apply_scale_region_animation: Max number of scale regions exceeded");
-        }
-        ScaleRegionOpt_t *opt = &regions->regions[regions->num_regions++];
-        opt->x0_perc = data->scale_region.x0_perc;
-        opt->x1_perc = data->scale_region.x1_perc;
-        opt->y0_perc = data->scale_region.y0_perc;
-        opt->y1_perc = data->scale_region.y1_perc;
-        opt->relative_scale = data->scale_region.relative_scale * progress;
-    } else {
+
+    if ( progress >= 1.0 ) {
+        progress = 1.0;
         animation->active = false;
     }
+
+    // progress = apply_ease_func(progress, data->ease_func);
+    // Consider this will be the num_region'th region of the final set
+    if ( regions->num_regions >= MAX_SCALE_SUB_REGIONS ) {
+        error_abort("apply_scale_region_animation: Max number of scale regions exceeded");
+    }
+    const float scale_diff = data->scale_region.to_scale - data->scale_region.from_scale;
+    ScaleRegionOpt_t *opt = &regions->regions[regions->num_regions++];
+    opt->x0_perc = data->scale_region.x0_perc;
+    opt->x1_perc = data->scale_region.x1_perc;
+    opt->y0_perc = data->scale_region.y0_perc;
+    opt->y1_perc = data->scale_region.y1_perc;
+    opt->relative_scale = data->scale_region.from_scale + scale_diff * progress;
+    opt->from_scale = data->scale_region.from_scale;
+    opt->to_scale = data->scale_region.to_scale;
 }
 
 typedef struct AnimationDelta {
@@ -460,6 +465,7 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     }
 
     DrawTextureOpts_t opts = {0};
+    opts.scale_regions = &delta.scale_regions;
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
@@ -479,7 +485,6 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
-    opts.scale_regions = &delta.scale_regions;
     render_draw_texture(drawable->texture, &rect, &opts);
 }
 
@@ -1060,10 +1065,10 @@ void ui_destroy_drawable(Drawable_t *drawable) {
         }
     }
     for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
-        animation_destroy(drawable->active_animations->data[i]);
+        animation_destroy(drawable->active_animations->data[i], true);
     }
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
-        animation_destroy(drawable->animations->data[i]);
+        animation_destroy(drawable->animations->data[i], true);
     }
     // Find the drawable in the scene graph
     const Container_t *parent = drawable->parent;
@@ -1144,24 +1149,6 @@ static Animation_t *find_active_animation(const Drawable_t *drawable, const Anim
         }
     }
     return NULL;
-}
-
-void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
-    if ( alpha == drawable->alpha_mod ) {
-        return;
-    }
-
-    Animation_t *fade_animation = find_animation(drawable, ANIM_FADE_IN_OUT);
-    if ( fade_animation != NULL ) {
-        Animation_FadeInOutData_t *data = fade_animation->custom_data;
-
-        fade_animation->elapsed = 0.0;
-        fade_animation->active = true;
-
-        data->from_alpha = drawable->alpha_mod;
-        data->to_alpha = alpha;
-    }
-    drawable->alpha_mod = alpha;
 }
 
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
@@ -1327,10 +1314,14 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
         vec_add(drawable->active_animations, animation);
     } else if ( apply_type == ANIM_APPLY_SEQUENTIAL ) {
         // Add the current animation to the linked list of "pending" animations
-        while ( existing->next != NULL ) {
-            existing = existing->next;
+        if ( existing != NULL ) {
+            while ( existing->next != NULL ) {
+                existing = existing->next;
+            }
+            existing->next = animation;
+        } else {
+            vec_add(drawable->active_animations, animation);
         }
-        existing->next = animation;
     } else {
         error_abort("reapply_animation: Unrecognized animation type");
     }
@@ -1480,6 +1471,23 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
     }
 }
 
+void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
+    if ( alpha == drawable->alpha_mod ) {
+        return;
+    }
+
+    const Animation_t *base_anim = find_animation(drawable, ANIM_FADE_IN_OUT);
+    if ( base_anim != NULL ) {
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            Animation_FadeInOutData_t *data = animation->custom_data;
+            data->from_alpha = drawable->alpha_mod;
+            data->to_alpha = alpha;
+        }
+    }
+    drawable->alpha_mod = alpha;
+}
+
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) {
     if ( alpha == drawable->alpha_mod ) {
         return;
@@ -1514,15 +1522,14 @@ void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt
                                       AnimationApplyType_t apply_type) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE_REGION);
     // TODO: This function doesn't do anything if there's no animation attached
-            puts("inside func");
     if ( base_anim != NULL ) {
         if ( apply_type == ANIM_APPLY_DEFAULT )
             apply_type = base_anim->apply_type;
         Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
         if ( animation != NULL ) {
-            puts("this should have set the animation");
             Animation_ScaleRegionData_t *data = animation->custom_data;
             data->scale_region = *region;
+            animation->duration = duration;
         }
     }
 }
@@ -1596,6 +1603,7 @@ void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data) 
     result->duration = data->duration;
     result->active = false;
     result->ease_func = data->ease_func;
+    result->apply_type = ANIM_APPLY_OVERRIDE;
 
     vec_add(target->animations, result);
 }

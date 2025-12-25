@@ -9,6 +9,8 @@ uniform vec2 u_rectSize;
 uniform float u_colorModFactor;
 uniform int u_num_regions;
 uniform vec4 u_regions[4];
+uniform int u_num_erase_regions;
+uniform vec4 u_erase_regions[20];
 
 void main() {
     vec4 texColor = texture(u_tex, TexCoord);
@@ -29,7 +31,7 @@ void main() {
 
     for (int i = 0; i < u_num_regions; i++) {
         vec2 region_start = u_regions[i].xy;
-        vec2 region_end = u_regions[i].xy + u_regions[i].zw;
+        vec2 region_end = u_regions[i].zw;
 
         if (TexCoord.x >= region_start.x
                 && TexCoord.x <= region_end.x
@@ -37,6 +39,18 @@ void main() {
                 && TexCoord.y <= region_end.y) {
             in_region = true;
             break;
+        }
+    }
+
+    for (int i = 0; i < u_num_erase_regions; i++) {
+        vec2 region_start = u_erase_regions[i].xy;
+        vec2 region_end = u_erase_regions[i].zw;
+
+        if (TexCoord.x >= region_start.x
+                && TexCoord.x <= region_end.x
+                && TexCoord.y >= region_start.y
+                && TexCoord.y <= region_end.y) {
+            discard;
         }
     }
 

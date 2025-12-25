@@ -23,6 +23,7 @@ typedef struct {
     bool show_loading_screen;
     bool enable_dynamic_fill;
     bool enable_reading_hints;
+    bool enable_pulse_effect;
 } Config_t;
 
 Config_t *config_get(void);

@@ -12,7 +12,7 @@
 // The max number of sub regions that can be specified when drawing portions of a texture
 #define MAX_DRAW_SUB_REGIONS (4)
 // The max number of sub regions that can be scaled at the same time
-#define MAX_SCALE_SUB_REGIONS (4)
+#define MAX_SCALE_SUB_REGIONS (20)
 
 /**
  * Represents a texture uploaded to the GPU using OpenGL, with some cached information about it
@@ -180,10 +180,12 @@ typedef struct DrawRegionOptSet_t {
  * The relative_scale param behaves in the same way as the Bounds_t scale_mod, that is, 0 being the default and any value other than 0
  * being a mod to the original value, e.g. a relative_scale of 0.5 is the same as 1.5 of the original scale, in other words, bigger than the default.
  * A negative value yields a smaller final scale.
+ * TODO Fix this doc
  */
 typedef struct ScaleRegionOpt_t {
     float x0_perc, x1_perc;
     float y0_perc, y1_perc;
+    float from_scale, to_scale;
     float relative_scale;
 } ScaleRegionOpt_t;
 

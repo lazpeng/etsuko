@@ -31,6 +31,9 @@
 #define SCALE_ANIMATION_OUT_DURATION (0.3)
 #define TRANSLATION_ANIMATION_DURATION (0.3)
 #define TRANSLATION_ANIMATION_OUT_DURATION (0.3)
+#define SCALE_REGION_UP_DURATION (0.15)
+#define SCALE_REGION_DOWN_MIN_DURATION (0.2)
+#define SCALE_REGION_TARGET_SCALE (0.1)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -235,7 +238,11 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                                                         .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
-        ui_animate_draw_region(prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_QUAD});
+        ui_animate_draw_region(
+            prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_QUAD});
+        ui_animate_scale_region(prev, &(Animation_ScaleRegionData_t){.duration = SCALE_REGION_UP_DURATION,
+                                                                     .ease_func = ANIM_EASE_OUT_CUBIC,
+                                                                     .default_apply = ANIM_APPLY_CONCURRENT});
 
         if ( should_generate_reading_hints ) {
             const Layout_t layout = {
@@ -331,16 +338,11 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
-static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Song_t *song, const Song_Line_t *line) {
+static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t *drawable, const Song_t *song,
+                                                 const Song_Line_t *line) {
     // A slight variation that highlights the entire portion of the segment
     // Mainly intended when the timing is done per-syllable
     const Drawable_TextData_t *text_data = drawable->custom_data;
-
-    // TODO: Return a boolean from the ui_set* functions as to whether not the change was applied successfully or not,
-    // so we can retry in the next frame to see if the prev animation is already over
-    // when this is done, mark the timing as "visited" (reset on a line_state change to active on the set_active function)
-    // that allows us to skip this timing as its animation is already running, saving us the need to recompute everything and accidentally
-    // reapply the animation
 
     DrawRegionOptSet_t draw_regions = {0};
     draw_regions.num_regions = (int32_t)text_data->line_offsets->size;
@@ -351,6 +353,20 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
+
+        // Check for any visited segments that are now in the future (e.g. user seeked backwards)
+        for ( int32_t s = 0; s < line->num_timings; s++ ) {
+            if ( view->active_line_segment_visited[s] ) {
+                const Song_LineTiming_t *timing = &line->timings[s];
+                const double start_time = line->base_start_time + timing->cumulative_duration;
+                if ( audio_elapsed < start_time ) {
+                    view->active_line_segment_visited[s] = 0;
+                }
+            }
+        }
+
+        const double y0 = (float)(offset_info->start_y / drawable->bounds.h);
+        const double y1 = y0 + (float)(offset_info->height / drawable->bounds.h);
         // Compensate for alignment
         float x1 = (float)(offset_info->start_x / drawable->bounds.w);
         for ( int32_t s = timing_offset_start; s < line->num_timings; s++ ) {
@@ -367,8 +383,8 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
             if ( segment_length_in_current_line <= 0 )
                 continue;
 
-            // If this segment started on the previous line, calculate a time per character and add a delay equivalent to the characters
-            // left on the previous line so the animation looks correct
+            // If this segment started on the previous line, calculate a time per character and add a delay equivalent to the
+            // characters left on the previous line so the animation looks correct
             double delay = 0.0;
             const int32_t segment_length = timing->end_char_idx - timing->start_char_idx;
             const double duration_per_character = timing->duration / segment_length;
@@ -380,8 +396,9 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
             if ( elapsed_since_segment <= 0.0 )
                 break;
 
-            // The secret here is that we calculate each letter boundary and always set the fill size to that
-            // for the whole duration of the segment
+            // timing_offset_start = s; // TODO
+            //  The secret here is that we calculate each letter boundary and always set the fill size to that
+            //  for the whole duration of the segment
             double segment_width = 0.0;
             const int32_t segment_start_in_line = MAX(0, timing->start_char_idx - offset_info->start_char_idx);
             for ( int32_t ci = 0; ci < segment_length_in_current_line; ci++ ) {
@@ -398,6 +415,25 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
                 duration = duration_per_character * segment_length_in_current_line;
             }
 
+            if ( !(view->active_line_segment_visited[s] & (1 << i)) && config_get()->enable_pulse_effect ) {
+                ScaleRegionOpt_t region = {
+                    .x0_perc = x1,
+                    .x1_perc = x1 + (float)segment_fill_contribution,
+                    .y0_perc = y0,
+                    .y1_perc = y1,
+                    .from_scale = 0.0,
+                    .to_scale = SCALE_REGION_TARGET_SCALE,
+                };
+                ui_drawable_add_scale_region_dur(drawable, &region, SCALE_REGION_UP_DURATION, ANIM_APPLY_DEFAULT);
+                // Then do another scale anim for scaling back down for the duration of the segment
+                region.from_scale = SCALE_REGION_TARGET_SCALE;
+                region.to_scale = 0.0;
+                // That runs after the current one finishes
+                const double down_duration = MAX(duration, SCALE_REGION_DOWN_MIN_DURATION);
+                ui_drawable_add_scale_region_dur(drawable, &region, down_duration, ANIM_APPLY_SEQUENTIAL);
+                view->active_line_segment_visited[s] |= (1 << i);
+            }
+
             x1 += (float)segment_fill_contribution;
             last_segment_remaining = duration - elapsed_since_segment;
         }
@@ -406,9 +442,9 @@ static void calculate_sub_region_for_active_line(Drawable_t *drawable, const Son
         // x0 is always at the beginning
         draw_regions.regions[i].x0_perc = 0.f;
         // y0 is the beginning of this line
-        draw_regions.regions[i].y0_perc = (float)(offset_info->start_y / drawable->bounds.h);
+        draw_regions.regions[i].y0_perc = y0;
         // y1 is the end of this line
-        draw_regions.regions[i].y1_perc = (float)(offset_info->height / drawable->bounds.h);
+        draw_regions.regions[i].y1_perc = y1;
     }
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, MAX(REGION_ANIMATION_DURATION, last_segment_remaining));
 }
@@ -435,6 +471,11 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     if ( view->line_states[index] != new_state ) {
         view->line_states[index] = new_state;
 
+        // Clear visited for the current line
+        for ( int i = 0; i < MAX_TIMINGS_PER_LINE; i++ ) {
+            view->active_line_segment_visited[i] = 0;
+        }
+
         drawable->layout.offset_y = 0;
         if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
             drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
@@ -458,7 +499,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     }
 
     if ( view->song->has_sub_timings && line->num_timings > 0 ) {
-        calculate_sub_region_for_active_line(drawable, view->song, line);
+        calculate_sub_region_for_active_line(view, drawable, view->song, line);
     }
 }
 
@@ -494,6 +535,7 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
 
     if ( alpha != drawable->alpha_mod ) {
         ui_drawable_set_alpha(drawable, alpha);
+        fade_hint_for_line(view, index);
     }
 
     const LineState_t new_state = LINE_INACTIVE;
@@ -573,7 +615,6 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
-    // TODO: Also apply to hint
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         if ( view->line_states[index] == LINE_ACTIVE ) {
@@ -581,6 +622,7 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
             ui_drawable_disable_draw_region(drawable);
             ui_drawable_set_draw_underlay(drawable, false, 0);
             ui_drawable_set_alpha(drawable, alpha);
+            fade_hint_for_line(view, index);
         } else {
             // Position the same as the drawable
             drawable->layout.relative_to = NULL;

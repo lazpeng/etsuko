@@ -79,6 +79,8 @@ typedef struct Renderer_t {
     GLint tex_color_mod_loc;
     GLint tex_num_regions_loc;
     GLint tex_regions_loc;
+    GLint tex_num_erase_regions_loc;
+    GLint tex_erase_regions_loc;
     GLint rect_projection_loc;
     GLint rect_color_loc;
     GLint rect_pos_loc;
@@ -121,9 +123,6 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
             break;
         case GL_FRAGMENT_SHADER:
             type_str = "frag";
-            break;
-        case GL_GEOMETRY_SHADER:
-            type_str = "geom";
             break;
         }
         printf("Shader compilation failed for %s.%s:\n%s\n", name, type_str, log);
@@ -327,6 +326,8 @@ void render_init(void) {
     g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "u_colorModFactor");
     g_renderer->tex_num_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_num_regions");
     g_renderer->tex_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_regions");
+    g_renderer->tex_num_erase_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_num_erase_regions");
+    g_renderer->tex_erase_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_erase_regions");
 
     // Get uniform locations for rect shader
     g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "u_projection");
@@ -1369,6 +1370,21 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         regions[i][3] = region->y1_perc;
     }
 
+    int num_erase_regions = 0;
+    if ( opts->scale_regions != NULL ) {
+        num_erase_regions = opts->scale_regions->num_regions;
+    }
+
+    // Erase the portions of the texture that are to be scaled so we redraw them scaled later
+    float erase_regions[MAX_SCALE_SUB_REGIONS][4] = {0};
+    for ( int i = 0; i < num_erase_regions; i++ ) {
+        const ScaleRegionOpt_t *region = &opts->scale_regions->regions[i];
+        erase_regions[i][0] = region->x0_perc;
+        erase_regions[i][1] = region->y0_perc;
+        erase_regions[i][2] = region->x1_perc;
+        erase_regions[i][3] = region->y1_perc;
+    }
+
     glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
     glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
@@ -1379,6 +1395,10 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glUniform1i(g_renderer->tex_num_regions_loc, num_draw_regions);
     if ( num_draw_regions > 0 ) {
         glUniform4fv(g_renderer->tex_regions_loc, MAX_DRAW_SUB_REGIONS, &regions[0][0]);
+    }
+    glUniform1i(g_renderer->tex_num_erase_regions_loc, num_erase_regions);
+    if ( num_erase_regions > 0 ) {
+        glUniform4fv(g_renderer->tex_erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
     }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
@@ -1399,6 +1419,45 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Re-draw the scaled portions of the texture in separate draw calls
+    // this will of course induce additional rebuilding of the VBO and the draw calls themselves but...
+    // well, right now it's a lot better than making a separate texture for every text segment
+    for ( int i = 0; i < num_erase_regions; i++ ) {
+        const ScaleRegionOpt_t *region = &opts->scale_regions->regions[i];
+        Bounds_t bounds = *at;
+        bounds.scale_mod += region->relative_scale;
+        // Also compensate for the scale by centering the texture by the amount scaled
+        // relative to the center of the region
+        const float center_x = (region->x0_perc + region->x1_perc) / 2.f;
+        const float center_y = (region->y0_perc + region->y1_perc) / 2.f;
+        bounds.x -= bounds.w * region->relative_scale * center_x;
+        bounds.y -= bounds.h * region->relative_scale * center_y;
+        // Options will be the same with the exception that the draw region(s) will be just one with the actual bound
+        // to be drawn, considering the actual draw regions set
+        DrawTextureOpts_t new_opts = *opts;
+        new_opts.scale_regions = NULL;
+        new_opts.draw_regions = NULL;
+
+        DrawRegionOptSet_t scaled_region = {0};
+        scaled_region.num_regions = 1;
+        DrawRegionOpt_t *scaled_region_opt = &scaled_region.regions[0];
+        scaled_region_opt->x0_perc = region->x0_perc;
+        scaled_region_opt->x1_perc = region->x1_perc;
+        scaled_region_opt->y0_perc = region->y0_perc;
+        scaled_region_opt->y1_perc = region->y1_perc;
+
+        // Now iterate through the set draw regions and set it accordingly
+        for ( int dr = 0; dr < num_draw_regions; dr++ ) {
+            const DrawRegionOpt_t *draw_region = &opts->draw_regions->regions[dr];
+            if ( draw_region->y0_perc <= scaled_region_opt->y0_perc && draw_region->y1_perc >= scaled_region_opt->y1_perc ) {
+                scaled_region_opt->x1_perc = MIN(scaled_region_opt->x1_perc, draw_region->x1_perc);
+            }
+        }
+
+        new_opts.draw_regions = &scaled_region;
+        render_draw_texture(texture, &bounds, &new_opts);
+    }
 }
 
 void render_destroy_shadow(Shadow_t *shadow) {
