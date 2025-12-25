@@ -751,10 +751,17 @@ static double get_hidden_height(const LyricsView_t *view) {
         }
     }
     const Drawable_t *first_line = view->line_drawables->data[0];
-    if ( first_non_hidden == NULL || first_non_hidden == first_line )
+    if ( first_non_hidden == first_line )
         return 0;
+    
+    double anchor_y;
+    if ( first_non_hidden != NULL ) {
+        anchor_y = first_non_hidden->bounds.y;
+    } else {
+        anchor_y = view->container->bounds.y;
+    }
 
-    return first_non_hidden->bounds.y - first_line->bounds.y;
+    return anchor_y - first_line->bounds.y;
 }
 
 static double get_visible_height(const LyricsView_t *view) {
