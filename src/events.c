@@ -20,7 +20,7 @@ static void clear_key_presses(void) { memset(g_key_presses, 0, sizeof(g_key_pres
 
 static void key_callback(GLFWwindow *, const int key, int, const int action, int) {
     if ( action == GLFW_PRESS ) {
-        etsuko_Key_t k;
+        Key_t k;
         switch ( key ) {
         case GLFW_KEY_SPACE:
             k = KEY_SPACE;
@@ -119,7 +119,7 @@ bool events_get_mouse_click(int32_t *x, int32_t *y) {
 
 double events_get_mouse_scrolled(void) { return g_mouse_scroll; }
 
-bool events_key_was_pressed(const etsuko_Key_t key) { return g_key_presses[key]; }
+bool events_key_was_pressed(const Key_t key) { return g_key_presses[key]; }
 
 bool events_has_quit(void) { return g_quit; }
 

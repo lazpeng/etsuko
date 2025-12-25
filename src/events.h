@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum etsuko_Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_R, KEY_INVALID } etsuko_Key_t;
+typedef enum Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_R, KEY_INVALID } Key_t;
 
 // Init, finish and loop
 void events_init(void);
@@ -28,7 +28,7 @@ double events_get_elapsed_time(void);
 void events_get_mouse_position(int32_t *x, int32_t *y);
 bool events_get_mouse_click(int32_t *x, int32_t *y);
 double events_get_mouse_scrolled(void);
-bool events_key_was_pressed(etsuko_Key_t key);
+bool events_key_was_pressed(Key_t key);
 // Config
 void events_set_window_pixel_scale(double scale);
 
