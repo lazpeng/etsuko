@@ -49,12 +49,15 @@ cd ./build/desktop-release
 ./etsuko
 ```
 
+The desktop-debug variant has asan enabled so it'll be a tad slower to run but should still run
+without major hickups.
+
 **Requirements**
 - CMake
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
-- GLEW, GLFW3, OpenAL and ICU dev libraries
+- GLEW, GLFW3 and OpenAL dev libraries
 
 On Linux and mac OS it's probably pretty straightforward to build, you can either install all the dependencies manually or use the vcpkg
 cmake target. On Windows it's a bit trickier and you'll probably want to use the vcpkg target.
@@ -119,13 +122,17 @@ bgType=simpleGradient
 #lyrics
 
 First line of the song
-And the second one#alignment=right
+And the second one 光#alignment=right
 ...
 #ass
 Dialogue: 0,0:00:00.00,0:00:05.75,Default,,0,0,0,,
 Dialogue: 0,0:00:05.75,0:00:13.10,Default,,0,0,0,,First line of the song
 Dialogue: 0,0:00:13.10,0:00:17.00,Default,,0,0,0,,And the second one#alignment=right
 ...
+#readings
+
+First=text to show under First,line=Same for line,of=again
+one=text to show under one,光=hikari
 ```
 
 Notice that all files are expected to be inside the assets/ folder during
@@ -146,8 +153,18 @@ Using #timings is the simplest way and can be done by hand, and you can
 specify a custom offset to be applied during runtime if the timing as a
 whole is a little off.
 
-It is generally expected to have an empty newline at the end of the file,
-or you may see an error.
+The #readings section is composed of one line of comma separated key=value
+in the exact same order as the lyric lines appear in, and any parts of the string
+used as keys there will have the corresponding value written under it in a smaller font.
+This is mainly to support CJK and other writing systems that are not based in the latin alphabet
+so you can show reading hints under a arbitrary amount of characters.
+It is possible to skip characters or have spaces in the key and/or value. The keys are processed
+in ascending order, so any n+1 key will only be looked up after the index where n ends. This is so
+that lyric lines that have more than one word can still show readings under them, even in the case where
+they may be read differently. Every occurrence of a key must be specified in the order they appear in, so
+for example if the lyric line has ABC in it twice, and you set ABC=something in the corresponding reading hint
+line *once*, only the first (in case it doesn't appear *after* another key that is placed after the first ABC)
+occurrence will show the reading hint under it.
 
 With the file created in the right format and pointed at in the config.c
 source file, upon rebuilding and running you may get it to start playing.
@@ -166,3 +183,20 @@ Also includes shaders written by Inigo Quilez, released under Creative Commons A
 and under the selected OpenGL version, and as such those modified shaders are available under the same license:
 * shaders/am gradient.frag.glsl
 * shaders/cloud gradient.frag.glsl
+
+This application bundles the Google Noto fonts in the assets directory, without any modification. Different fonts can be used
+instead by replacing the files inside that folder and replacing the correspoding setting inside config.c
+
+## Configuration
+
+~~many~~ Some options are available in the config.c file, and unfortunately it's not currently possible to save and retrieve
+them at runtime, so every instantiation uses the default values. Some of these options control the presence or not of certain
+features that some may consider undesirable, like the dynamic fill and pulse effect (which depends on the dynamic fill being
+enabled). In contrast to the runtime option of showing/hiding certain elements (e.g. the reading hints), setting some of these
+options to false will prevent the necessary data for their function from being computed and the resources for them allocated at
+all, which makes it impossible for it to be toggled during execution. It's essentially hard-disabling parts of the application.
+
+Although the same isn't true yet even for the config itself, these runtime toggles can have saved states in the future that live
+in a preferences file or the browser's local storage, and can have, e.g. the reading hints, hidden by default even though they're
+*enabled* in the config, so just hitting the shortcut will show them again.
+The flags in the config are meant to be unchangeable parameters for the runtime.
