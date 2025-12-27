@@ -239,7 +239,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
         ui_animate_draw_region(
-            prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_QUAD});
+            prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE});
         ui_animate_scale_region(prev, &(Animation_ScaleRegionData_t){.duration = SCALE_REGION_UP_DURATION,
                                                                      .ease_func = ANIM_EASE_OUT_CUBIC,
                                                                      .default_apply = ANIM_APPLY_CONCURRENT});
