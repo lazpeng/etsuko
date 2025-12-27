@@ -41,7 +41,31 @@ static bool is_line_intermission(const LyricsView_t *view, const int32_t index) 
     return str_is_empty(line->full_text) && line->base_duration > 5;
 }
 
+static void reposition_hint_for_line(Ui_t *ui, const LyricsView_t *view, int32_t index) {
+    if ( index < (int32_t)view->line_read_hints->size ) {
+        Drawable_t *hint = view->line_read_hints->data[index];
+        ui_reposition_drawable(ui, hint);
+    }
+}
+
+static void scale_hint_for_line(const LyricsView_t *view, int32_t index) {
+    if ( index < (int32_t)view->line_read_hints->size ) {
+        const Drawable_t *drawable = view->line_drawables->data[index];
+        Drawable_t *hint = view->line_read_hints->data[index];
+        ui_drawable_set_scale_factor(hint, 1.f + drawable->bounds.scale_mod);
+    }
+}
+
+static void fade_hint_for_line(const LyricsView_t *view, int32_t index) {
+    if ( index < (int32_t)view->line_read_hints->size ) {
+        const Drawable_t *drawable = view->line_drawables->data[index];
+        Drawable_t *hint = view->line_read_hints->data[index];
+        ui_drawable_set_alpha(hint, drawable->alpha_mod);
+    }
+}
+
 static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
+    puts("making sure initialized");
     for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
         Drawable_t *hint = view->line_read_hints->data[i];
 
@@ -103,32 +127,10 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
             }
             hint->texture = render_restore_texture_target();
             render_set_blend_mode(blend_mode);
+            reposition_hint_for_line(ui, view, i);
 
             hint->pending_recompute = false;
         }
-    }
-}
-
-static void reposition_hint_for_line(Ui_t *ui, const LyricsView_t *view, int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        Drawable_t *hint = view->line_read_hints->data[index];
-        ui_reposition_drawable(ui, hint);
-    }
-}
-
-static void scale_hint_for_line(const LyricsView_t *view, int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        const Drawable_t *drawable = view->line_drawables->data[index];
-        Drawable_t *hint = view->line_read_hints->data[index];
-        ui_drawable_set_scale_factor(hint, 1.f + drawable->bounds.scale_mod);
-    }
-}
-
-static void fade_hint_for_line(const LyricsView_t *view, int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        const Drawable_t *drawable = view->line_drawables->data[index];
-        Drawable_t *hint = view->line_read_hints->data[index];
-        ui_drawable_set_alpha(hint, drawable->alpha_mod);
     }
 }
 
@@ -741,7 +743,6 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
     view->prev_viewport_y = view->container->viewport_y;
 }
 
-// TODO: After screen change, lyrics are wrong
 void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
 
 static double get_hidden_height(const LyricsView_t *view) {
