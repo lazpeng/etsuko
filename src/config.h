@@ -21,6 +21,7 @@ typedef struct {
     bool draw_album_art_shadow;
     bool draw_lyric_shadow;
     bool show_loading_screen;
+    bool enlarge_active_line;
     bool enable_dynamic_fill;
     bool enable_reading_hints;
     bool enable_pulse_effect;

@@ -22,6 +22,7 @@
 #else
 #define SCROLL_MODIFIER (10)
 #endif
+#define LINE_SCALE_FACTOR_ACTIVE (1.0f)
 #define LINE_SCALE_FACTOR_INACTIVE (0.75f)
 #define ALPHA_DISTANCE_BASE_CALC (100)
 #define ALPHA_DISTANCE_MIN_VALUE (25)
@@ -135,6 +136,10 @@ static double get_line_vertical_padding(const LyricsView_t *view) {
     const bool has_hints = view->song->has_reading_info && config_get()->enable_reading_hints;
 
     return has_hints ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
+}
+
+static float get_active_line_scale() {
+    return config_get()->enlarge_active_line ? LINE_SCALE_FACTOR_ACTIVE : LINE_SCALE_FACTOR_INACTIVE;
 }
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
@@ -456,7 +461,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     drawable->enabled = true;
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
-    ui_drawable_set_scale_factor(drawable, 1.f);
+    ui_drawable_set_scale_factor(drawable, get_active_line_scale());
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
 
