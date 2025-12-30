@@ -349,6 +349,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
     BlockType current_block = BLOCK_HEADER;
     size_t bytes_read = 0;
     int32_t index = 0;
+    // TODO: Implement this using the strbuffer impl
     while ( (bytes_read = str_buffered_read(buffer, BUFFER_SIZE, src, src_size, offset)) > 0 ) {
         offset += bytes_read;
         buffer[strcspn(buffer, "\r")] = 0;
