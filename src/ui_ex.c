@@ -513,7 +513,6 @@ static void check_line_hover(const LyricsView_t *view, Drawable_t *drawable, con
     if ( ui_mouse_hovering_drawable(drawable, 0, NULL, NULL, NULL) ) {
         ui_drawable_set_alpha_immediate(drawable, calculate_alpha(0));
     }
-    // TODO: Clicking a line seeks to the wrong time
     if ( ui_mouse_clicked_drawable(drawable, 0, NULL, NULL, NULL) ) {
         const Song_Line_t *line = view->song->lyrics_lines->data[index];
         audio_seek(line->base_start_time);
