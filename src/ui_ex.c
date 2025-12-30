@@ -402,7 +402,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
             if ( elapsed_since_segment <= 0.0 )
                 break;
 
-            // timing_offset_start = s; // TODO
+            // timing_offset_start = s; // TODO: Find a way to skip unnecessary calculations for segments we've already passed through. Also the draw region is sometimes wrong when seeking back
             //  The secret here is that we calculate each letter boundary and always set the fill size to that
             //  for the whole duration of the segment
             double segment_width = 0.0;

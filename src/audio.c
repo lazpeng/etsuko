@@ -165,7 +165,6 @@ void audio_seek(double time) {
     if ( g_audio.stopped ) {
         reset();
     }
-    // TODO: Check when time < 0
     time = MAX(0.0, time);
 
     uint64_t sample_pos = (uint64_t)(time * (double)g_audio.sample_rate * (double)g_audio.channels);

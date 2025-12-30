@@ -1430,7 +1430,6 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
 }
 
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const double duration) {
-    // TODO: Check if this logic is correct
     Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
         // If it's the same, do nothing
