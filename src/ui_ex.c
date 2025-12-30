@@ -65,7 +65,6 @@ static void fade_hint_for_line(const LyricsView_t *view, int32_t index) {
 }
 
 static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
-    puts("making sure initialized");
     for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
         Drawable_t *hint = view->line_read_hints->data[i];
 
@@ -598,6 +597,8 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         ui_drawable_set_draw_underlay(drawable, false, 0);
         ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
         scale_hint_for_line(view, index);
+
+        view->layout_dirty = true;
     }
 
     const double threshold = config_get()->hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
@@ -646,9 +647,8 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
     }
 }
 
-// TODO: When there isn't a final empty line, the stacking is incorrect (two last lines stay on top of each other)
 static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *view, int32_t idx) {
-    if ( idx >= (int32_t)view->line_drawables->size - 1 )
+    if ( idx >= (int32_t)view->line_drawables->size )
         return NULL;
 
     if ( view->line_states[idx] != LINE_HIDDEN ) {
@@ -733,11 +733,11 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
 
     if ( view->layout_dirty ) {
         if ( view->credit_separator )
-            ui_recompute_drawable(ui, view->credit_separator);
+            ui_reposition_drawable(ui, view->credit_separator);
         if ( view->credits_prefix )
-            ui_recompute_drawable(ui, view->credits_prefix);
+            ui_reposition_drawable(ui, view->credits_prefix);
         if ( view->credits_content )
-            ui_recompute_drawable(ui, view->credits_content);
+            ui_reposition_drawable(ui, view->credits_content);
     }
 
     view->prev_viewport_y = view->container->viewport_y;
