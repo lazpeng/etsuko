@@ -12,7 +12,6 @@
 #include "resource_includes.h"
 #include "str_utils.h"
 
-#include <SDL2/SDL.h>
 #include <stdlib.h>
 
 struct Karaoke_t {
