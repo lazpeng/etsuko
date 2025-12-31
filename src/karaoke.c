@@ -12,6 +12,8 @@
 #include "resource_includes.h"
 #include "str_utils.h"
 
+#include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 struct Karaoke_t {

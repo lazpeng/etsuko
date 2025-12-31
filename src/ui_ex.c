@@ -29,6 +29,7 @@
 #define REGION_ANIMATION_DURATION (0.2)
 #define LINE_SCALE_FACTOR_INACTIVE_DURATION (0.2)
 #define SCALE_ANIMATION_DURATION (0.1)
+#define FADE_ANIMATION_DURATION (1.0)
 #define SCALE_ANIMATION_OUT_DURATION (0.3)
 #define TRANSLATION_ANIMATION_DURATION (0.3)
 #define TRANSLATION_ANIMATION_OUT_DURATION (0.3)
@@ -242,10 +243,11 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         view->line_states[i] = LINE_NONE;
         ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
                                                                         .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_fade(prev, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_fade(prev,
+                        &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
-        ui_animate_draw_region(
-            prev, &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE});
+        ui_animate_draw_region(prev,
+                               &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE});
         ui_animate_scale_region(prev, &(Animation_ScaleRegionData_t){.duration = SCALE_REGION_UP_DURATION,
                                                                      .ease_func = ANIM_EASE_OUT_CUBIC,
                                                                      .default_apply = ANIM_APPLY_CONCURRENT});
@@ -256,15 +258,15 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
             Drawable_t *hint = ui_make_custom(ui, parent, &layout);
             ui_animate_translation(hint, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
                                                                             .ease_func = ANIM_EASE_OUT_CUBIC});
-            ui_animate_fade(hint, &(Animation_FadeInOutData_t){.duration = 1.0, .ease_func = ANIM_EASE_OUT_CUBIC});
+            ui_animate_fade(hint,
+                            &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_scale(hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
 
             vec_add(view->line_read_hints, hint);
         }
     }
 
-    if ( !str_is_empty(song->credits) ) {
-        Drawable_t *last = view->line_drawables->data[view->line_drawables->size - 1];
+    if ( !str_is_empty(song->credits) && prev != NULL ) {
         view->credit_separator = ui_make_rectangle(
             ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}, .border_radius_em = 1.0},
             view->container,
@@ -274,7 +276,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                         .height = 1,
                         .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
                                  LAYOUT_PROPORTIONAL_Y,
-                        .relative_to = last});
+                        .relative_to = prev});
         ui_animate_translation(view->credit_separator,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
 
@@ -402,7 +404,8 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
             if ( elapsed_since_segment <= 0.0 )
                 break;
 
-            // timing_offset_start = s; // TODO: Find a way to skip unnecessary calculations for segments we've already passed through. Also the draw region is sometimes wrong when seeking back
+            // timing_offset_start = s; // TODO: Find a way to skip unnecessary calculations for segments we've already passed
+            // through. Also the draw region is sometimes wrong when seeking back
             //  The secret here is that we calculate each letter boundary and always set the fill size to that
             //  for the whole duration of the segment
             double segment_width = 0.0;
@@ -758,7 +761,7 @@ static double get_hidden_height(const LyricsView_t *view) {
     const Drawable_t *first_line = view->line_drawables->data[0];
     if ( first_non_hidden == first_line )
         return 0;
-    
+
     double anchor_y;
     if ( first_non_hidden != NULL ) {
         anchor_y = first_non_hidden->bounds.y;
