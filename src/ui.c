@@ -668,7 +668,7 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
     const double calculated_max_width = m_current_width * data->wrap_width_threshold;
 
     const char *text = data->text;
-    const int32_t size = (int32_t)strnlen(text, MAX_TEXT_SIZE);
+    const int32_t size = (int32_t)strlen(text);
 
     if ( start >= size )
         return size;
@@ -793,7 +793,7 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
  * Partially computes text offsets character by character. Some of the information is later populated by internal_make_text.
  */
 static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line, const int32_t byte_offset) {
-    const size_t text_size = strnlen(line, MAX_TEXT_SIZE);
+    const size_t text_size = strlen(line);
     const int32_t pixels_size = render_measure_pixels_from_em(data->em);
 
     const TextOffsetInfo_t *prev = data->line_offsets->size > 0 ? data->line_offsets->data[data->line_offsets->size - 1] : NULL;
@@ -864,7 +864,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
 
     const int32_t line_padding = render_measure_pixels_from_em(data->line_padding_em);
 
-    const size_t text_size = strnlen(data->text, MAX_TEXT_SIZE);
+    const size_t text_size = strlen(data->text);
     if ( data->wrap_enabled && measure_text_wrap_stop(data, container, 0) < (int32_t)text_size ) {
         size_t start = 0;
 

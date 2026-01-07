@@ -222,6 +222,31 @@ void str_buf_destroy(StrBuffer_t *buf) {
     }
 }
 
+void str_buf_clear(StrBuffer_t *buf) {
+    buf->len = 0;
+    if ( buf->cap > 0 ) {
+        buf->data[0] = '\0';
+    }
+}
+
+int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32_t start) {
+    int32_t bytes = start, content_end = start;
+    while ( (size_t)bytes < len ) {
+        int32_t i = bytes;
+        const int32_t c = str_u8_next(src, len, &i);
+
+        bytes = i;
+        // If a newline was found, don't include it in the final append
+        if ( c == '\n' ) {
+            break;
+        }
+        content_end = bytes;
+    }
+    str_buf_append(buf, src+start, src+content_end);
+
+    return bytes - start;
+}
+
 size_t str_buffered_read(char *destination, const size_t size, const char *src, const size_t src_len, const size_t start_offset) {
     if ( start_offset >= src_len )
         return 0;

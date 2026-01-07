@@ -11,14 +11,6 @@
 #define VERSION "0.6.2b"
 #define APP_NAME "etsuko"
 #define DEFAULT_TITLE APP_NAME " - Karaoke v" VERSION
-#define DEFAULT_WIDTH (1280)
-#define DEFAULT_HEIGHT (720)
-#define DEFAULT_PT (16)
-#define MAX_TEXT_SIZE (1024)
-#define BUFFER_SIZE (1024)
-#define MAX_TIMINGS_PER_LINE (24)
-#define MAX_SONG_LINES (1024)
-#define DEFAULT_VEC_CAPACITY (16)
 
 /**
  * This annotates, very poorly, that the struct owns the following pointer and is responsible for freeing it

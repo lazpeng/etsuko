@@ -68,6 +68,9 @@ void repository_get_resource(const char *src, const char *subdir, Load_t *load) 
     if ( load->data != NULL ) {
         error_abort("Load job already has data");
     }
+    if ( str_is_empty(src) ) {
+        error_abort("Invalid resource path");
+    }
 
     mkdir("assets", 0777);
     load->filename = str_get_filename(src);

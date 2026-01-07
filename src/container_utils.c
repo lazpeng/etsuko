@@ -3,8 +3,9 @@
 #include <string.h>
 #include <stddef.h>
 
-#include "constants.h"
 #include "error.h"
+
+#define DEFAULT_VEC_CAPACITY (16)
 
 Vector_t *vec_init(void) {
     Vector_t *v = calloc(1, sizeof(*v));

@@ -92,6 +92,16 @@ void str_buf_append_ch(StrBuffer_t *buf, char ch);
  */
 void str_buf_destroy(StrBuffer_t *buf);
 /**
+ * Clears a strbuffer while keeping the allocated capacity
+ */
+void str_buf_clear(StrBuffer_t *buf);
+/**
+ * Appends the content from src, starting from the given index, up until a newline character is found, not including the
+ * newline character in the final buffer.
+ * Returns the total amount of bytes read from src since the given start
+ */
+int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32_t start);
+/**
  * Reads up to size bytes from a string buffer into a destination buffer.
  * Returns the number of bytes read.
  */

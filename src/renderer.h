@@ -180,7 +180,8 @@ typedef struct DrawRegionOptSet_t {
  * The relative_scale param behaves in the same way as the Bounds_t scale_mod, that is, 0 being the default and any value other than 0
  * being a mod to the original value, e.g. a relative_scale of 0.5 is the same as 1.5 of the original scale, in other words, bigger than the default.
  * A negative value yields a smaller final scale.
- * TODO Fix this doc
+ * Original scale in this case means whatever scale_mod the texture this is being applied to has in their Bounds
+ * from_scale and to_scale only exist because this API is a mess and it's used as interpolation values by the animation
  */
 typedef struct ScaleRegionOpt_t {
     float x0_perc, x1_perc;

@@ -54,12 +54,6 @@ Karaoke_t *karaoke_init(void) {
     return karaoke;
 }
 
-static char *append_file_to_loading_text(char *buffer, const char *file, const bool first, const char *buffer_end) {
-    const char *format = first ? "%s" : ", %s";
-    buffer += snprintf(buffer, buffer_end - buffer, format, file);
-    return buffer;
-}
-
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
     return state->load_ui_font.downloaded + state->load_album_art.downloaded + state->load_lyrics_font.downloaded +
            state->load_audio.downloaded;
@@ -71,34 +65,38 @@ static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
 }
 
 static char *get_loading_files_names(const Karaoke_t *state) {
-    char *buffer = calloc(MAX_TEXT_SIZE, sizeof(*buffer));
-    char *original_buffer = buffer;
-    const char *const loading_text = "Loading ";
-    memcpy(buffer, loading_text, strlen(loading_text));
-    buffer += strlen(loading_text);
+    StrBuffer_t *buf = str_buf_init();
+    str_buf_append(buf, "Loading ", NULL);
 
     bool first = true;
     if ( state->load_lyrics_font.status != LOAD_FINISHED ) {
         if ( !str_is_empty(state->load_lyrics_font.filename) ) {
-            buffer =
-                append_file_to_loading_text(buffer, state->load_lyrics_font.filename, first, original_buffer + MAX_TEXT_SIZE);
             first = false;
+            str_buf_append(buf, state->load_lyrics_font.filename, NULL);
         }
     }
     if ( state->load_album_art.status != LOAD_FINISHED ) {
         if ( !str_is_empty(state->load_album_art.filename) ) {
-            buffer = append_file_to_loading_text(buffer, state->load_album_art.filename, first, original_buffer + MAX_TEXT_SIZE);
-            first = false;
+            if ( !first ) {
+                str_buf_append(buf, ", ", NULL);
+            } else first = false;
+            str_buf_append(buf, state->load_album_art.filename, NULL);
         }
     }
     if ( state->load_audio.status != LOAD_FINISHED ) {
         if ( !str_is_empty(state->load_audio.filename) ) {
-            buffer = append_file_to_loading_text(buffer, state->load_audio.filename, first, original_buffer + MAX_TEXT_SIZE);
+            if ( !first ) {
+                str_buf_append(buf, ", ", NULL);
+            }
+            str_buf_append(buf, state->load_audio.filename, NULL);
         }
     }
 
-    snprintf(buffer, MAX_TEXT_SIZE - (buffer - original_buffer), "...");
-    return original_buffer;
+    str_buf_append(buf, "...", NULL);
+    char *str = strdup(buf->data);
+    str_buf_destroy(buf);
+
+    return str;
 }
 
 static int load_async(Karaoke_t *state) {
@@ -474,7 +472,7 @@ static void update_remaining_text(const Karaoke_t *state) {
     asprintf(&time_str, "-%.2d:%.2d", minutes, seconds);
 
     Drawable_TextData_t *custom_data = state->remaining_time_text->custom_data;
-    if ( strncmp(time_str, custom_data->text, MAX_TEXT_SIZE) != 0 ) {
+    if ( strcmp(time_str, custom_data->text) != 0 ) {
         free(custom_data->text);
         custom_data->text = time_str;
         ui_recompute_drawable(state->ui, state->remaining_time_text);

@@ -5,6 +5,8 @@
 #include "karaoke.h"
 
 #ifdef __EMSCRIPTEN__
+#include "error.h"
+
 #include <emscripten.h>
 
 typedef struct {

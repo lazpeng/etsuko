@@ -10,6 +10,8 @@
 #include "constants.h"
 #include "container_utils.h"
 
+#define MAX_TIMINGS_PER_LINE (24)
+
 typedef struct Song_LineTiming_t {
     int32_t start_idx, end_idx;
     int32_t start_char_idx;

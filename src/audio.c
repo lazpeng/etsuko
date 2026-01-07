@@ -18,6 +18,7 @@
 #include "constants.h"
 
 #define NUM_BUFFERS 4
+// TODO: Rename to something else
 #define BUFFER_SIZE (4096 * 4)
 
 typedef struct {

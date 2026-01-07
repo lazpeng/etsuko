@@ -34,6 +34,9 @@
 #define RESOURCE_INCLUDE_SHADERS
 #include "resource_includes.h"
 
+#define DEFAULT_WIDTH (1280)
+#define DEFAULT_HEIGHT (720)
+#define DEFAULT_PT (16)
 #define BASE_DPI 72.f
 // 1MB
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
@@ -1094,7 +1097,7 @@ Texture_t *render_make_null(void) {
 Texture_t *render_make_text(const char *text, const int32_t pixels_size, const Color_t *color, const FontType_t font_type) {
     const stbtt_fontinfo *font = font_type == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
 
-    if ( strnlen(text, MAX_TEXT_SIZE) == 0 ) {
+    if ( strlen(text) == 0 ) {
         error_abort("render_make_text: Text is empty");
     }
 
@@ -1358,7 +1361,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
 
     int num_draw_regions = 0;
     if ( opts->draw_regions != NULL ) {
-        num_draw_regions = opts->draw_regions->num_regions;
+        num_draw_regions = MIN(MAX_DRAW_SUB_REGIONS, opts->draw_regions->num_regions);
     }
 
     float regions[MAX_DRAW_SUB_REGIONS][4] = {0};
@@ -1372,7 +1375,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
 
     int num_erase_regions = 0;
     if ( opts->scale_regions != NULL ) {
-        num_erase_regions = opts->scale_regions->num_regions;
+        num_erase_regions = MIN(MAX_SCALE_SUB_REGIONS, opts->scale_regions->num_regions);
     }
 
     // Erase the portions of the texture that are to be scaled so we redraw them scaled later

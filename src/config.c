@@ -21,7 +21,7 @@ EM_JS(const char *, get_song_param, (void), {
 
 static void try_load_config_web(Config_t *config) {
     const char *song = get_song_param();
-    if ( strnlen(song, MAX_TEXT_SIZE) > 0 ) {
+    if ( strlen(song) > 0 ) {
         printf("song: %s\n", song);
 
         if ( config->song_file != NULL ) {
@@ -42,7 +42,7 @@ static Config_t *get_default_config(void) {
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
-    config->song_file = strdup("shirushi.txt");
+    config->song_file = strdup("yoake.txt");
     config->hide_past_lyrics = true;
     config->draw_album_art_shadow = true;
     config->draw_lyric_shadow = true;

@@ -12,6 +12,8 @@
 #include "song.h"
 #include "ui.h"
 
+#define MAX_SONG_LINES 512
+
 typedef enum LineState_t {
     LINE_NONE = 0, // Transient state
     LINE_INACTIVE,
@@ -38,5 +40,7 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view);
 void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view);
 void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, double delta_y);
 void ui_ex_destroy_lyrics_view(LyricsView_t *view);
+
+#undef MAX_SONG_LINES
 
 #endif // ETSUKO_RENDERER_EX_H
