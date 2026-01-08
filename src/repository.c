@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #include "error.h"
 #include "str_utils.h"
@@ -45,33 +44,24 @@ static void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, co
 
 static void on_fetch_success(emscripten_fetch_t *fetch) {
     Resource_t *resource = fetch->userData;
-    if ( !resource->streaming && fetch->numBytes > 0 ) {
+    if ( fetch->numBytes > 0 ) {
         append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
         if ( resource->on_resource_loaded != NULL ) {
             resource->on_resource_loaded(resource);
         }
     }
     if ( resource->buffer->total_bytes == 0 ) {
-        error_abort("Fatal: on_fetch_success: total bytes for the resource returned 0");
+        printf("Fatal: on_fetch_success: total bytes for the resource '%s' returned 0\n", resource->original_filename);
     }
     if ( resource->buffer->downloaded_bytes > resource->buffer->total_bytes ) {
-        error_abort("Fatal: on_fetch_success: downloaded bytes exceed total bytes reported by the server");
+        // error_abort("Fatal: on_fetch_success: downloaded bytes exceed total bytes reported by the server");
     }
     if ( resource->buffer->downloaded_bytes != resource->buffer->total_bytes ) {
-        error_abort("Maybe wrong: on_fetch_success: downloaded bytes different than reported by the server in total bytes");
+        // error_abort("Maybe wrong: on_fetch_success: downloaded bytes different than reported by the server in total bytes");
     }
 
     resource->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
-}
-
-// ReSharper disable once CppParameterMayBeConstPtrOrRef
-static void on_fetch_progress(emscripten_fetch_t *fetch) {
-    if ( fetch->numBytes == 0 )
-        return;
-
-    const Resource_t *resource = fetch->userData;
-    append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
 }
 
 static void on_fetch_failure(emscripten_fetch_t *fetch) {
@@ -83,15 +73,13 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 static void on_fetch_ready(emscripten_fetch_t *fetch) {
-    Resource_t *resource = fetch->userData;
+    const Resource_t *resource = fetch->userData;
     resource->buffer->total_bytes = fetch->totalBytes;
-
-    if ( resource->streaming && resource->on_resource_loaded != NULL ) {
-        resource->on_resource_loaded(resource);
-    }
 }
 
 #else
+
+#include <sys/stat.h>
 
 char *load_file(const char *filename, uint64_t *size) {
     FILE *file = fopen(filename, "rb");
@@ -139,18 +127,14 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
         str_buf_append(path_buf, request->sub_dir, NULL);
     }
     str_buf_append(path_buf, request->relative_path, NULL);
-    printf("relative path: %s sub_dir: %s buf: %s\n", request->relative_path, request->sub_dir, path_buf->data);
 
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
     strcpy(attr.requestMethod, "GET");
     attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-    if ( request->streaming )
-        attr.attributes |= EMSCRIPTEN_FETCH_STREAM_DATA;
     attr.onsuccess = on_fetch_success;
     attr.onerror = on_fetch_failure;
     attr.onreadystatechange = on_fetch_ready;
-    attr.onprogress = on_fetch_progress;
     attr.userData = resource;
 
     emscripten_fetch(&attr, path_buf->data);
@@ -169,6 +153,7 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     append_data_to_buffer(resource->buffer, file_data, file_size);
     free(file_data);
 
+    resource->buffer->total_bytes = file_size;
     resource->status = LOAD_DONE;
 
     if ( resource->on_resource_loaded != NULL ) {

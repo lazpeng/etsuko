@@ -32,13 +32,11 @@ typedef struct Resource_t {
     OWNING ResourceBuffer_t *buffer;
     WEAK MAYBE_NULL f_resource_loaded_ptr on_resource_loaded;
     WEAK MAYBE_NULL void *custom_data;
-    bool streaming;
 } Resource_t;
 
 typedef struct LoadRequest_t {
     WEAK const char *relative_path;
     WEAK const char *sub_dir;
-    bool streaming;
     WEAK MAYBE_NULL f_resource_loaded_ptr on_resource_loaded;
     WEAK MAYBE_NULL void *custom_data;
 } LoadRequest_t;
