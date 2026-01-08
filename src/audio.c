@@ -18,7 +18,6 @@
 #include "constants.h"
 
 #define NUM_BUFFERS 4
-// TODO: Rename to something else
 #define BUFFER_SIZE (4096 * 4)
 
 typedef struct {
@@ -49,7 +48,6 @@ static void check_al_error(const char *msg) {
 }
 
 void audio_init(void) {
-    // TODO: Maybe try to clear any buffers left on openal?
     g_audio.device = alcOpenDevice(NULL);
     if ( !g_audio.device ) {
         error_abort("Failed to open OpenAL device");

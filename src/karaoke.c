@@ -13,16 +13,11 @@
 #include "str_utils.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct Karaoke_t {
     Ui_t *ui;
-    Load_t load_song;
-    Load_t load_ui_font;
-    Load_t load_lyrics_font;
-    Load_t load_audio;
-    Load_t load_album_art;
     Drawable_t *version_text;
     Drawable_t *song_name_text;
     Drawable_t *song_artist_album_text;
@@ -40,6 +35,17 @@ struct Karaoke_t {
     // Only exists during init
     Drawable_t *loading_progress_bar;
     Drawable_t *loading_text;
+    // Loading stuff
+    Resource_t *res_song;
+    Resource_t *res_ui_font;
+    Resource_t *res_lyrics_font;
+    Resource_t *res_audio;
+    Resource_t *res_album_art;
+    ResourceBuffer_t *res_album_art_buffer;
+    bool song_loaded;
+    bool ui_font_loaded, lyrics_font_loaded;
+    bool audio_loaded;
+    bool album_art_loaded;
 };
 
 Karaoke_t *karaoke_init(void) {
@@ -55,13 +61,48 @@ Karaoke_t *karaoke_init(void) {
 }
 
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
-    return state->load_ui_font.downloaded + state->load_album_art.downloaded + state->load_lyrics_font.downloaded +
-           state->load_audio.downloaded;
+    uint64_t total = 0;
+    if ( state->res_album_art != NULL )
+        total += state->res_album_art->buffer->downloaded_bytes;
+
+    if ( state->res_lyrics_font != NULL )
+        total += state->res_lyrics_font->buffer->downloaded_bytes;
+
+    if ( state->res_ui_font != NULL )
+        total += state->res_ui_font->buffer->downloaded_bytes;
+
+    if ( state->res_audio != NULL )
+        total += state->res_audio->buffer->downloaded_bytes;
+
+    return total;
 }
 
 static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
-    return state->load_ui_font.total_size + state->load_lyrics_font.total_size + state->load_audio.total_size +
-           state->load_album_art.total_size;
+    uint64_t total = 0;
+    if ( state->res_album_art != NULL )
+        total += state->res_album_art->buffer->total_bytes;
+
+    if ( state->res_lyrics_font != NULL )
+        total += state->res_lyrics_font->buffer->total_bytes;
+
+    if ( state->res_ui_font != NULL )
+        total += state->res_ui_font->buffer->total_bytes;
+
+    if ( state->res_audio != NULL )
+        total += state->res_audio->buffer->total_bytes;
+
+    return total;
+}
+
+static void append_loading_file_name(StrBuffer_t *buffer, const Resource_t *res, bool *first) {
+    if ( res != NULL ) {
+        if ( *first ) {
+            *first = false;
+        } else {
+            str_buf_append(buffer, ", ", NULL);
+        }
+        str_buf_append(buffer, res->original_filename, NULL);
+    }
 }
 
 static char *get_loading_files_names(const Karaoke_t *state) {
@@ -69,28 +110,10 @@ static char *get_loading_files_names(const Karaoke_t *state) {
     str_buf_append(buf, "Loading ", NULL);
 
     bool first = true;
-    if ( state->load_lyrics_font.status != LOAD_FINISHED ) {
-        if ( !str_is_empty(state->load_lyrics_font.filename) ) {
-            first = false;
-            str_buf_append(buf, state->load_lyrics_font.filename, NULL);
-        }
-    }
-    if ( state->load_album_art.status != LOAD_FINISHED ) {
-        if ( !str_is_empty(state->load_album_art.filename) ) {
-            if ( !first ) {
-                str_buf_append(buf, ", ", NULL);
-            } else first = false;
-            str_buf_append(buf, state->load_album_art.filename, NULL);
-        }
-    }
-    if ( state->load_audio.status != LOAD_FINISHED ) {
-        if ( !str_is_empty(state->load_audio.filename) ) {
-            if ( !first ) {
-                str_buf_append(buf, ", ", NULL);
-            }
-            str_buf_append(buf, state->load_audio.filename, NULL);
-        }
-    }
+    append_loading_file_name(buf, state->res_ui_font, &first);
+    append_loading_file_name(buf, state->res_lyrics_font, &first);
+    append_loading_file_name(buf, state->res_audio, &first);
+    append_loading_file_name(buf, state->res_album_art, &first);
 
     str_buf_append(buf, "...", NULL);
     char *str = strdup(buf->data);
@@ -99,118 +122,118 @@ static char *get_loading_files_names(const Karaoke_t *state) {
     return str;
 }
 
-static int load_async(Karaoke_t *state) {
-    Config_t *config = config_get();
-    // UI Font
-    if ( state->load_ui_font.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->ui_font, "files", &state->load_ui_font);
+static void on_song_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load song file resource");
+
+    song_load(res->original_filename, (char *)res->buffer->data, (int)res->buffer->downloaded_bytes);
+    if ( song_get() == NULL )
+        error_abort("Failed to load song");
+
+    BackgroundType_t bg_type = BACKGROUND_NONE;
+    switch ( song_get()->bg_type ) {
+    case BG_SIMPLE_GRADIENT:
+        bg_type = BACKGROUND_GRADIENT;
+        break;
+    case BG_SANDS_GRADIENT:
+        bg_type = BACKGROUND_SANDS_GRADIENT;
+        break;
+    case BG_RANDOM_GRADIENT:
+        bg_type = BACKGROUND_RANDOM_GRADIENT;
+        break;
+    case BG_CLOUD_GRADIENT:
+        bg_type = BACKGROUND_CLOUD_GRADIENT;
+        break;
+    case BG_AM_LIKE_GRADIENT:
+        bg_type = BACKGROUND_AM_LIKE_GRADIENT;
+        break;
+    default:
+        break;
     }
-    if ( state->load_ui_font.status == LOAD_DONE ) {
-        state->load_ui_font.status = LOAD_FINISHED;
-        ui_load_font(state->load_ui_font.data, state->load_ui_font.data_size, FONT_UI);
-        repository_free_resource(&state->load_ui_font);
+    ui_set_bg_gradient(song_get()->bg_color, song_get()->bg_color_secondary, bg_type);
+
+    Karaoke_t *state = res->custom_data;
+    state->song_loaded = true;
+}
+
+static void on_ui_font_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load UI font resource");
+    ui_load_font(res->buffer->data, (int)res->buffer->downloaded_bytes, FONT_UI);
+
+    Karaoke_t *state = res->custom_data;
+    state->ui_font_loaded = true;
+}
+
+static void on_lyrics_font_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load lyrics font resource");
+    ui_load_font(res->buffer->data, (int)res->buffer->downloaded_bytes, FONT_LYRICS);
+
+    Karaoke_t *state = res->custom_data;
+    state->lyrics_font_loaded = true;
+}
+
+static void on_audio_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load audio resource");
+    audio_load(res->buffer->data, (int)res->buffer->downloaded_bytes);
+
+    Karaoke_t *state = res->custom_data;
+    state->audio_loaded = true;
+}
+
+static void on_album_art_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load album art resource");
+
+    ui_sample_bg_colors_from_image(res->buffer->data, (int)res->buffer->downloaded_bytes);
+
+    Karaoke_t *state = res->custom_data;
+    state->album_art_loaded = true;
+    state->res_album_art_buffer = res->buffer;
+}
+
+static bool load_async(Karaoke_t *state) {
+    const Config_t *config = config_get();
+    // UI Font
+    if ( state->res_ui_font == NULL ) {
+        state->res_ui_font = repo_load_resource(&(LoadRequest_t){.relative_path = config->ui_font,
+                                                                 .sub_dir = "files/",
+                                                                 .on_resource_loaded = on_ui_font_loaded,
+                                                                 .custom_data = state});
     }
     // Song
-    if ( state->load_song.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->song_file, NULL, &state->load_song);
+    if ( state->res_song == NULL ) {
+        state->res_song = repo_load_resource(
+            &(LoadRequest_t){.relative_path = config->song_file, .on_resource_loaded = on_song_loaded, .custom_data = state});
     }
-    if ( state->load_song.status == LOAD_DONE ) {
-        song_load(state->load_song.filename, (const char *)state->load_song.data, state->load_song.data_size);
-        if ( song_get() == NULL )
-            error_abort("Failed to load song");
-        repository_free_resource(&state->load_song);
-        state->load_song.status = LOAD_FINISHED;
-
-        if ( song_get()->bg_type == BG_SOLID ) {
-            ui_set_bg_color(song_get()->bg_color);
-        } else {
-            BackgroundType_t bg_type = BACKGROUND_AM_LIKE_GRADIENT;
-            switch ( song_get()->bg_type ) {
-            case BG_SIMPLE_GRADIENT:
-                bg_type = BACKGROUND_GRADIENT;
-                break;
-            case BG_SANDS_GRADIENT:
-                bg_type = BACKGROUND_SANDS_GRADIENT;
-                break;
-            case BG_RANDOM_GRADIENT:
-                bg_type = BACKGROUND_RANDOM_GRADIENT;
-                break;
-            case BG_CLOUD_GRADIENT:
-                bg_type = BACKGROUND_CLOUD_GRADIENT;
-                break;
-            case BG_AM_LIKE_GRADIENT:
-                bg_type = BACKGROUND_AM_LIKE_GRADIENT;
-                break;
-            default:
-                break;
-            }
-            ui_set_bg_gradient(song_get()->bg_color, song_get()->bg_color_secondary, bg_type);
-        }
-
-        if ( song_get()->font_override != NULL ) {
-            free(config->lyrics_font);
-            config->lyrics_font = strdup(song_get()->font_override);
-        }
-    } else if ( state->load_song.status != LOAD_FINISHED ) {
-        return 0;
-    }
+    if ( !state->song_loaded )
+        return false;
     // Finish loading the song before we load the rest
 
     // Lyrics font
     // It's important we begin downloading this _after_ the song has been loaded so we know which is the correct font to fetch
-    if ( state->load_lyrics_font.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(config->lyrics_font, "files", &state->load_lyrics_font);
-    }
-    if ( state->load_lyrics_font.status == LOAD_DONE ) {
-        state->load_lyrics_font.status = LOAD_FINISHED;
-        ui_load_font(state->load_lyrics_font.data, state->load_lyrics_font.data_size, FONT_LYRICS);
-        repository_free_resource(&state->load_lyrics_font);
-    }
-
-    // Display progress
-    if ( state->loading_progress_bar != NULL ) {
-        const uint64_t total_size = get_total_loading_files_size(state);
-        const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
-        Drawable_ProgressBarData_t *loading_progress = state->loading_progress_bar->custom_data;
-        loading_progress->progress = (double)downloaded / (double)total_size;
-    }
-    // Update progress text
-    if ( state->loading_text != NULL ) {
-        char *current_loading_text = get_loading_files_names(state);
-        Drawable_TextData_t *text_data = state->loading_text->custom_data;
-
-        if ( strcmp(current_loading_text, text_data->text) != 0 ) {
-            free(text_data->text);
-            text_data->text = current_loading_text;
-            ui_recompute_drawable(state->ui, state->loading_text);
-        } else {
-            free(current_loading_text);
-        }
+    if ( state->res_lyrics_font == NULL ) {
+        const char *font = song_get()->font_override;
+        if ( font == NULL )
+            font = config->lyrics_font;
+        state->res_lyrics_font = repo_load_resource(&(LoadRequest_t){
+            .relative_path = font, .sub_dir = "files/", .on_resource_loaded = on_lyrics_font_loaded, .custom_data = state});
     }
 
     // Song audio file
-    if ( state->load_audio.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->file_path, NULL, &state->load_audio);
-    }
-    if ( state->load_audio.status == LOAD_DONE ) {
-        free(song_get()->file_path);
-        state->load_audio.status = LOAD_FINISHED;
-        audio_load(state->load_audio.data, state->load_audio.data_size);
-        repository_free_resource(&state->load_audio);
+    if ( state->res_audio == NULL ) {
+        state->res_audio = repo_load_resource(&(LoadRequest_t){
+            .relative_path = song_get()->file_path, .on_resource_loaded = on_audio_loaded, .custom_data = state});
     }
     // Album art
-    if ( state->load_album_art.status == LOAD_NOT_STARTED ) {
-        repository_get_resource(song_get()->album_art_path, NULL, &state->load_album_art);
-    }
-    if ( state->load_album_art.status == LOAD_DONE ) {
-        free(song_get()->album_art_path);
-        ui_sample_bg_colors_from_image(state->load_album_art.data, state->load_album_art.data_size);
-        state->load_album_art.status = LOAD_FINISHED;
+    if ( state->res_album_art == NULL ) {
+        state->res_album_art = repo_load_resource(&(LoadRequest_t){
+            .relative_path = song_get()->album_art_path, .on_resource_loaded = on_album_art_loaded, .custom_data = state});
     }
 
-    return state->load_ui_font.status == LOAD_FINISHED && state->load_lyrics_font.status == LOAD_FINISHED &&
-           state->load_song.status == LOAD_FINISHED && state->load_audio.status == LOAD_FINISHED &&
-           state->load_album_art.status == LOAD_FINISHED;
+    return state->ui_font_loaded && state->lyrics_font_loaded && state->audio_loaded && state->album_art_loaded;
 }
 
 int karaoke_load_loop(Karaoke_t *state) {
@@ -218,33 +241,46 @@ int karaoke_load_loop(Karaoke_t *state) {
     if ( events_has_quit() )
         return -1;
 
-    if ( state->load_ui_font.status == LOAD_FINISHED && config_get()->show_loading_screen ) {
+    if ( state->ui_font_loaded && config_get()->show_loading_screen ) {
         if ( state->loading_progress_bar == NULL ) {
-            state->loading_progress_bar = ui_make_progressbar(state->ui,
-                                                              &(Drawable_ProgressBarData_t){
-                                                                  .progress = 0,
-                                                                  .border_radius_em = 0.8,
-                                                                  .fg_color = (Color_t){.r = 200, .g = 200, .b = 200, .a = 255},
-                                                                  .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
-                                                              },
-                                                              ui_root_container(state->ui),
-                                                              &(Layout_t){
-                                                                  .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
-                                                                  .width = 0.75,
-                                                                  .height = 0.02,
-                                                              });
+            const Drawable_ProgressBarData_t data = {
+                .progress = 0,
+                .border_radius_em = 0.8,
+                .fg_color = (Color_t){.r = 200, .g = 200, .b = 200, .a = 255},
+                .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
+            };
+            const Layout_t layout = {
+                .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
+                .width = 0.75,
+                .height = 0.02,
+            };
+            state->loading_progress_bar = ui_make_progressbar(state->ui, &data, ui_root_container(state->ui), &layout);
+        } else {
+            const uint64_t total_size = get_total_loading_files_size(state);
+            const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
+            Drawable_ProgressBarData_t *data = state->loading_progress_bar->custom_data;
+            data->progress = (double)downloaded / (double)total_size;
         }
 
         if ( state->loading_text == NULL ) {
-            state->loading_text = ui_make_text(
-                state->ui,
-                &(Drawable_TextData_t){
-                    .text = "Loading...", .em = 1.5, .color = {.r = 200, .g = 200, .b = 200, .a = 255}, .font_type = FONT_UI},
-                ui_root_container(state->ui),
-                &(Layout_t){.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y |
-                                     LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
-                            .offset_y = -0.035,
-                            .relative_to = state->loading_progress_bar});
+            const Drawable_TextData_t data = {
+                .text = "Loading...", .em = 1.5, .color = {.r = 200, .g = 200, .b = 200, .a = 255}, .font_type = FONT_UI};
+            const Layout_t layout = {.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y |
+                                              LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
+                                     .offset_y = -0.035,
+                                     .relative_to = state->loading_progress_bar};
+            state->loading_text = ui_make_text(state->ui, &data, ui_root_container(state->ui), &layout);
+        } else {
+            char *current_loading_text = get_loading_files_names(state);
+            Drawable_TextData_t *text_data = state->loading_text->custom_data;
+
+            if ( strcmp(current_loading_text, text_data->text) != 0 ) {
+                free(text_data->text);
+                text_data->text = current_loading_text;
+                ui_recompute_drawable(state->ui, state->loading_text);
+            } else {
+                free(current_loading_text);
+            }
         }
     }
 
@@ -255,6 +291,17 @@ int karaoke_load_loop(Karaoke_t *state) {
     events_frame_end();
     ui_draw(state->ui);
     ui_end_loop();
+
+    if ( initialized ) {
+        // Free loading resources
+        repo_resource_destroy(state->res_song);
+        repo_resource_destroy(state->res_ui_font);
+        repo_resource_destroy(state->res_lyrics_font);
+        repo_resource_destroy(state->res_audio);
+        // We will free later, when initializing the album art drawable
+        repo_resource_buffer_leak(state->res_album_art);
+        repo_resource_destroy(state->res_album_art);
+    }
 
     return initialized;
 }
@@ -301,7 +348,7 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Album art
     state->album_image = ui_make_image(
-        state->ui, state->load_album_art.data, state->load_album_art.data_size,
+        state->ui, state->res_album_art_buffer->data, (int)state->res_album_art_buffer->downloaded_bytes,
         &(Drawable_ImageData_t){
             .border_radius_em = 2.0,
             .draw_shadow = config_get()->draw_album_art_shadow,
@@ -309,7 +356,7 @@ void karaoke_setup(Karaoke_t *state) {
         state->left_container,
         &(Layout_t){
             .height = 0.6, .width = 0.6, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
-    repository_free_resource(&state->load_album_art);
+    repo_resource_buffer_destroy(state->res_album_art_buffer);
 
     // Song info container
     state->song_info_container =

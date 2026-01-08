@@ -69,7 +69,7 @@ typedef enum ContainerFlags_t {
 typedef struct Container_t {
     Bounds_t bounds;
     WEAK struct Container_t *parent;
-    OWNING Vector_t *child_drawables; // of Drawable_t*
+    OWNING Vector_t *child_drawables;  // of Drawable_t*
     OWNING Vector_t *child_containers; // of Container_t*
     Layout_t layout;
     bool enabled;
@@ -87,7 +87,7 @@ typedef struct Drawable_t {
     bool enabled, dynamic;
     Layout_t layout;
     uint8_t alpha_mod;
-    OWNING Vector_t *animations; // of Animation_t*
+    OWNING Vector_t *animations;        // of Animation_t*
     OWNING Vector_t *active_animations; // of Animation_t*
     float color_mod;
     OWNING Shadow_t *shadow;
@@ -106,39 +106,42 @@ typedef enum AnimationType_t {
 } AnimationType_t;
 
 /**
- * Defines what happens when an animation is fired more than once in the given duration, that is, when the current animation is already running and
- * the event that triggers it happens again.
+ * Defines what happens when an animation is fired more than once in the given duration, that is, when the current animation is
+ * already running and the event that triggers it happens again.
  */
 typedef enum AnimationApplyType_t {
     /**
      * Default value. This cancels the previous animation and applies a new one with the default or otherwise specified duration.
-     * Can have the side effect of "jumping", since the animations usually apply the target value early on and calculate a delta to be deducted
-     * from it at every frame while the animation is running. So when you re-apply the animation, you essentially calculate the new animation from the
-     * previous target value to the new target, even if the previous animation wasn't finished yet (in fact we're talking about the scenario where it
-     * hasn't finished), so the "current" value had not yet reached the previous target.
+     * Can have the side effect of "jumping", since the animations usually apply the target value early on and calculate a delta
+     * to be deducted from it at every frame while the animation is running. So when you re-apply the animation, you essentially
+     * calculate the new animation from the previous target value to the new target, even if the previous animation wasn't
+     * finished yet (in fact we're talking about the scenario where it hasn't finished), so the "current" value had not yet
+     * reached the previous target.
      */
     ANIM_APPLY_OVERRIDE = 0,
     /**
-     * When the animation is to be applied but another one of the same kind is already running, it does nothing and instead just skips the animation entirely,
-     * applying the to-be animated value directly
+     * When the animation is to be applied but another one of the same kind is already running, it does nothing and instead just
+     * skips the animation entirely, applying the to-be animated value directly
      */
     ANIM_APPLY_BLOCK,
     /**
-     * Sets the animation as the next animation in a linked-list way to the current running animation (or to the next if one already exists, and so on), so that
-     * it will run after it finishes.
-     * Can have the unintended side effect of animations running late and off-sync with whatever they're supposed to represent
+     * Sets the animation as the next animation in a linked-list way to the current running animation (or to the next if one
+     * already exists, and so on), so that it will run after it finishes. Can have the unintended side effect of animations
+     * running late and off-sync with whatever they're supposed to represent
      */
     ANIM_APPLY_SEQUENTIAL,
     /**
      * Apply the animation at the same time as the current one.
-     * Can have the side effect of modifying the same value more than once before drawing so be sure you're applying the different animations to different values,
-     * e.g. two different ScaleRegions or DrawRegions so they can run predictably at the same time but not interfere with one another
+     * Can have the side effect of modifying the same value more than once before drawing so be sure you're applying the different
+     * animations to different values, e.g. two different ScaleRegions or DrawRegions so they can run predictably at the same time
+     * but not interfere with one another
      */
     ANIM_APPLY_CONCURRENT,
     /**
      * Go with whatever is the default for the animation.
-     * When constructing a base animation (ui_animate_*), this will set the animation apply type to whatever is the default for that animation type.
-     * When calling a ui_set* that accepts a ApplyType with this value, the value given at the time of the creation of the animation is used instead.
+     * When constructing a base animation (ui_animate_*), this will set the animation apply type to whatever is the default for
+     * that animation type. When calling a ui_set* that accepts a ApplyType with this value, the value given at the time of the
+     * creation of the animation is used instead.
      */
     ANIM_APPLY_DEFAULT,
 } AnimationApplyType_t;
@@ -161,17 +164,13 @@ typedef struct Animation_t {
     AnimationApplyType_t apply_type;
     // At some point in the programs lifetime, this may be the only reference to the memory allocation for the animation,
     // but since when this animation is over and the next field is not NULL the ui system will automatically free this animation
-    // and replace its spot in the vector with the next, we can safely say it will be freed by the ui eventually. So in practice this
-    // reference is indeed a non-owning one.
+    // and replace its spot in the vector with the next, we can safely say it will be freed by the ui eventually. So in practice
+    // this reference is indeed a non-owning one.
     WEAK struct Animation_t *next;
 } Animation_t;
 
 // Options and custom data
-typedef enum DrawableAlignment_t {
-    ALIGN_LEFT = 0,
-    ALIGN_CENTER,
-    ALIGN_RIGHT
-} DrawableAlignment_t;
+typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } DrawableAlignment_t;
 
 typedef struct CharOffsetInfo_t {
     int32_t char_idx;
@@ -271,9 +270,9 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
 bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                  int32_t *out_mouse_y);
 // Drawables
-Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, Drawable_ImageData_t *data, Container_t *container,
-                          const Layout_t *layout);
+Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, const Drawable_ImageData_t *data,
+                          Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
@@ -293,7 +292,8 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, double duration);
 void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
-void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration, AnimationApplyType_t apply_type);
+void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
+                                      AnimationApplyType_t apply_type);
 // User-interaction checks
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                 int32_t *out_mouse_y);

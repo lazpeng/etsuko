@@ -8,6 +8,32 @@
 #include "error.h"
 #include "str_utils.h"
 
+#define DEFAULT_BUFFER_CAP (64)
+
+static void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uint64_t data_size) {
+    if ( buffer == NULL )
+        error_abort("append_data_to_buffer: buffer is NULL");
+
+    if ( buffer->data == NULL ) {
+        buffer->data = calloc(1, DEFAULT_BUFFER_CAP);
+        buffer->data_capacity = DEFAULT_BUFFER_CAP;
+    }
+
+    if ( buffer->data_capacity < buffer->downloaded_bytes + data_size ) {
+        const uint64_t new_cap = MAX(buffer->data_capacity * 2, buffer->data_capacity + data_size);
+        unsigned char *new_buf = realloc(buffer->data, new_cap);
+        if ( new_buf == NULL ) {
+            printf("Failed to realloc buffer at %llu bytes\n", new_cap);
+            error_abort("Failed to realloc resource buffer");
+        }
+        buffer->data = new_buf;
+        buffer->data_capacity = new_cap;
+    }
+
+    memcpy(buffer->data + buffer->downloaded_bytes, data, data_size);
+    buffer->downloaded_bytes += data_size;
+}
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten/fetch.h>
 
@@ -18,32 +44,56 @@
 #endif
 
 static void on_fetch_success(emscripten_fetch_t *fetch) {
-    Load_t *job = fetch->userData;
-    unsigned char *new_buffer = calloc(1, (int)fetch->numBytes);
-    memcpy(new_buffer, fetch->data, fetch->numBytes);
-    job->data = new_buffer;
-    job->data_size = (int)fetch->numBytes;
+    Resource_t *resource = fetch->userData;
+    if ( !resource->streaming && fetch->numBytes > 0 ) {
+        append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
+        if ( resource->on_resource_loaded != NULL ) {
+            resource->on_resource_loaded(resource);
+        }
+    }
+    if ( resource->buffer->total_bytes == 0 ) {
+        error_abort("Fatal: on_fetch_success: total bytes for the resource returned 0");
+    }
+    if ( resource->buffer->downloaded_bytes > resource->buffer->total_bytes ) {
+        error_abort("Fatal: on_fetch_success: downloaded bytes exceed total bytes reported by the server");
+    }
+    if ( resource->buffer->downloaded_bytes != resource->buffer->total_bytes ) {
+        error_abort("Maybe wrong: on_fetch_success: downloaded bytes different than reported by the server in total bytes");
+    }
 
-    job->status = LOAD_DONE;
+    resource->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
 }
 
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
+static void on_fetch_progress(emscripten_fetch_t *fetch) {
+    if ( fetch->numBytes == 0 )
+        return;
+
+    const Resource_t *resource = fetch->userData;
+    append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
+}
+
 static void on_fetch_failure(emscripten_fetch_t *fetch) {
-    puts(fetch->statusText);
+    Resource_t *resource = fetch->userData;
+    resource->status = LOAD_ERROR;
+    printf("Fetch failed for '%s': %s\n", resource->original_filename, fetch->statusText);
     emscripten_fetch_close(fetch);
-    error_abort("Failed to fetch resource");
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 static void on_fetch_ready(emscripten_fetch_t *fetch) {
-    Load_t *job = fetch->userData;
-    job->downloaded = fetch->dataOffset;
-    job->total_size = fetch->totalBytes;
+    Resource_t *resource = fetch->userData;
+    resource->buffer->total_bytes = fetch->totalBytes;
+
+    if ( resource->streaming && resource->on_resource_loaded != NULL ) {
+        resource->on_resource_loaded(resource);
+    }
 }
 
 #else
 
-const unsigned char *load_file(const char *filename, int *size) {
+char *load_file(const char *filename, uint64_t *size) {
     FILE *file = fopen(filename, "rb");
     if ( file == NULL ) {
         return NULL;
@@ -51,7 +101,7 @@ const unsigned char *load_file(const char *filename, int *size) {
     fseek(file, 0, SEEK_END);
     const int file_size = (int)ftell(file);
     fseek(file, 0, SEEK_SET);
-    unsigned char *data = malloc(file_size);
+    char *data = malloc(file_size);
     fread(data, 1, file_size, file);
     fclose(file);
 
@@ -61,56 +111,93 @@ const unsigned char *load_file(const char *filename, int *size) {
 
 #endif
 
-void repository_get_resource(const char *src, const char *subdir, Load_t *load) {
-    if ( load == NULL ) {
-        error_abort("Load job is NULL");
-    }
-    if ( load->data != NULL ) {
-        error_abort("Load job already has data");
-    }
-    if ( str_is_empty(src) ) {
-        error_abort("Invalid resource path");
+Resource_t *repo_load_resource(const LoadRequest_t *request) {
+    if ( str_is_empty(request->relative_path) ) {
+        error_abort("Invalid path passed to repo_load_resource");
     }
 
-    mkdir("assets", 0777);
-    load->filename = str_get_filename(src);
-    load->status = LOAD_IN_PROGRESS;
+    Resource_t *resource = calloc(1, sizeof(*resource));
+    resource->on_resource_loaded = request->on_resource_loaded;
+    resource->status = LOAD_IN_PROGRESS;
+    resource->original_filename = str_get_filename(request->relative_path);
+    resource->custom_data = request->custom_data;
+
+    resource->buffer = calloc(1, sizeof(*resource->buffer));
+    if ( resource->buffer == NULL )
+        error_abort("Failed to allocate buffer for resource");
+
+    resource->buffer->data = NULL;
+    resource->buffer->data_capacity = 0;
+    resource->buffer->downloaded_bytes = 0;
+    resource->buffer->total_bytes = 0;
+
 #ifdef __EMSCRIPTEN__
-    char *full_path;
-    if ( subdir != NULL ) {
-        asprintf(&full_path, "%s/%s/%s", CDN_BASE_PATH, subdir, src);
-    } else {
-        asprintf(&full_path, "%s/%s", CDN_BASE_PATH, src);
+    StrBuffer_t *path_buf = str_buf_init();
+    str_buf_append(path_buf, CDN_BASE_PATH, NULL);
+    str_buf_append_ch(path_buf, '/');
+    if ( !str_is_empty(request->sub_dir) ) {
+        str_buf_append(path_buf, request->sub_dir, NULL);
     }
+    str_buf_append(path_buf, request->relative_path, NULL);
+    printf("relative path: %s sub_dir: %s buf: %s\n", request->relative_path, request->sub_dir, path_buf->data);
+
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
     strcpy(attr.requestMethod, "GET");
     attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    if ( request->streaming )
+        attr.attributes |= EMSCRIPTEN_FETCH_STREAM_DATA;
     attr.onsuccess = on_fetch_success;
     attr.onerror = on_fetch_failure;
     attr.onreadystatechange = on_fetch_ready;
-    attr.userData = load;
+    attr.onprogress = on_fetch_progress;
+    attr.userData = resource;
 
-    emscripten_fetch(&attr, full_path);
-    free(full_path);
+    emscripten_fetch(&attr, path_buf->data);
+    str_buf_destroy(path_buf);
 #else
-    char *path;
-    asprintf(&path, "assets/%s", str_get_filename(src));
-    load->data = load_file(path, &load->data_size);
-    if ( load->data == NULL )
+    StrBuffer_t *path_buf = str_buf_init();
+    str_buf_append(path_buf, "assets/", NULL);
+    str_buf_append(path_buf, resource->original_filename, NULL);
+
+    uint64_t file_size = 0;
+    char *file_data = load_file(path_buf->data, &file_size);
+    str_buf_destroy(path_buf);
+    if ( file_data == NULL )
         error_abort("Failed to load resource");
-    load->status = LOAD_DONE;
+
+    append_data_to_buffer(resource->buffer, file_data, file_size);
+    free(file_data);
+
+    resource->status = LOAD_DONE;
+
+    if ( resource->on_resource_loaded != NULL ) {
+        resource->on_resource_loaded(resource);
+    }
 #endif
+
+    return resource;
 }
 
-void repository_free_resource(Load_t *load) {
-    if ( load->data != NULL ) {
-        free((void *)load->data);
+void repo_resource_buffer_leak(Resource_t *resource) { resource->buffer = NULL; }
+
+void repo_resource_destroy(Resource_t *resource) {
+    if ( resource != NULL ) {
+        if ( resource->buffer != NULL ) {
+            repo_resource_buffer_destroy(resource->buffer);
+        }
+        if ( resource->original_filename != NULL ) {
+            free(resource->original_filename);
+        }
+        free(resource);
     }
-    if ( load->filename != NULL ) {
-        free(load->filename);
-        load->filename = NULL;
+}
+
+void repo_resource_buffer_destroy(ResourceBuffer_t *buffer) {
+    if ( buffer != NULL ) {
+        if ( buffer->data != NULL ) {
+            free(buffer->data);
+        }
+        free(buffer);
     }
-    load->data = NULL;
-    load->data_size = 0;
 }

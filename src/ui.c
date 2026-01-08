@@ -846,11 +846,11 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
     }
 }
 
-static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_TextData_t *data, const Container_t *container,
-                                      const Layout_t *layout) {
+static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawable_TextData_t *weak_data,
+                                      const Container_t *container, const Layout_t *layout) {
     Texture_t *final_texture;
 
-    data = dup_text_data(data);
+    Drawable_TextData_t *data = dup_text_data(weak_data);
     const bool should_compute_offsets =
         data->compute_offsets && (config_get()->enable_dynamic_fill || config_get()->enable_reading_hints);
 
@@ -961,7 +961,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, Drawable_Tex
     return result;
 }
 
-Drawable_t *ui_make_text(Ui_t *ui, Drawable_TextData_t *data, Container_t *container, const Layout_t *layout) {
+Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
     internal_make_text(ui, result, data, container, layout);
     vec_add(container->child_drawables, result);
@@ -976,10 +976,10 @@ static void apply_shadow_to_image(Drawable_t *drawable) {
     drawable->shadow = render_make_shadow(drawable->texture, &drawable->bounds, 1.f, offset);
 }
 
-Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length, Drawable_ImageData_t *data,
+Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length, const Drawable_ImageData_t *weak_data,
                           Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
-    data = dup_image_data(data);
+    Drawable_ImageData_t *data = dup_image_data(weak_data);
 
     Texture_t *texture = render_make_image(bytes, length, data->border_radius_em);
     result->bounds.w = texture->width;
