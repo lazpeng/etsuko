@@ -312,6 +312,8 @@ static void read_readings(Song_t *song, const char *buffer, const int32_t len, c
             end = (int32_t)len;
 
         const int32_t eq = str_find(buffer, '=', start, end);
+        if ( eq < 0 )
+            goto end;
 
         const int32_t idx = str_u8_find_str(line->full_text, buffer + start, lyric_idx, lyric_len, eq - start);
         const int32_t part_count = str_u8_count(buffer, start, eq);
@@ -324,6 +326,7 @@ static void read_readings(Song_t *song, const char *buffer, const int32_t len, c
         vec_add(line->readings, reading);
 
         lyric_idx = idx + (eq - start);
+    end:
         start = end + 1;
     }
 }
