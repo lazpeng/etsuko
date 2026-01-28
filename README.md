@@ -20,7 +20,7 @@ purpose of its existence is for my own enjoyment (I like lyrics) and to
 sometimes send it to my friends (although they don't like it nearly as much
 as I do).
 
-A publicly viewable demo is hosted [here](https://tl.wooby.moe/karaoke/v2)
+A publicly viewable demo is hosted [here](https://karaoke.wooby.moe/)
 using emscripten to target wasm.\
 Check the console if it takes a while to load to see if there are any errors.
 Also, it expects support for WebGL 2/OpenGL ES 3.0, or else it'll fail to run.\
