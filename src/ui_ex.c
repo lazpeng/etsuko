@@ -710,6 +710,8 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
     }
+    if ( view->container->enabled == false )
+        return;
 
     check_user_input(view);
 

@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_R, KEY_INVALID } Key_t;
+typedef enum Key_t { KEY_SPACE = 0, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_R, KEY_L, KEY_INVALID } Key_t;
 
 // Init, finish and loop
 void events_init(void);

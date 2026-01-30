@@ -321,9 +321,10 @@ void karaoke_setup(Karaoke_t *state) {
     const double vertical_padding = 0.01;
 
     // Make the left container
-    state->left_container = ui_make_container(state->ui, ui_root_container(state->ui),
-                                              &(Layout_t){.width = 0.5, .height = 1.0, .flags = LAYOUT_PROPORTIONAL_SIZE},
-                                              CONTAINER_VERTICAL_ALIGN_CONTENT);
+    state->left_container =
+        ui_make_container(state->ui, ui_root_container(state->ui),
+                          &(Layout_t){.width = 0.5, .height = 1.0, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
+                          CONTAINER_VERTICAL_ALIGN_CONTENT);
 
     // Make the right container
     state->right_container = ui_make_container(state->ui, ui_root_container(state->ui),
@@ -472,6 +473,15 @@ void karaoke_setup(Karaoke_t *state) {
                                  .offset_x = 0.005,
                                  .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y});
     ui_drawable_set_alpha_immediate(temp_text, 150);
+    // About hiding lyrics
+    temp_text = ui_make_text(
+        state->ui,
+        &(Drawable_TextData_t){.text = "L: Show/Hide lyrics", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
+        ui_root_container(state->ui),
+        &(Layout_t){.offset_y = -0.001,
+                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
+                    .relative_to = temp_text});
+    ui_drawable_set_alpha_immediate(temp_text, 150);
     // About seeking with arrow keys
     temp_text = ui_make_text(
         state->ui,
@@ -549,6 +559,23 @@ static void update_play_pause_state(const Karaoke_t *state) {
     state->pause_button->enabled = !paused;
 }
 
+static void toggle_show_lyrics(const Karaoke_t *state) {
+    state->right_container->enabled = !state->right_container->enabled;
+
+    Layout_t *layout = &state->left_container->layout;
+    if ( state->right_container->enabled ) {
+        // Left container stays on the left (duh)
+        layout->flags &= ~LAYOUT_ANCHOR_CENTER_X;
+        layout->offset_x = 0;
+    } else {
+        // Position the left container in the center of the screen (which should bring with it everything it holds)
+        layout->flags |= LAYOUT_ANCHOR_CENTER_X;
+        layout->offset_x = 0.5;
+    }
+
+    ui_reposition_container(state->ui, state->left_container);
+}
+
 static void check_user_input(const Karaoke_t *state) {
     if ( events_key_was_pressed(KEY_SPACE) ) {
         toggle_pause(state);
@@ -557,6 +584,8 @@ static void check_user_input(const Karaoke_t *state) {
         audio_seek_relative(-5);
     } else if ( events_key_was_pressed(KEY_ARROW_RIGHT) ) {
         audio_seek_relative(+5);
+    } else if ( events_key_was_pressed(KEY_L) ) {
+        toggle_show_lyrics(state);
     }
 
     int32_t mouse_x;

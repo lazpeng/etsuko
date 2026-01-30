@@ -34,6 +34,9 @@ static void key_callback(GLFWwindow *, const int key, int, const int action, int
         case GLFW_KEY_R:
             k = KEY_R;
             break;
+        case GLFW_KEY_L:
+            k = KEY_L;
+            break;
         default:
             return;
         }

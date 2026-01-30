@@ -239,6 +239,8 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
         calc_w = out_bounds->w;
+    } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_X ) {
+        calc_w = out_bounds->w / 2.0;
     }
     if ( layout->flags & LAYOUT_CENTER_X ) {
         x = parent->bounds.w / 2.f - out_bounds->w / 2.f - calc_w;
@@ -254,6 +256,8 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     double calc_h = 0;
     if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
         calc_h = out_bounds->h;
+    } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_Y ) {
+        calc_h = out_bounds->h / 2.f;
     }
     if ( layout->flags & LAYOUT_CENTER_Y ) {
         y = parent->bounds.h / 2.f - out_bounds->h / 2.f - calc_h;
@@ -1197,6 +1201,24 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         if ( container->child_containers->data[i] != NULL ) {
             ui_recompute_container(ui, container->child_containers->data[i]);
+        }
+    }
+}
+
+void ui_reposition_container(Ui_t *ui, Container_t *container) {
+    if ( container->parent != NULL ) {
+        measure_layout(&container->layout, container->parent, &container->bounds);
+        position_layout(ui, &container->layout, container->parent, &container->bounds);
+    }
+
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
+        ui_reposition_drawable(ui, container->child_drawables->data[i]);
+    }
+
+    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
+        Container_t *child_container = container->child_containers->data[i];
+        if ( child_container != NULL ) {
+            ui_reposition_container(ui, child_container);
         }
     }
 }

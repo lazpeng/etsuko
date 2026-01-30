@@ -43,6 +43,8 @@ typedef enum LayoutFlags_t {
     LAYOUT_WRAP_AROUND_X = 1 << 15,
     LAYOUT_WRAP_AROUND_Y = 1 << 16,
     LAYOUT_WRAP_AROUND = LAYOUT_WRAP_AROUND_X | LAYOUT_WRAP_AROUND_Y,
+    LAYOUT_ANCHOR_CENTER_Y = 1 << 17,
+    LAYOUT_ANCHOR_CENTER_X = 1 << 18,
 } LayoutFlags_t;
 
 typedef struct Layout_t {
@@ -302,6 +304,7 @@ bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);
+void ui_reposition_container(Ui_t *ui, Container_t *container);
 void ui_destroy_container(Ui_t *ui, Container_t *container);
 // Animations
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data);
