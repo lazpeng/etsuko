@@ -148,7 +148,7 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     char *file_data = load_file(path_buf->data, &file_size);
     str_buf_destroy(path_buf);
     if ( file_data == NULL )
-        error_abort("Failed to load resource");
+        error_abort("Failed to load resource: %s", resource->original_filename);
 
     append_data_to_buffer(resource->buffer, file_data, file_size);
     free(file_data);
