@@ -699,8 +699,7 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
 
     while ( current_idx < size ) {
         const int32_t char_start_idx = current_idx;
-        int32_t c;
-        c = str_u8_next(text, size, &current_idx);
+        const int32_t c = str_u8_next(text, size, &current_idx);
         if ( c < 0 )
             break;
 
@@ -714,13 +713,20 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
         render_measure_char_bounds(c, prev_c, measure_pixels_size, &char_bounds, data->font_type);
         current_line_width += char_bounds.width;
 
-        if ( c == ' ' ) {
-            last_safe_break_idx = char_start_idx + 1;
+        if ( c == ' ' || c == '(' || c == ')' ) {
+            // If we're breaking on a space, keep it on the previous line so the alignment doesn't look weird
+            // but for a ( or ), push it onto the next line
+            if ( c == ' ' ) {
+                // 1 here is fine because this char is guaranteed 1 byte
+                last_safe_break_idx = char_start_idx + 1;
+            } else {
+                last_safe_break_idx = char_start_idx;
+            }
         } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_punctuation(c) ) {
             if ( str_ch_is_japanese_punctuation(c) ) {
                 // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first
                 // character on the following line
-                last_particle_break_idx = current_idx;
+                last_safe_break_idx = current_idx;
             } else {
                 last_particle_break_idx = char_start_idx;
             }
@@ -731,22 +737,21 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
                 return size;
             }
 
-            if ( is_japanese_context && last_particle_break_idx != -1 && last_particle_break_idx > start ) {
-                return last_particle_break_idx;
-            }
-
+            // Prefer to break on punctuation rather than particles if possible
             if ( last_safe_break_idx != -1 && last_safe_break_idx > start ) {
                 return last_safe_break_idx;
+            }
+
+            if ( is_japanese_context && last_particle_break_idx != -1 && last_particle_break_idx > start ) {
+                return last_particle_break_idx;
             }
 
             if ( is_japanese_context ) {
                 bool last_was_kanji = str_ch_is_kanji(c);
 
                 while ( current_idx < size ) {
-                    int32_t next_c;
                     const int32_t prev_current_idx = current_idx;
-                    // U8_NEXT(text, current_idx, size, next_c);
-                    next_c = str_u8_next(text, size, &current_idx);
+                    const int32_t next_c = str_u8_next(text, size, &current_idx);
                     if ( next_c < 0 )
                         break;
 
@@ -762,7 +767,7 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
             }
 
             // when not breaking japanese text
-            return (char_start_idx > start) ? (char_start_idx - 1) : (current_idx - 1);
+            return char_start_idx > start ? char_start_idx - 1 : current_idx - 1;
         }
 
         prev_c = c;
