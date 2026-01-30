@@ -232,13 +232,24 @@ void str_buf_clear(StrBuffer_t *buf) {
 int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32_t start) {
     int32_t bytes = start, content_end = start;
     while ( (size_t)bytes < len ) {
+        // i don't remember why i did this
         int32_t i = bytes;
         const int32_t c = str_u8_next(src, len, &i);
 
         bytes = i;
         // If a newline was found, don't include it in the final append
-        // TODO: Check for \r
         if ( c == '\n' ) {
+            break;
+        }
+        if ( c == '\r' ) {
+            // If the next character is a unix newline, consume it in the string but stop at the \r
+            if ( bytes < (int32_t)len - 1 ) {
+                int32_t temp_bytes = bytes;
+                const int32_t temp_c = str_u8_next(src, len, &temp_bytes);
+                if ( temp_c == '\n' ) {
+                    bytes = temp_bytes;
+                }
+            }
             break;
         }
         content_end = bytes;
