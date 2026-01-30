@@ -1155,6 +1155,8 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
     const Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
         void *old_custom_data = drawable->custom_data;
+        // TODO: Maybe we don't need to destroy the texture and realloc/remake it? just make a new opengl texture
+        //  and reconfigure the VBA/VAO
         if ( drawable->texture != NULL ) {
             render_destroy_texture(drawable->texture);
             drawable->texture = NULL;
