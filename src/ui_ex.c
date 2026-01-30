@@ -464,7 +464,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
-    const double fill_duration = MAX(REGION_ANIMATION_DURATION, last_segment_remaining);
+    const double fill_duration = MAX(0.0, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
 }
 
