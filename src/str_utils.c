@@ -237,6 +237,7 @@ int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32
 
         bytes = i;
         // If a newline was found, don't include it in the final append
+        // TODO: Check for \r
         if ( c == '\n' ) {
             break;
         }
@@ -296,7 +297,7 @@ bool str_ch_is_japanese_particle(const int32_t c) {
     }
 }
 
-bool str_ch_is_japanese_comma_or_period(const int32_t c) {
-    // 、(comma), 。(period)
-    return c == 0x3001 || c == 0x3002;
+bool str_ch_is_japanese_punctuation(const int32_t c) {
+    // (space), 、(comma), 。(period)
+    return c == 0x3000 || c == 0x3001 || c == 0x3002;
 }

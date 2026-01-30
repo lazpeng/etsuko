@@ -716,8 +716,8 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
 
         if ( c == ' ' ) {
             last_safe_break_idx = char_start_idx + 1;
-        } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_comma_or_period(c) ) {
-            if ( str_ch_is_japanese_comma_or_period(c) ) {
+        } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_punctuation(c) ) {
+            if ( str_ch_is_japanese_punctuation(c) ) {
                 // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first
                 // character on the following line
                 last_particle_break_idx = current_idx;
