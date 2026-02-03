@@ -409,10 +409,12 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
             if ( elapsed_since_segment <= 0.0 )
                 break;
 
-            // timing_offset_start = s; // TODO: Find a way to skip unnecessary calculations for segments we've already passed
-            // through. Also the draw region is sometimes wrong when seeking back
-            //  The secret here is that we calculate each letter boundary and always set the fill size to that
-            //  for the whole duration of the segment
+            // TODO: Find a way to skip unnecessary calculations for segments we've already passed
+            //  through. Also the draw region is sometimes wrong when seeking back
+            // timing_offset_start = s;
+
+            // here we calculate each letter boundary and always set the fill size to that
+            // for the whole duration of the segment
             double segment_width = 0.0;
             const int32_t segment_start_in_line = MAX(0, timing->start_char_idx - offset_info->start_char_idx);
             for ( int32_t ci = 0; ci < segment_length_in_current_line; ci++ ) {
@@ -429,7 +431,9 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                 duration = duration_per_character * segment_length_in_current_line;
             }
 
-            if ( !(view->active_line_segment_visited[s] & (1 << i)) && config_get()->enable_pulse_effect ) {
+            const bool segment_visited = view->active_line_segment_visited[s] & (1 << i);
+
+            if ( !segment_visited && config_get()->enable_pulse_effect ) {
                 ScaleRegionOpt_t region = {
                     .x0_perc = x1,
                     .x1_perc = x1 + (float)segment_fill_contribution,
