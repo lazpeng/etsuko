@@ -47,12 +47,26 @@ typedef enum LayoutFlags_t {
     LAYOUT_ANCHOR_CENTER_X = 1 << 18,
 } LayoutFlags_t;
 
+typedef enum SizeConstraintType_t {
+    CONSTRAINT_NONE = 0,
+    CONSTRAINT_ABSOLUTE = 1,
+    CONSTRAINT_RELATIVE = 2,
+} SizeConstraintType_t;
+
+typedef struct SizeConstraint_t {
+    SizeConstraintType_t type;
+    double value;
+    WEAK Bounds_t *relative_to;
+} SizeConstraint_t;
+
 typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
     WEAK Drawable_t *relative_to_size;
     WEAK Drawable_t *relative_to;
+    SizeConstraint_t min_width, max_width;
+    SizeConstraint_t min_height, max_height;
 } Layout_t;
 
 typedef enum DrawableType_t {

@@ -356,7 +356,20 @@ void karaoke_setup(Karaoke_t *state) {
         },
         state->left_container,
         &(Layout_t){
-            .height = 0.6, .width = 0.6, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO});
+            .height = 0.6,
+            .width = 0.6,
+            .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
+            .max_width = {
+                .type = CONSTRAINT_RELATIVE,
+                .relative_to = &state->left_container->bounds,
+                .value = 0.6
+            },
+            .max_height = {
+                .type = CONSTRAINT_RELATIVE,
+                .relative_to = &state->left_container->bounds,
+                .value = 0.6
+            }
+        });
     repo_resource_buffer_destroy(state->res_album_art_buffer);
 
     // Song info container

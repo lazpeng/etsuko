@@ -137,6 +137,29 @@ static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *b
     render_draw_rounded_rect(drawable->texture, bounds, &data->color, border_radius);
 }
 
+static void measure_constraints(const SizeConstraint_t *constraint, MAYBE_NULL double *width, MAYBE_NULL double *height) {
+    double computed_width = 0, computed_height = 0;
+    if ( constraint->type & CONSTRAINT_RELATIVE && constraint->relative_to == NULL ) {
+        printf("Warning: compute_constraints: RELATIVE flag is set but no relative_to has been assigned\n");
+        goto finish;
+    }
+
+    if ( constraint->type & CONSTRAINT_ABSOLUTE ) {
+        computed_width = constraint->value;
+        computed_height = constraint->value;
+    } else if ( constraint->type & CONSTRAINT_RELATIVE ) {
+        computed_width = constraint->relative_to->w * constraint->value;
+        computed_height = constraint->relative_to->h * constraint->value;
+        printf("computed_height: %.2f, relative_height: %.2f\n", computed_height, constraint->relative_to->h);
+    }
+
+finish:
+    if ( width != NULL )
+        *width = computed_width;
+    if ( height != NULL )
+        *height = computed_height;
+}
+
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
     double w = layout->width, h = layout->height;
     if ( layout->width > 0 ) {
@@ -192,6 +215,35 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
+    // TODO: This will currently mess with things that have the keep aspect ratio flag on
+    //  come back to this when I can think of a solution to have both at the same time
+    if ( layout->min_width.type != CONSTRAINT_NONE ) {
+        double constraint_width = 0;
+        measure_constraints(&layout->min_width, &constraint_width, NULL);
+        if ( constraint_width != 0 )
+            w = MAX(w, constraint_width);
+    }
+    if ( layout->max_width.type != CONSTRAINT_NONE ) {
+        double constraint_width = 0;
+        measure_constraints(&layout->max_width, &constraint_width, NULL);
+        if ( constraint_width != 0 )
+            w = MIN(w, constraint_width);
+    }
+    if ( layout->min_height.type != CONSTRAINT_NONE ) {
+        double constraint_height = 0;
+        measure_constraints(&layout->min_height, NULL, &constraint_height);
+        if ( constraint_height != 0 )
+            h = MAX(w, constraint_height);
+    }
+    if ( layout->max_height.type != CONSTRAINT_NONE ) {
+        double constraint_height = 0;
+        measure_constraints(&layout->max_height, NULL, &constraint_height);
+        if ( constraint_height != 0 )
+            h = MIN(w, constraint_height);
+    }
+
+    // width or height being zero means automatic so dependent on the actual size of the thing, e.g. text and images
+    // this is of course a major oversight and it will be wrong if you forget to set these properly so... don't :)
     if ( layout->width != 0 || maintain_aspect_ratio )
         out_bounds->w = w;
 
