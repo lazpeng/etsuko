@@ -572,6 +572,10 @@ static void update_play_pause_state(const Karaoke_t *state) {
     state->pause_button->enabled = !paused;
 }
 
+/**
+ * Toggles the screen state between having the album art on the left and the lyrics on the right,
+ * to the lyrics disappearing and the album art (and song info) being centered in the screen
+ */
 static void toggle_show_lyrics(const Karaoke_t *state) {
     state->right_container->enabled = !state->right_container->enabled;
 
