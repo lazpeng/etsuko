@@ -150,7 +150,6 @@ static void measure_constraints(const SizeConstraint_t *constraint, MAYBE_NULL d
     } else if ( constraint->type & CONSTRAINT_RELATIVE ) {
         computed_width = constraint->relative_to->w * constraint->value;
         computed_height = constraint->relative_to->h * constraint->value;
-        printf("computed_height: %.2f, relative_height: %.2f\n", computed_height, constraint->relative_to->h);
     }
 
 finish:
