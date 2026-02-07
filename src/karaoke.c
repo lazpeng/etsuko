@@ -236,10 +236,10 @@ static bool load_async(Karaoke_t *state) {
     return state->ui_font_loaded && state->lyrics_font_loaded && state->audio_loaded && state->album_art_loaded;
 }
 
-int karaoke_load_loop(Karaoke_t *state) {
+AppStatus_t karaoke_load_loop(Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
-        return -1;
+        return APP_STATUS_FAILURE;
 
     if ( state->ui_font_loaded && config_get()->show_loading_screen ) {
         if ( state->loading_progress_bar == NULL ) {
@@ -286,7 +286,7 @@ int karaoke_load_loop(Karaoke_t *state) {
 
     ui_begin_loop(state->ui);
     // Recalculate dynamic elements
-    const int initialized = load_async(state);
+    const bool initialized = load_async(state);
 
     events_frame_end();
     ui_draw(state->ui);
@@ -301,9 +301,11 @@ int karaoke_load_loop(Karaoke_t *state) {
         // We will free later, when initializing the album art drawable
         repo_resource_buffer_leak(state->res_album_art);
         repo_resource_destroy(state->res_album_art);
+
+        return APP_STATUS_OK;
     }
 
-    return initialized;
+    return APP_STATUS_LOADING;
 }
 
 void karaoke_setup(Karaoke_t *state) {
@@ -635,10 +637,10 @@ static void check_user_input(const Karaoke_t *state) {
     }
 }
 
-int karaoke_loop(const Karaoke_t *state) {
+AppStatus_t karaoke_loop(const Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
-        return -1;
+        return APP_STATUS_FAILURE;
     audio_loop();
 
     // Check for user inputs
@@ -662,7 +664,7 @@ int karaoke_loop(const Karaoke_t *state) {
     ui_draw(state->ui);
     ui_end_loop();
 
-    return 0;
+    return APP_STATUS_OK;
 }
 
 void karaoke_finish(const Karaoke_t *state) {

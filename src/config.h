@@ -7,13 +7,8 @@
 
 #include <stdbool.h>
 
+#include "etsuko.h"
 #include "constants.h"
-
-// The mode the application should operate on
-typedef enum Config_OpMode_t {
-    // Shows a single song with album art on one side and the scrolling lyrics on the other
-    APP_MODE_KARAOKE = 0,
-} Config_OpMode_t;
 
 /**
  * The config should be a static and permanent way to tell the application how to behave and what to do
