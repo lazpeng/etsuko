@@ -5,11 +5,13 @@
 #include <string.h>
 
 #include "error.h"
+#include "remote_repository.h"
+#include "secret.h" // defines CDN_BASE_PATH
 #include "str_utils.h"
 
 #define DEFAULT_BUFFER_CAP (64)
 
-static void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uint64_t data_size) {
+void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uint64_t data_size) {
     if ( buffer == NULL )
         error_abort("append_data_to_buffer: buffer is NULL");
 
@@ -35,8 +37,6 @@ static void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, co
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/fetch.h>
-
-#include "secret.h" // defines CDN_BASE_PATH
 
 #ifndef CDN_BASE_PATH
 #error "No base URL defined for the CDN to fetch songs from"
@@ -100,14 +100,15 @@ char *load_file(const char *filename, uint64_t *size) {
 #endif
 
 Resource_t *repo_load_resource(const LoadRequest_t *request) {
-    if ( str_is_empty(request->relative_path) ) {
+    const char *path = str_is_empty(request->absolute_path) ? request->relative_path : request->absolute_path;
+    if ( str_is_empty(path) ) {
         error_abort("Invalid path passed to repo_load_resource");
     }
 
     Resource_t *resource = calloc(1, sizeof(*resource));
     resource->on_resource_loaded = request->on_resource_loaded;
     resource->status = LOAD_IN_PROGRESS;
-    resource->original_filename = str_get_filename(request->relative_path);
+    resource->original_filename = str_get_filename(path);
     resource->custom_data = request->custom_data;
 
     resource->buffer = calloc(1, sizeof(*resource->buffer));
@@ -119,15 +120,19 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     resource->buffer->downloaded_bytes = 0;
     resource->buffer->total_bytes = 0;
 
-#ifdef __EMSCRIPTEN__
     StrBuffer_t *path_buf = str_buf_init();
-    str_buf_append(path_buf, CDN_BASE_PATH, NULL);
-    str_buf_append_ch(path_buf, '/');
-    if ( !str_is_empty(request->sub_dir) ) {
-        str_buf_append(path_buf, request->sub_dir, NULL);
+    if ( str_is_empty(request->absolute_path) ) {
+        str_buf_append(path_buf, CDN_BASE_PATH, NULL);
+        str_buf_append_ch(path_buf, '/');
+        if ( !str_is_empty(request->sub_dir) ) {
+            str_buf_append(path_buf, request->sub_dir, NULL);
+        }
+        str_buf_append(path_buf, request->relative_path, NULL);
+    } else {
+        str_buf_append(path_buf, request->absolute_path, NULL);
     }
-    str_buf_append(path_buf, request->relative_path, NULL);
 
+#ifdef __EMSCRIPTEN__
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
     strcpy(attr.requestMethod, "GET");
@@ -138,28 +143,35 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     attr.userData = resource;
 
     emscripten_fetch(&attr, path_buf->data);
-    str_buf_destroy(path_buf);
 #else
-    StrBuffer_t *path_buf = str_buf_init();
-    str_buf_append(path_buf, "assets/", NULL);
-    str_buf_append(path_buf, resource->original_filename, NULL);
+
+    if ( request->force_remote_fetch ) {
+        remote_load_resource(path_buf->data, resource);
+        return resource;
+    }
+
+    StrBuffer_t *local_path_buf = str_buf_init();
+    str_buf_append(local_path_buf, "assets/", NULL);
+    str_buf_append(local_path_buf, resource->original_filename, NULL);
 
     uint64_t file_size = 0;
-    char *file_data = load_file(path_buf->data, &file_size);
-    str_buf_destroy(path_buf);
-    if ( file_data == NULL )
-        error_abort("Failed to load resource: %s", resource->original_filename);
+    char *file_data = load_file(local_path_buf->data, &file_size);
+    str_buf_destroy(local_path_buf);
+    if ( file_data != NULL ) {
+        append_data_to_buffer(resource->buffer, file_data, file_size);
+        free(file_data);
 
-    append_data_to_buffer(resource->buffer, file_data, file_size);
-    free(file_data);
+        resource->buffer->total_bytes = file_size;
+        resource->status = LOAD_DONE;
 
-    resource->buffer->total_bytes = file_size;
-    resource->status = LOAD_DONE;
-
-    if ( resource->on_resource_loaded != NULL ) {
-        resource->on_resource_loaded(resource);
+        if ( resource->on_resource_loaded != NULL ) {
+            resource->on_resource_loaded(resource);
+        }
+    } else {
+        remote_load_resource(path_buf->data, resource);
     }
 #endif
+    str_buf_destroy(path_buf);
 
     return resource;
 }

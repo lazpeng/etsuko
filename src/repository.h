@@ -48,12 +48,16 @@ typedef struct Resource_t {
 typedef struct LoadRequest_t {
     // Path to the resource. In practice, the filename
     WEAK const char *relative_path;
+    // Absolute path to the resource. Will not be appended to the cdn url.
+    WEAK const char *absolute_path;
     // Sub folder where the resource is located in the remote location
     WEAK const char *sub_dir;
     // Callback on completion
     WEAK MAYBE_NULL f_resource_loaded_ptr on_resource_loaded;
     // Caller custom data
     WEAK MAYBE_NULL void *custom_data;
+    // Fetch the resource from a remote repository even if it otherwise exists on the local filesystem
+    bool force_remote_fetch;
 } LoadRequest_t;
 
 /**
@@ -71,6 +75,9 @@ void repo_resource_buffer_leak(Resource_t *resource);
 // Frees data related to the resource, and its buffer if it was not leaked
 void repo_resource_destroy(Resource_t *resource);
 // Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now
+// Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now
 void repo_resource_buffer_destroy(ResourceBuffer_t *buffer);
+
+void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, uint64_t data_size);
 
 #endif // ETSUKO_REPOSITORY_H

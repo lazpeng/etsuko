@@ -32,6 +32,8 @@ add_executable(etsuko src/main.c
         src/ui_ex.c
         src/renderer.h
         src/renderer.c
+        src/main_menu.c
+        src/remote_repository.c
         src/contrib/stb_image.c
         src/contrib/stb_truetype.c
         src/contrib/minimp3.c
@@ -60,7 +62,7 @@ if (EMSCRIPTEN)
             "SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
 
-            #"SHELL:-sMIN_WEBGL_VERSION=2"
+            "SHELL:-sMIN_WEBGL_VERSION=1"
             "SHELL:-sMAX_WEBGL_VERSION=2"
 
             "SHELL:-Oz"
@@ -77,6 +79,12 @@ else ()
 
     find_package(glfw3 REQUIRED)
     target_link_libraries(etsuko PRIVATE glfw)
+
+    find_package(Threads REQUIRED)
+    target_link_libraries(etsuko PRIVATE Threads::Threads)
+
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(etsuko PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
     find_package(OpenAL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenAL::OpenAL)
