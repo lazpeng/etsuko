@@ -1,3 +1,8 @@
+
+// No need to have this under the web target
+// TODO: Find a way to exclude this from build or better handle the absence of this functionality under emscripten
+#ifndef __EMSCRIPTEN__
+
 #include "remote_repository.h"
 #include "repository.h"
 
@@ -300,3 +305,5 @@ void remote_load_resource(const char *path, Resource_t *resource) {
         pthread_detach(thread);
     }
 }
+
+#endif
