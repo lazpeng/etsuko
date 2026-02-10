@@ -62,6 +62,8 @@ void audio_init(void) {
         error_abort("Failed to make OpenAL context current");
     }
 
+    g_audio.last_first_decoded_sample = 0;
+
     alGenSources(1, &g_audio.source);
     alGenBuffers(NUM_BUFFERS, g_audio.buffers);
     check_al_error("init");
