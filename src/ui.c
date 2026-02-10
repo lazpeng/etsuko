@@ -373,14 +373,14 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         if ( layout->flags & LAYOUT_RELATIVE_TO_X ) {
             x += layout->relative_to->bounds.x;
             if ( layout->flags & LAYOUT_RELATION_X_INCLUDE_WIDTH ) {
-                x += layout->relative_to->bounds.w * (1.0 + layout->relative_to->bounds.scale_mod);
+                x += layout->relative_to->bounds.w;
             }
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_Y ) {
             y += layout->relative_to->bounds.y;
             if ( layout->flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
-                y += layout->relative_to->bounds.h * (1.0 + layout->relative_to->bounds.scale_mod);
+                y += layout->relative_to->bounds.h;
             }
         }
     }
