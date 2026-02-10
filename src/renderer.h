@@ -213,6 +213,8 @@ typedef struct DrawTextureOpts_t {
     WEAK const DrawRegionOptSet_t *draw_regions;
     // Optional set of regions to scale inside the final texture
     WEAK const ScaleRegionOptSet_t *scale_regions;
+    // Center the final texture if any scale modifications are applied
+    bool center_on_scale;
 } DrawTextureOpts_t;
 
 /**
@@ -277,7 +279,11 @@ void render_set_bg_gradient(Color_t top_color, Color_t bottom_color, BackgroundT
  * Supported image types: JPEG, PNG
  * For effects that use less than 5 colors (static gradient, dynamic gradient, solid color), the first N colors will be used from this sample
  */
-void render_sample_bg_colors_from_image(const unsigned char *bytes, int length);
+void render_sample_bg_colors_from_image(const unsigned char *bytes, int length, Color_t colors[5]);
+/**
+ * Updates the internal background color array
+ */
+void render_set_bg_colors(const Color_t colors[5]);
 /**
  * Set the blend mode to be used when calling render_draw_texture
  */

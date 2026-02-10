@@ -45,6 +45,12 @@ typedef enum LayoutFlags_t {
     LAYOUT_WRAP_AROUND = LAYOUT_WRAP_AROUND_X | LAYOUT_WRAP_AROUND_Y,
     LAYOUT_ANCHOR_CENTER_Y = 1 << 17,
     LAYOUT_ANCHOR_CENTER_X = 1 << 18,
+    // Calculates all proportional positioning using the relative_to's bounds instead of the parent container's
+    LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE = 1 << 19,
+    LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE = 1 << 20,
+    LAYOUT_PROPORTIONAL_POS_TO_RELATIVE = LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE | LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE,
+    // Calculates all proportional sizing using the relative_to's bounds instead of the parent container's
+    LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE = 1 << 21,
 } LayoutFlags_t;
 
 typedef enum SizeConstraintType_t {
@@ -63,8 +69,8 @@ typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
-    WEAK Drawable_t *relative_to_size;
-    WEAK Drawable_t *relative_to;
+    WEAK const Drawable_t *relative_to_size;
+    WEAK const Drawable_t *relative_to;
     SizeConstraint_t min_width, max_width;
     SizeConstraint_t min_height, max_height;
 } Layout_t;
@@ -80,6 +86,7 @@ typedef enum DrawableType_t {
 typedef enum ContainerFlags_t {
     CONTAINER_NONE = 0,
     CONTAINER_VERTICAL_ALIGN_CONTENT = 1,
+    CONTAINER_HORIZONTAL_ALIGN_CONTENT = 2,
 } ContainerFlags_t;
 
 typedef struct Container_t {
@@ -90,8 +97,8 @@ typedef struct Container_t {
     Layout_t layout;
     bool enabled;
     ContainerFlags_t flags;
-    double align_content_offset_y;
-    double viewport_y;
+    double align_content_offset_y, align_content_offset_x;
+    double viewport_y, viewport_x;
 } Container_t;
 
 typedef struct Drawable_t {
@@ -111,6 +118,7 @@ typedef struct Drawable_t {
     uint8_t underlay_alpha;
     bool draw_underlay;
     bool pending_recompute;
+    bool center_on_scale;
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -213,6 +221,7 @@ typedef struct Drawable_TextData_t {
     double wrap_width_threshold;
     double measure_at_em;
     double line_padding_em;
+    // This only applies when wrapping is enabled AND there is more than one line because I'm dunb
     DrawableAlignment_t alignment;
     bool draw_shadow;
     OWNING Vector_t *line_offsets; // of TextOffsetInfo_t
@@ -278,7 +287,6 @@ void ui_draw(const Ui_t *ui);
 void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
 void ui_set_bg_gradient(uint32_t primary, uint32_t secondary, BackgroundType_t type);
-void ui_sample_bg_colors_from_image(const unsigned char *bytes, int length);
 void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
@@ -296,6 +304,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Drawable_t *drawable);
 double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent);
+void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);

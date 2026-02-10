@@ -18,11 +18,6 @@
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
 #define LINE_FADE_MAX_DISTANCE (5)
 #define SCROLL_THRESHOLD (0.05)
-#ifdef __EMSCRIPTEN__
-#define SCROLL_MODIFIER (50)
-#else
-#define SCROLL_MODIFIER (10)
-#endif
 #define LINE_SCALE_FACTOR_ACTIVE (1.0f)
 #define LINE_SCALE_FACTOR_INACTIVE (0.75f)
 #define ALPHA_DISTANCE_BASE_CALC (100)
@@ -815,7 +810,7 @@ void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, const double delta_y)
     if ( fabs(delta_y) < SCROLL_THRESHOLD )
         return;
 
-    double new_viewport_y = view->container->viewport_y + delta_y * SCROLL_MODIFIER;
+    double new_viewport_y = view->container->viewport_y + delta_y;
     new_viewport_y = MIN(new_viewport_y, get_hidden_height(view));
     new_viewport_y = MAX(new_viewport_y, get_visible_height(view));
 

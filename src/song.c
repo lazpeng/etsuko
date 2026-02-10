@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "constants.h"
 #include "error.h"
+#include "json.h"
 #include "str_utils.h"
 
 static Song_t *g_song;
@@ -483,4 +483,147 @@ void song_destroy(void) {
         free(g_song);
     }
     g_song = NULL;
+}
+
+HashMap_t *menu_songs_parse(const char *src, int src_size) {
+    JsonContext_t *ctx = json_ctx_init();
+    JsonObject_t *root_obj = json_parse(src, ctx);
+
+    if ( root_obj == NULL ) {
+        fprintf(stderr, "DEBUG: json_parse failed\n");
+        json_ctx_destroy(ctx);
+        return NULL;
+    }
+
+    const JsonField_t *data_field = json_obj_get(root_obj, "data");
+    const Vector_t *songs_list = json_get_list(data_field);
+    if ( songs_list == NULL ) {
+        fprintf(stderr, "DEBUG: data list is NULL\n");
+        json_obj_destroy(root_obj);
+        json_ctx_destroy(ctx);
+        return NULL;
+    }
+
+    HashMap_t *artists_map = map_init();
+
+    for ( size_t i = 0; i < songs_list->size; i++ ) {
+        const JsonField_t *song_field = songs_list->data[i];
+        if ( song_field->type != JSON_OBJECT )
+            continue;
+
+        JsonObject_t *song_obj = song_field->value.obj_value;
+
+        // Extract fields
+        const char *name = json_get_string(json_obj_get(song_obj, "name"));
+        const char *artist = json_get_string(json_obj_get(song_obj, "artist"));
+        const char *album = json_get_string(json_obj_get(song_obj, "album"));
+
+        if ( str_is_empty(name) || str_is_empty(artist) || str_is_empty(album) ) {
+            continue;
+        }
+
+        // Find or create artist
+        MenuArtist_t *menu_artist = map_get(artists_map, artist);
+        if ( menu_artist == NULL ) {
+            menu_artist = calloc(1, sizeof(MenuArtist_t));
+            menu_artist->name = strdup(artist);
+            menu_artist->albums = map_init();
+            map_put(artists_map, artist, menu_artist);
+        }
+
+        // Find or create album
+        MenuAlbum_t *menu_album = map_get(menu_artist->albums, album);
+        if ( menu_album == NULL ) {
+            menu_album = calloc(1, sizeof(MenuAlbum_t));
+            menu_album->name = strdup(album);
+            menu_album->songs = vec_init();
+            map_put(menu_artist->albums, album, menu_album);
+        }
+
+        // Create song
+        MenuSong_t *menu_song = calloc(1, sizeof(MenuSong_t));
+        menu_song->name = strdup(name);
+        menu_song->artist = strdup(artist);
+        menu_song->album = strdup(album);
+
+        const char *id = json_get_string(json_obj_get(song_obj, "id"));
+        if ( id )
+            menu_song->id = strdup(id);
+
+        const char *album_art = json_get_string(json_obj_get(song_obj, "album_art"));
+        if ( album_art )
+            menu_song->album_art_path = strdup(album_art);
+
+        const char *tags = json_get_string(json_obj_get(song_obj, "tags"));
+        if ( tags )
+            menu_song->tags = strdup(tags);
+
+        const char *language = json_get_string(json_obj_get(song_obj, "language"));
+        if ( language )
+            menu_song->language = strdup(language);
+
+        menu_song->year = (int)json_get_number(json_obj_get(song_obj, "year"));
+
+        vec_add(menu_album->songs, menu_song);
+    }
+
+    json_obj_destroy(root_obj);
+    json_ctx_destroy(ctx);
+
+    return artists_map;
+}
+
+static void free_menu_song(MenuSong_t *song) {
+    if ( !song )
+        return;
+    if ( song->id )
+        free(song->id);
+    if ( song->name )
+        free(song->name);
+    if ( song->artist )
+        free(song->artist);
+    if ( song->album )
+        free(song->album);
+    if ( song->album_art_path )
+        free(song->album_art_path);
+    if ( song->tags )
+        free(song->tags);
+    if ( song->language )
+        free(song->language);
+    free(song);
+}
+
+static void cb_free_album(const char *key, void *value, void *user_data) {
+    MenuAlbum_t *album = (MenuAlbum_t *)value;
+    if ( !album )
+        return;
+    if ( album->name )
+        free(album->name);
+    if ( album->songs ) {
+        for ( size_t i = 0; i < album->songs->size; i++ ) {
+            free_menu_song((MenuSong_t *)album->songs->data[i]);
+        }
+        vec_destroy(album->songs);
+    }
+    free(album);
+}
+
+static void cb_free_artist(const char *key, void *value, void *user_data) {
+    MenuArtist_t *artist = (MenuArtist_t *)value;
+    if ( !artist )
+        return;
+    if ( artist->name )
+        free(artist->name);
+    if ( artist->albums ) {
+        map_iterate(artist->albums, cb_free_album, NULL);
+        map_destroy(artist->albums);
+    }
+    free(artist);
+}
+
+void menu_songs_destroy(HashMap_t *map) {
+    if ( !map )
+        return;
+    map_iterate(map, cb_free_artist, NULL);
+    map_destroy(map);
 }

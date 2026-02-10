@@ -181,6 +181,12 @@ bool str_equals_sized(const char *a, const char *b, const size_t len) {
     return memcmp(a, b, a_len) == 0;
 }
 
+bool str_equals(const char *a, const char *b) {
+    if ( a == NULL || b == NULL )
+        return a == b;
+    return strcmp(a, b) == 0;
+}
+
 bool str_equals_right_sized(const char *a, const char *b) { return str_equals_sized(a, b, strlen(b)); }
 
 static void resize_str_buffer(StrBuffer_t *buf, const size_t cap) {

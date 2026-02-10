@@ -160,16 +160,25 @@ finish:
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
+    const Bounds_t *proportional_bounds = &parent->bounds;
+    if ( layout->flags & LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE ) {
+        if ( layout->relative_to_size == NULL ) {
+            printf("Warning: LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE is set but no relative_to_size has been assigned\n");
+        } else {
+            proportional_bounds = &layout->relative_to_size->bounds;
+        }
+    }
+
     double w = layout->width, h = layout->height;
     if ( layout->width > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
-            w = parent->bounds.w * w;
+            w = proportional_bounds->w * w;
         }
     }
 
     if ( layout->height > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_H ) {
-            h = parent->bounds.h * h;
+            h = proportional_bounds->h * h;
         }
     }
 
@@ -251,12 +260,15 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 }
 
 static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
-    // Only measure height for now
+    double max_x = 0, min_x = 0;
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
-        double draw_y;
-        ui_get_drawable_canon_pos(drawable, NULL, &draw_y);
+        double draw_x, draw_y;
+        ui_get_drawable_canon_pos(drawable, &draw_x, &draw_y);
+
+        max_x = fmax(max_x, draw_x + drawable->bounds.w * (1.0 + drawable->bounds.scale_mod));
+        min_x = fmin(min_x, draw_x);
 
         max_y = fmax(max_y, draw_y + drawable->bounds.h * (1.0 + drawable->bounds.scale_mod));
         min_y = fmin(min_y, draw_y);
@@ -266,26 +278,46 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         const Container_t *child = container->child_containers->data[i];
         Bounds_t child_bounds = {0};
         measure_container_size(ui, child, &child_bounds);
+
+        max_x = fmax(max_x, child_bounds.x + child_bounds.w);
+        min_x = fmin(min_x, child_bounds.x);
+
         max_y = fmax(max_y, child_bounds.y + child_bounds.h);
         min_y = fmin(min_y, child_bounds.y);
     }
 
     out_bounds->h = fmax(out_bounds->h, max_y - min_y);
+    out_bounds->w = fmax(out_bounds->w, max_x - min_x);
 }
 
 static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
     if ( container->parent != NULL )
         recalculate_container_alignment(ui, container->parent);
 
-    if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
+    if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT || container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
         container->align_content_offset_y = 0;
+        container->align_content_offset_x = 0;
         Bounds_t bounds = {0};
         measure_container_size(ui, container, &bounds);
-        container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
+        if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
+            container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
+        }
+        if ( container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
+            container->align_content_offset_x = (container->bounds.w - bounds.w) / 2.f;
+        }
     }
 }
 
 static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
+    const Bounds_t *proportional_bounds_x = &parent->bounds;
+    if ( layout->flags & LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE ) {
+        if ( layout->relative_to == NULL ) {
+            printf("Warning: LAYOUT_PROPORTIONAL_POS_TO_RELATIVE is set but no relative_to is assigned\n");
+        } else {
+            proportional_bounds_x = &layout->relative_to->bounds;
+        }
+    }
+
     double x = layout->offset_x;
     double calc_w = 0;
     if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
@@ -294,15 +326,23 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         calc_w = out_bounds->w / 2.0;
     }
     if ( layout->flags & LAYOUT_CENTER_X ) {
-        x = parent->bounds.w / 2.f - out_bounds->w / 2.f - calc_w;
+        x = proportional_bounds_x->w / 2.f - out_bounds->w / 2.f - calc_w;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_X ) {
-        x = parent->bounds.w * x;
+        x = proportional_bounds_x->w * x;
     }
 
     if ( x < 0 && layout->flags & LAYOUT_WRAP_AROUND_X )
-        x = parent->bounds.w + x;
+        x = proportional_bounds_x->w + x;
     x -= calc_w;
 
+    const Bounds_t *proportional_bounds_y = &parent->bounds;
+    if ( layout->flags & LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE ) {
+        if ( layout->relative_to == NULL ) {
+            printf("Warning: LAYOUT_PROPORTIONAL_POS_TO_RELATIVE is set but no relative_to is assigned\n");
+        } else {
+            proportional_bounds_y = &layout->relative_to->bounds;
+        }
+    }
     double y = layout->offset_y;
     double calc_h = 0;
     if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
@@ -311,13 +351,13 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
         calc_h = out_bounds->h / 2.f;
     }
     if ( layout->flags & LAYOUT_CENTER_Y ) {
-        y = parent->bounds.h / 2.f - out_bounds->h / 2.f - calc_h;
+        y = proportional_bounds_y->h / 2.f - out_bounds->h / 2.f - calc_h;
     } else if ( layout->flags & LAYOUT_PROPORTIONAL_Y ) {
-        y = parent->bounds.h * y;
+        y = proportional_bounds_y->h * y;
     }
 
     if ( y < 0 && layout->flags & LAYOUT_WRAP_AROUND_Y )
-        y = parent->bounds.h + y;
+        y = proportional_bounds_y->h + y;
     y -= calc_h;
 
     if ( layout->relative_to != NULL ) {
@@ -521,6 +561,8 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
 
     DrawTextureOpts_t opts = {0};
     opts.scale_regions = &delta.scale_regions;
+    opts.center_on_scale = drawable->center_on_scale;
+
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
@@ -547,7 +589,7 @@ static void draw_all_container(const Container_t *container, Bounds_t base_bound
     if ( !container->enabled )
         return;
 
-    base_bounds.x += container->bounds.x;
+    base_bounds.x += container->bounds.x + container->align_content_offset_x + container->viewport_x;
     base_bounds.y += container->bounds.y + container->align_content_offset_y + container->viewport_y;
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -583,10 +625,6 @@ void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, const 
     render_set_bg_gradient(primary_color, secondary_color, type);
 }
 
-void ui_sample_bg_colors_from_image(const unsigned char *bytes, const int length) {
-    render_sample_bg_colors_from_image(bytes, length);
-}
-
 Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
 
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y) {
@@ -603,10 +641,12 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
     double parent_x = 0, parent_y = 0;
     const Container_t *parent = container;
     while ( parent != NULL ) {
-        parent_x += parent->bounds.x;
+        parent_x += parent->bounds.x + parent->align_content_offset_x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
-        if ( include_viewport_offset )
+        if ( include_viewport_offset ) {
             parent_y += parent->viewport_y;
+            parent_x += parent->viewport_x;
+        }
         parent = parent->parent;
     }
 
@@ -1548,6 +1588,23 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
         }
         drawable->draw_regions.num_regions = draw_regions->num_regions;
     }
+}
+
+void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length) {
+    if ( drawable == NULL )
+        error_abort("ui_drawable_set_image: Drawable is null");
+    if ( drawable->type != DRAW_TYPE_IMAGE )
+        error_abort("ui_drawable_set_image: Drawable is not an image");
+
+    render_destroy_texture(drawable->texture);
+    drawable->texture = NULL;
+
+    const Drawable_ImageData_t *data = drawable->custom_data;
+    drawable->texture = render_make_image(bytes, length, data->border_radius_em);
+    drawable->bounds.w = drawable->texture->width;
+    drawable->bounds.h = drawable->texture->height;
+
+    ui_reposition_drawable(ui, drawable);
 }
 
 void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {

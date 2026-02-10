@@ -7,12 +7,14 @@
 #include <GLFW/glfw3.h>
 
 #include "error.h"
-#include "renderer.h"
 #include "karaoke.h"
+#include "main_menu.h"
+#include "renderer.h"
+#include "ui.h"
 
 struct AppState {
     OWNING void *state;
-    Config_OpMode_t current_mode;
+    Config_OpMode_t current_mode, next_mode;
     // Whether the current mode finished loading
     bool finished_loading;
 };
@@ -24,9 +26,9 @@ static void error_callback(const int error, const char *description) {
 }
 
 void global_init(void) {
-    if (g_state != NULL )
+    if ( g_state != NULL )
         error_abort("global_init called more than once");
-    g_state = calloc(1, sizeof (*g_state));
+    g_state = calloc(1, sizeof(*g_state));
     if ( g_state == NULL )
         error_abort("Failed to allocate the global sate\n");
     g_state->finished_loading = true; // Default mode is NONE
@@ -51,25 +53,9 @@ void global_mode_switch(Config_OpMode_t mode) {
     if ( !g_state->finished_loading )
         printf("global_mode_switch: The current mode hasn't finished loading yet, weird shit could happen\n");
 
-    if ( g_state->current_mode == APP_MODE_KARAOKE ) {
-        karaoke_finish((Karaoke_t *)g_state->state);
-    } else if ( g_state->current_mode == APP_MODE_MENU ) {
-        // TODO
-    }
-
-    if ( g_state->state != NULL ) {
-        free(g_state->state);
-        g_state->state = NULL;
-    }
-
-    g_state->current_mode = mode;
-    g_state->finished_loading = false;
-
-    if ( mode == APP_MODE_KARAOKE ) {
-        g_state->state = karaoke_init();
-    } else if ( mode == APP_MODE_MENU ) {
-        // TODO
-    }
+    g_state->next_mode = mode;
+    if ( g_state->current_mode == APP_MODE_NONE )
+        global_update();
 }
 
 AppStatus_t global_load() {
@@ -89,7 +75,13 @@ AppStatus_t global_load() {
         }
         return initialized;
     } else if ( g_state->current_mode == APP_MODE_MENU ) {
-        // TODO
+        MainMenu_t *menu = g_state->state;
+        AppStatus_t status = menu_load_loop(menu);
+        if ( status == APP_STATUS_OK ) {
+            menu_setup(menu);
+            g_state->finished_loading = true;
+        }
+        return status;
     }
 
     return APP_STATUS_OK;
@@ -106,7 +98,8 @@ AppStatus_t global_loop() {
         Karaoke_t *karaoke = g_state->state;
         status = karaoke_loop(karaoke);
     } else if ( g_state->current_mode == APP_MODE_MENU ) {
-        // TODO
+        MainMenu_t *menu = g_state->state;
+        status = menu_loop(menu);
     }
 
     return status;
@@ -122,4 +115,47 @@ bool global_mode_finished_loading() {
     if ( g_state == NULL )
         error_abort("global_mode_finished_loading: state is null. Call global_init first");
     return g_state->finished_loading;
+}
+
+void global_update() {
+    if ( g_state == NULL )
+        error_abort("global_update: state is null. Call global_init first");
+
+    if ( g_state->next_mode != APP_MODE_NONE ) {
+        if ( g_state->current_mode == APP_MODE_KARAOKE ) {
+            karaoke_finish(g_state->state);
+        } else if ( g_state->current_mode == APP_MODE_MENU ) {
+            menu_finish(g_state->state);
+        }
+
+        if ( g_state->state != NULL ) {
+            free(g_state->state);
+            g_state->state = NULL;
+        }
+        const Config_OpMode_t mode = g_state->next_mode;
+
+        g_state->current_mode = mode;
+        g_state->finished_loading = false;
+
+        if ( mode == APP_MODE_KARAOKE ) {
+            g_state->state = karaoke_init();
+        } else if ( mode == APP_MODE_MENU ) {
+            g_state->state = menu_init();
+        }
+
+        g_state->next_mode = APP_MODE_NONE;
+    }
+}
+
+void etsuko_setup_version(Ui_t *ui) {
+    Drawable_t *version_text =
+        ui_make_text(ui,
+                     &(Drawable_TextData_t){
+                         .text = "etsuko v" VERSION,
+                         .font_type = FONT_UI,
+                         .em = 0.8,
+                         .color = {255, 255, 255, 255},
+                     },
+                     ui_root_container(ui), &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
+    ui_drawable_set_alpha_immediate(version_text, 128);
 }

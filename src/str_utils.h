@@ -65,6 +65,14 @@ bool str_is_empty(const char *str);
  */
 int str_replace_char(char *str, char old_c, char new_c);
 /**
+ * Compares the two strings like strcmp would do.
+ * If one of the strings are NULL but the other isn't, it returns false. if both are NULL, it returns true.
+ * If the length of one is different than the other, it returns false.
+ * Otherwise, it runs strcmp.
+ * No it is not effective.
+ */
+bool str_equals(const char *a, const char *b);
+/**
  * Compares two strings byte by byte, up to the length of the string on the
  * right side.
  * same as str_equals_sized(left, right, strlen(right))

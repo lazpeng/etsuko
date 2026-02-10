@@ -48,7 +48,7 @@ static Config_t *get_default_config(void) {
     config->draw_lyric_shadow = true;
     config->show_loading_screen = true;
     config->enlarge_active_line = true;
-    config->op_mode = APP_MODE_KARAOKE;
+    config->op_mode = APP_MODE_MENU;
     config->enable_dynamic_fill = true;
     config->enable_reading_hints = true;
     config->enable_pulse_effect = true;

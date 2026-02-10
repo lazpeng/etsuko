@@ -25,6 +25,8 @@ typedef enum AppStatus_t {
     APP_STATUS_LOADING,
 } AppStatus_t;
 
+struct Ui_t;
+
 // Switch the operating mode for the application. This includes finishing the execution and freeing up the resources of the current
 // running mode, if there's any
 void global_mode_switch(Config_OpMode_t mode);
@@ -36,5 +38,9 @@ AppStatus_t global_loop();
 Config_OpMode_t global_active_mode();
 // Whether the current selected mode has finished loading
 bool global_mode_finished_loading();
+// Actually runs the stuff because if you switch modes mid frame, bad things can happen
+void global_update();
+// Setup the version string on the top right
+void etsuko_setup_version(struct Ui_t *ui);
 
 #endif // ETSUKO_ETSUKO_H

@@ -647,7 +647,7 @@ void render_clear(void) {
     glClear(GL_COLOR_BUFFER_BIT);
 
     if ( g_renderer->bg_type == BACKGROUND_GRADIENT ) {
-        if ( g_renderer->bg_texture == NULL ) {
+        if ( g_renderer->bg_texture == NULL || g_renderer->bg_texture->id == 0 ) {
             g_renderer->bg_texture = internal_create_gradient_background_texture();
         }
         static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
@@ -891,7 +891,7 @@ static float calculate_color_luminance(const Color_t *color) {
     return 0.299f * (float)color->r + 0.587f * (float)color->g + 0.114f * (float)color->b;
 }
 
-void render_sample_bg_colors_from_image(const unsigned char *bytes, const int length) {
+void render_sample_bg_colors_from_image(const unsigned char *bytes, const int length, Color_t colors[5]) {
     int width, height, channels;
     unsigned char *image_data = stbi_load_from_memory(bytes, length, &width, &height, &channels, 3);
 
@@ -1022,18 +1022,24 @@ void render_sample_bg_colors_from_image(const unsigned char *bytes, const int le
     }
 
     for ( int i = 0; i < K; i++ ) {
-        float *r = &g_renderer->dynamic_bg_colors[i][0];
-        float *g = &g_renderer->dynamic_bg_colors[i][1];
-        float *b = &g_renderer->dynamic_bg_colors[i][2];
-        deconstruct_colors_opengl(&sorted[i].color, r, g, b, NULL);
+        colors[i] = sorted[i].color;
     }
-    // Mark as initialized
-    g_renderer->dynamic_bg_colors_initialized = true;
 
     // Cleanup
     free(assignments);
     free(samples);
     stbi_image_free(image_data);
+}
+
+void render_set_bg_colors(const Color_t colors[5]) {
+    for ( int i = 0; i < K; i++ ) {
+        float *r = &g_renderer->dynamic_bg_colors[i][0];
+        float *g = &g_renderer->dynamic_bg_colors[i][1];
+        float *b = &g_renderer->dynamic_bg_colors[i][2];
+        deconstruct_colors_opengl(&colors[i], r, g, b, NULL);
+    }
+    // Mark as initialized
+    g_renderer->dynamic_bg_colors_initialized = true;
 }
 
 void render_set_blend_mode(const BlendMode_t mode) {
@@ -1347,11 +1353,19 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         error_abort("Warning: Attempting to draw invalid texture\n");
     }
 
+    const float original_w = at->w == 0 ? (float)texture->width : (float)at->w;
+    const float original_h = at->w == 0 ? (float)texture->height : (float)at->h;
     const float scale = MAX(0.f, 1.f + (float)at->scale_mod);
     const float w = (float)(at->w == 0 ? (float)texture->width : at->w) * scale;
     const float h = (float)(at->w == 0 ? (float)texture->height : at->h) * scale;
 
-    if ( at->x + w < 0 || at->x > g_renderer->viewport.w || at->y + h < 0 || at->y > g_renderer->viewport.h ) {
+    double x = at->x, y = at->y;
+    if ( scale != 1.f && opts->center_on_scale ) {
+        x -= (w - original_w) / 2.f;
+        y -= (h - original_h) / 2.f;
+    }
+
+    if ( x + w < 0 || x > g_renderer->viewport.w || y + h < 0 || y > g_renderer->viewport.h ) {
         return;
     }
 
@@ -1392,7 +1406,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
     glUniform1i(g_renderer->tex_use_bounds_loc, 1);
-    glUniform4f(g_renderer->tex_bounds_loc, (float)at->x, (float)at->y, w, h);
+    glUniform4f(g_renderer->tex_bounds_loc, (float)x, (float)y, w, h);
     glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
     glUniform1f(g_renderer->tex_color_mod_loc, opts->color_mod);
     glUniform1i(g_renderer->tex_num_regions_loc, num_draw_regions);
@@ -1409,10 +1423,10 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindVertexArray(texture->vao);
     glBindBuffer(GL_ARRAY_BUFFER, texture->vbo);
 
-    const Bounds_t final_bounds = {.x = at->x, .y = at->y, .w = (int32_t)w, .h = (int32_t)h};
+    const Bounds_t final_bounds = {.x = x, .y = y, .w = (int32_t)w, .h = (int32_t)h};
     if ( texture_needs_reconfigure(texture, &final_bounds) ) {
         float vertices[QUAD_VERTICES_SIZE] = {0};
-        create_quad_vertices((float)at->x, (float)at->y, w, h, vertices);
+        create_quad_vertices((float)x, (float)y, w, h, vertices);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
         mark_texture_configured(texture, &final_bounds);
     }
@@ -1432,6 +1446,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         bounds.scale_mod += region->relative_scale;
         // Also compensate for the scale by centering the texture by the amount scaled
         // relative to the center of the region
+        // TODO: Remove this and use the texture opt
         const float center_x = (region->x0_perc + region->x1_perc) / 2.f;
         const float center_y = (region->y0_perc + region->y1_perc) / 2.f;
         bounds.x -= bounds.w * region->relative_scale * center_x;

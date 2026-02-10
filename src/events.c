@@ -3,6 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef __EMSCRIPTEN__
+#define SCROLL_MODIFIER (50)
+#else
+#define SCROLL_MODIFIER (10)
+#endif
+
 static bool g_quit = false;
 static bool g_window_resized = false;
 static double g_mouse_scroll = 0;
@@ -120,7 +126,7 @@ bool events_get_mouse_click(int32_t *x, int32_t *y) {
     return g_mouse_clicked;
 }
 
-double events_get_mouse_scrolled(void) { return g_mouse_scroll; }
+double events_get_mouse_scrolled(void) { return g_mouse_scroll * SCROLL_MODIFIER; }
 
 bool events_key_was_pressed(const Key_t key) { return g_key_presses[key]; }
 

@@ -33,6 +33,7 @@ add_executable(etsuko src/main.c
         src/renderer.h
         src/renderer.c
         src/main_menu.c
+        src/json.c
         src/remote_repository.c
         src/contrib/stb_image.c
         src/contrib/stb_truetype.c

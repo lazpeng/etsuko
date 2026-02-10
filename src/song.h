@@ -5,6 +5,7 @@
 #ifndef ETSUKO_SONG_H
 #define ETSUKO_SONG_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "constants.h"
@@ -27,11 +28,7 @@ typedef struct Song_LineTiming_t {
 } Song_LineTiming_t;
 
 // Tells how to align the lyric line relative to its container
-typedef enum Song_LineAlignment_t {
-    SONG_LINE_LEFT = 0,
-    SONG_LINE_CENTER,
-    SONG_LINE_RIGHT
-} Song_LineAlignment_t;
+typedef enum Song_LineAlignment_t { SONG_LINE_LEFT = 0, SONG_LINE_CENTER, SONG_LINE_RIGHT } Song_LineAlignment_t;
 
 // Background type that can be specified in the song
 typedef enum Song_BgType_t {
@@ -52,8 +49,8 @@ typedef struct Song_LineReading_t {
 } Song_LineReading_t;
 
 /**
- * Represents an entire line of lyric. Not to be confused with a visual line, as these are broken dynamically depending on screen size.
- * Instead this maps to individual lines defined in the song file
+ * Represents an entire line of lyric. Not to be confused with a visual line, as these are broken dynamically depending on screen
+ * size. Instead this maps to individual lines defined in the song file
  */
 typedef struct Song_Line_t {
     OWNING char *full_text;
@@ -100,5 +97,30 @@ void song_load(const char *filename, const char *src, int src_size);
 Song_t *song_get(void);
 // Frees the current active song
 void song_destroy(void);
+
+typedef struct MenuSong_t {
+    OWNING char *id, *name, *artist, *album;
+    OWNING char *album_art_path;
+    OWNING char *tags;
+    OWNING char *language;
+    int year;
+} MenuSong_t;
+
+typedef struct MenuAlbum_t {
+    OWNING char *name;
+    OWNING Vector_t *songs; // of MenuSong_t
+} MenuAlbum_t;
+
+typedef struct MenuArtist_t {
+    OWNING char *name;
+    OWNING HashMap_t *albums; // of MenuAlbum_t
+} MenuArtist_t;
+
+/**
+ * Parses a json string with a list of songs to be displayed on the main menu and returns a hashmap with an entry
+ * for every artist. The key is the artist name and the value is a MenuArtist_t
+ */
+HashMap_t *menu_songs_parse(const char *src, int src_size);
+void menu_songs_destroy(HashMap_t *map);
 
 #endif // ETSUKO_SONG_H

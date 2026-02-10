@@ -18,7 +18,6 @@
 
 struct Karaoke_t {
     Ui_t *ui;
-    Drawable_t *version_text;
     Drawable_t *song_name_text;
     Drawable_t *song_artist_album_text;
     Drawable_t *elapsed_time_text;
@@ -27,6 +26,7 @@ struct Karaoke_t {
     Drawable_t *song_progressbar;
     Drawable_t *play_button;
     Drawable_t *pause_button;
+    Drawable_t *back_button;
     Container_t *left_container;
     Container_t *right_container;
     Container_t *song_info_container;
@@ -187,7 +187,9 @@ static void on_album_art_loaded(const Resource_t *res) {
     if ( res->status == LOAD_ERROR )
         error_abort("Failed to load album art resource");
 
-    ui_sample_bg_colors_from_image(res->buffer->data, (int)res->buffer->downloaded_bytes);
+    Color_t colors[5];
+    render_sample_bg_colors_from_image(res->buffer->data, (int)res->buffer->downloaded_bytes, colors);
+    render_set_bg_colors(colors);
 
     Karaoke_t *state = res->custom_data;
     state->album_art_loaded = true;
@@ -338,16 +340,12 @@ void karaoke_setup(Karaoke_t *state) {
                                                CONTAINER_NONE);
 
     // Version string
-    state->version_text = ui_make_text(state->ui,
-                                       &(Drawable_TextData_t){
-                                           .text = "etsuko v" VERSION,
-                                           .font_type = FONT_UI,
-                                           .em = 0.8,
-                                           .color = {255, 255, 255, 255},
-                                       },
-                                       ui_root_container(state->ui),
-                                       &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
-    ui_drawable_set_alpha_immediate(state->version_text, 128);
+    etsuko_setup_version(state->ui);
+    // Make the back (to menu) "button"
+    state->back_button = ui_make_text(
+        state->ui, &(Drawable_TextData_t){.text = "< Back", .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .em = 0.8},
+        ui_root_container(state->ui), &(Layout_t){.offset_x = 0.01, .offset_y = 0.01, .flags = LAYOUT_PROPORTIONAL_POS});
+    ui_drawable_set_alpha_immediate(state->back_button, 128);
 
     // Album art
     state->album_image = ui_make_image(
@@ -357,21 +355,11 @@ void karaoke_setup(Karaoke_t *state) {
             .draw_shadow = config_get()->draw_album_art_shadow,
         },
         state->left_container,
-        &(Layout_t){
-            .height = 0.6,
-            .width = 0.6,
-            .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-            .max_width = {
-                .type = CONSTRAINT_RELATIVE,
-                .relative_to = &state->left_container->bounds,
-                .value = 0.6
-            },
-            .max_height = {
-                .type = CONSTRAINT_RELATIVE,
-                .relative_to = &state->left_container->bounds,
-                .value = 0.6
-            }
-        });
+        &(Layout_t){.height = 0.6,
+                    .width = 0.6,
+                    .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
+                    .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->left_container->bounds, .value = 0.6},
+                    .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->left_container->bounds, .value = 0.6}});
     repo_resource_buffer_destroy(state->res_album_art_buffer);
 
     // Song info container
@@ -595,7 +583,7 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
     ui_reposition_container(state->ui, state->left_container);
 }
 
-static void check_user_input(const Karaoke_t *state) {
+static void handle_user_input(const Karaoke_t *state) {
     if ( events_key_was_pressed(KEY_SPACE) ) {
         toggle_pause(state);
     }
@@ -635,6 +623,10 @@ static void check_user_input(const Karaoke_t *state) {
     if ( ui_mouse_hovering_container(state->lyrics_view->container, NULL, NULL, NULL) ) {
         ui_ex_lyrics_view_on_scroll(state->lyrics_view, events_get_mouse_scrolled());
     }
+
+    if ( ui_mouse_clicked_drawable(state->back_button, 0, NULL, NULL, NULL) ) {
+        global_mode_switch(APP_MODE_MENU);
+    }
 }
 
 AppStatus_t karaoke_loop(const Karaoke_t *state) {
@@ -644,7 +636,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     audio_loop();
 
     // Check for user inputs
-    check_user_input(state);
+    handle_user_input(state);
 
     ui_begin_loop(state->ui);
     // Recalculate dynamic elements
@@ -664,6 +656,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     ui_draw(state->ui);
     ui_end_loop();
 
+    global_update();
     return APP_STATUS_OK;
 }
 
