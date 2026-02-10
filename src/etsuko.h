@@ -42,5 +42,7 @@ bool global_mode_finished_loading();
 void global_update();
 // Setup the version string on the top right
 void etsuko_setup_version(struct Ui_t *ui);
+// Change the address bar on the web build
+void etsuko_navigate(const char *relative_address);
 
 #endif // ETSUKO_ETSUKO_H

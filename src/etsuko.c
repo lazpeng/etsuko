@@ -159,3 +159,21 @@ void etsuko_setup_version(Ui_t *ui) {
                      ui_root_container(ui), &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
     ui_drawable_set_alpha_immediate(version_text, 128);
 }
+
+#ifdef __EMSCRIPTEN__
+
+#include <emscripten.h>
+
+EM_JS(void, navigate_to_song, (const char* url), {
+    const urlStr = UTF8ToString(url);
+    window.history.pushState({}, '', urlStr);
+});
+#endif
+
+void etsuko_navigate(const char *relative_address) {
+#ifdef __EMSCRIPTEN__
+    navigate_to_song(relative_address);
+#else
+    printf("etsuko_navigate: stub\n");
+#endif
+}

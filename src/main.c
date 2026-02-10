@@ -36,9 +36,11 @@ static bool main_loop() {
     return global_loop() == APP_STATUS_OK;
 }
 
+#ifdef __EMSCRIPTEN__
 static void main_loop_void() {
     main_loop();
 }
+#endif
 
 int main(void) {
 #ifdef __EMSCRIPTEN__

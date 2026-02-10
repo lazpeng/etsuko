@@ -131,6 +131,8 @@ MainMenu_t *menu_init() {
     menu->menu_artists = map_init();
     menu->album_art_drawables = map_init();
 
+    render_set_window_title("Etsuko");
+
     return menu;
 }
 
@@ -363,6 +365,10 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
         asprintf(&file, "%s.txt", key);
         str_replace_char(file, '_', ' ');
         config->song_file = file;
+        char *addr;
+        asprintf(&addr, "/?song=%s", key);
+        etsuko_navigate(addr);
+        free(addr);
 
         global_mode_switch(APP_MODE_KARAOKE);
     }
