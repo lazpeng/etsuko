@@ -30,6 +30,7 @@ static void try_load_config_web(Config_t *config) {
 
         asprintf(&config->song_file, "%s.txt", song);
         str_replace_char(config->song_file, '_', ' ');
+        config->op_mode = APP_MODE_KARAOKE;
     } // else use the default config (for now)
 }
 
