@@ -5,6 +5,7 @@
 #ifndef ETSUKO_STR_UTILS_H
 #define ETSUKO_STR_UTILS_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -18,6 +19,10 @@ typedef struct StrBuffer_t {
     size_t len, cap;
 } StrBuffer_t;
 
+/**
+ * Skips whitespace from the given start index. Returns the number of bytes skipped
+ */
+int32_t str_skip_whitespace(const char *src, int32_t start, int32_t max_len);
 /**
  * Finds the byte index of the first occurrence of a given character in a string,
  * starting from the given index.

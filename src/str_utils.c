@@ -9,6 +9,19 @@
 #define MAX_STRLEN (2048)
 #define STR_BUF_START_CAP (128)
 
+int32_t str_skip_whitespace(const char *src, int32_t start, int32_t max_len) {
+    int32_t idx = start;
+    while ( idx < max_len ) {
+        int32_t tmp_idx = idx;
+        int32_t c = str_u8_next(src, (size_t)max_len, &tmp_idx);
+        if ( c == ' ' || c == '\n' || c == '\n' )
+            idx = tmp_idx;
+        else break;
+    }
+
+    return idx - start;
+}
+
 int32_t str_find(const char *src, const char c, const int32_t start, int32_t max_len) {
     const int32_t size = (int32_t)strnlen(src, MAX_STRLEN);
     if ( max_len < 0 )
