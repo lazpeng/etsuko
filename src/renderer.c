@@ -734,7 +734,8 @@ void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w
 }
 
 int32_t render_measure_pixels_from_em(const double em) {
-    const double scale = MIN(g_renderer->viewport.w / DEFAULT_WIDTH, g_renderer->viewport.h / DEFAULT_HEIGHT);
+    // i have no idea if this is right
+    const double scale = (g_renderer->viewport.w / DEFAULT_WIDTH + g_renderer->viewport.h / DEFAULT_HEIGHT) / 2.0;
     const double rem = round(DEFAULT_PT * scale);
     const double pixels = em * rem;
     return (int32_t)pixels;
