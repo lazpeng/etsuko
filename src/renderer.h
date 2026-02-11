@@ -13,6 +13,7 @@
 #define MAX_DRAW_SUB_REGIONS (4)
 // The max number of sub regions that can be scaled at the same time
 #define MAX_SCALE_SUB_REGIONS (20)
+#define BORDER_RADIUS_AUTO (-1.f)
 
 /**
  * Represents a texture uploaded to the GPU using OpenGL, with some cached information about it
@@ -22,7 +23,7 @@ typedef struct Texture_t {
     unsigned int id;
     // Dimensions in pixels
     int32_t width, height;
-    // Optional border radius used when rendering the texture
+    // Optional border radius used when rendering the texture. If the border radius is <0, the default (min(h,w)/2) is used
     float border_radius;
     // Internal vertex array object and buffer object pre-configured and exclusive to this texture
     unsigned int vbo, vao;

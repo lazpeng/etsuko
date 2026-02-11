@@ -714,7 +714,6 @@ void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w
     int32_t prev_c = -1;
 
     while ( i < len ) {
-        // U8_NEXT(text, i, len, c);
         c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
@@ -1126,7 +1125,6 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     int32_t prev_c = -1;
 
     while ( i < len ) {
-        // U8_NEXT(text, i, len, c);
         c = str_u8_next(text, len, &i);
         if ( c < 0 )
             continue;
@@ -1288,6 +1286,8 @@ Texture_t *render_make_image(const unsigned char *bytes, const int length, const
 
     if ( border_radius_em > 0 ) {
         texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
+    } else if ( border_radius_em < 0 ) {
+        texture->border_radius = BORDER_RADIUS_AUTO;
     }
 
     return texture;
@@ -1298,18 +1298,22 @@ Texture_t *render_make_dummy_image(const double border_radius_em) {
 
     if ( border_radius_em > 0 ) {
         texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
+    } else if ( border_radius_em < 0 ) {
+        texture->border_radius = BORDER_RADIUS_AUTO;
     }
 
     return texture;
 }
 
-void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color,
-                              const float border_radius) {
+void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius) {
     if ( bounds->w <= 0 ) {
         return;
     }
 
     set_shader_program(g_renderer->rect_shader);
+
+    if ( border_radius < 0.f )
+        border_radius = (float)MIN(bounds->w, bounds->h) * 0.5f;
 
     float r, g, b, a;
     deconstruct_colors_opengl(color, &r, &g, &b, &a);
@@ -1402,7 +1406,12 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         erase_regions[i][3] = region->y1_perc;
     }
 
-    glUniform1f(g_renderer->tex_border_radius_loc, texture->border_radius);
+    // auto border radius using half of the smaller axis
+    float border_radius = texture->border_radius;
+    if ( border_radius < 0.f ) {
+        border_radius = MIN(w,h) * 0.5f;
+    }
+    glUniform1f(g_renderer->tex_border_radius_loc, border_radius);
     glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
     glUniform2f(g_renderer->tex_rect_size_loc, w, h);
     glUniform1i(g_renderer->tex_use_bounds_loc, 1);

@@ -247,7 +247,7 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
         if ( state->loading_progress_bar == NULL ) {
             const Drawable_ProgressBarData_t data = {
                 .progress = 0,
-                .border_radius_em = 0.8,
+                .border_radius_em = BORDER_RADIUS_AUTO,
                 .fg_color = (Color_t){.r = 200, .g = 200, .b = 200, .a = 255},
                 .bg_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 255},
             };
@@ -394,7 +394,7 @@ void karaoke_setup(Karaoke_t *state) {
     state->song_progressbar = ui_make_progressbar(state->ui,
                                                   &(Drawable_ProgressBarData_t){
                                                       .progress = 0,
-                                                      .border_radius_em = 0.3,
+                                                      .border_radius_em = BORDER_RADIUS_AUTO,
                                                       .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
                                                       .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 50},
                                                   },

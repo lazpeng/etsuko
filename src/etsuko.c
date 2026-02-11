@@ -166,8 +166,8 @@ void etsuko_setup_version(Ui_t *ui) {
 
 EM_JS(void, navigate_to_song, (const char* url), {
     const urlStr = UTF8ToString(url);
-    window.history.pushState({}, '', urlStr);
-});
+    window.history.pushState({}, "", urlStr);
+})
 #endif
 
 void etsuko_navigate(const char *relative_address) {
