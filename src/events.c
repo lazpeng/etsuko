@@ -63,7 +63,11 @@ static void mouse_button_callback(GLFWwindow *window, const int button, const in
     }
 }
 
-static void cursor_position_callback(GLFWwindow *, const double x_pos, const double y_pos) {
+static void cursor_position_callback(GLFWwindow *window, const double x_pos, const double y_pos) {
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    if ( x_pos < 0.0 || x_pos > width || y_pos < 0.0 || y_pos > height )
+        return;
     g_mouse_x = (int32_t)(x_pos * g_window_pixel_scale);
     g_mouse_y = (int32_t)(y_pos * g_window_pixel_scale);
 }
