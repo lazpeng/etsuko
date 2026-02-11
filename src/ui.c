@@ -421,6 +421,7 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
 
     double progress = animation->elapsed / animation->duration;
 
+    // TODO: Animate the x axis too
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
         const double y_delta = data->to_y - data->from_y;

@@ -40,7 +40,7 @@ typedef struct {
     bool enable_reading_hints;
     // Enable a "jumping" or pulsing effect that plays together with the dynamic fill effect. Requires dynamic fill to work
     bool enable_pulse_effect;
-    // Global time scale (TODO: doesn't apply to audio)
+    // Global time scale, generally to debug animations (it applies to audio, and it's weird. use only for debugging)
     double time_scale;
 } Config_t;
 
