@@ -1,5 +1,7 @@
 #include "events.h"
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -108,7 +110,7 @@ void events_frame_end(void) {
     clear_key_presses();
 }
 
-double events_get_delta_time(void) { return g_delta_time; }
+double events_get_delta_time(void) { return g_delta_time * config_get()->time_scale; }
 double events_get_elapsed_time(void) { return glfwGetTime(); }
 
 void events_get_mouse_position(int32_t *x, int32_t *y) {
