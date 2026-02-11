@@ -267,10 +267,10 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         double draw_x, draw_y;
         ui_get_drawable_canon_pos(drawable, &draw_x, &draw_y);
 
-        max_x = fmax(max_x, draw_x + drawable->bounds.w * (1.0 + drawable->bounds.scale_mod));
+        max_x = fmax(max_x, draw_x + drawable->bounds.w);// * (1.0 + drawable->bounds.scale_mod));
         min_x = fmin(min_x, draw_x);
 
-        max_y = fmax(max_y, draw_y + drawable->bounds.h * (1.0 + drawable->bounds.scale_mod));
+        max_y = fmax(max_y, draw_y + drawable->bounds.h);// * (1.0 + drawable->bounds.scale_mod));
         min_y = fmin(min_y, draw_y);
     }
 
@@ -423,10 +423,9 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
 
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
-        const double y_delta = fabs(data->to_y - data->from_y);
+        const double y_delta = data->to_y - data->from_y;
         if ( fabs(y_delta) > 0.01 ) {
-            const double amount = y_delta * progress - y_delta;
-            final_bounds->y -= amount;
+            final_bounds->y = data->from_y + y_delta * progress;
         }
     } else {
         animation->active = false;
@@ -1454,6 +1453,8 @@ void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
     position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
+
+    // printf("old_x old_y %.2f,%.2f new_x new_y %.2f,%.2f\n", old_x, old_y, drawable->bounds.x, drawable->bounds.y);
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
         Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);

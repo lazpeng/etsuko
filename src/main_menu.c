@@ -14,8 +14,13 @@
 #include <string.h>
 
 #define ALBUM_SCALE_DURATION (0.2)
+#define ALBUM_SCALE_DOWN_DURATION (0.1)
 #define ALBUM_SCALE_FACTOR (1.2)
 #define MAX_SONGS_PER_ROW (4)
+#define SONG_TITLE_REGULAR_OFFSET_Y (0.01)
+#define SONG_TITLE_SCALED_OFFSET_Y (0.035)
+#define SONG_ALBUM_REGULAR_OFFSET_Y (0.005)
+#define SONG_ALBUM_SCALED_OFFSET_Y (0.01)
 
 // TODO: This shit shouldn't be here
 typedef struct GridLayoutInfo_t {
@@ -185,7 +190,7 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE |
                  LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
         .relative_to = image,
-        .offset_y = 0.01,
+        .offset_y = SONG_TITLE_REGULAR_OFFSET_Y,
     };
     const Drawable_TextData_t data = {.text = song->name, .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .em = 0.7};
     Drawable_t *text = ui_make_text(menu->ui, &data, menu->container, &layout);
@@ -196,6 +201,10 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
+    const Animation_EaseTranslationData_t translation_data = {
+        .duration = ALBUM_SCALE_DURATION
+    };
+    ui_animate_translation(text, &translation_data);
 
     return text;
 }
@@ -223,6 +232,10 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
+    const Animation_EaseTranslationData_t translation_data = {
+        .duration = ALBUM_SCALE_DURATION
+    };
+    ui_animate_translation(text, &translation_data);
 
     free(str);
     return text;
@@ -322,7 +335,7 @@ static void iterate_pending_art(const char *key, void *data, void *userdata) {
     AlbumArtData_t *art = data;
 
     if ( art->state == ART_PENDING_DRAW ) {
-        SongEntryDrawables_t *entry = map_get(menu->album_art_drawables, key);
+        const SongEntryDrawables_t *entry = map_get(menu->album_art_drawables, key);
         if ( entry == NULL )
             error_abort("Failed to find drawable for album art");
         Drawable_t *image = entry->image;
@@ -333,7 +346,7 @@ static void iterate_pending_art(const char *key, void *data, void *userdata) {
 
 static void iterate_drawables_for_input(const char *key, void *data, void *userdata) {
     MainMenu_t *menu = userdata;
-    SongEntryDrawables_t *entry = data;
+    const SongEntryDrawables_t *entry = data;
     Drawable_t *image = entry->image;
 
     if ( ui_mouse_hovering_drawable(image, 0, NULL, NULL, NULL) ) {
@@ -343,14 +356,29 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
             ui_drawable_set_scale_factor(entry->image, ALBUM_SCALE_FACTOR);
             ui_drawable_set_scale_factor(entry->title, ALBUM_SCALE_FACTOR);
             ui_drawable_set_scale_factor(entry->album, ALBUM_SCALE_FACTOR);
+
+            // Change the layout slightly so the text gets out of the way of the enlarged image
+            // this is unfortunately necessary because the ui design is shit
+            // change the title only because it's the one right below. the rest should reposition accordingly
+            entry->title->layout.offset_y = SONG_TITLE_SCALED_OFFSET_Y;
+            ui_reposition_drawable(menu->ui, entry->title);
+            // also change the album to keep a uniform spacing when scaled
+            entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
+            ui_reposition_drawable(menu->ui, entry->album);
         }
     } else {
         if ( menu->current_focused_image == image ) {
             menu->current_focused_image = NULL;
+
+            ui_drawable_set_scale_factor_dur(entry->image, 1.f, ALBUM_SCALE_DOWN_DURATION);
+            ui_drawable_set_scale_factor_dur(entry->title, 1.f, ALBUM_SCALE_DOWN_DURATION);
+            ui_drawable_set_scale_factor_dur(entry->album, 1.f, ALBUM_SCALE_DOWN_DURATION);
+
+            entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
+            ui_reposition_drawable(menu->ui, entry->title);
+            entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
+            ui_reposition_drawable(menu->ui, entry->album);
         }
-        ui_drawable_set_scale_factor(entry->image, 1.f);
-        ui_drawable_set_scale_factor(entry->title, 1.f);
-        ui_drawable_set_scale_factor(entry->album, 1.f);
     }
 
     if ( ui_mouse_clicked_drawable(image, 0, NULL, NULL, NULL) ) {
