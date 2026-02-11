@@ -50,15 +50,6 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
             resource->on_resource_loaded(resource);
         }
     }
-    if ( resource->buffer->total_bytes == 0 ) {
-        printf("Fatal: on_fetch_success: total bytes for the resource '%s' returned 0\n", resource->original_filename);
-    }
-    if ( resource->buffer->downloaded_bytes > resource->buffer->total_bytes ) {
-        // error_abort("Fatal: on_fetch_success: downloaded bytes exceed total bytes reported by the server");
-    }
-    if ( resource->buffer->downloaded_bytes != resource->buffer->total_bytes ) {
-        // error_abort("Maybe wrong: on_fetch_success: downloaded bytes different than reported by the server in total bytes");
-    }
 
     resource->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
