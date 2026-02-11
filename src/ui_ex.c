@@ -32,6 +32,7 @@
 #define SCALE_REGION_UP_DURATION (0.15)
 #define SCALE_REGION_DOWN_MIN_DURATION (0.2)
 #define SCALE_REGION_TARGET_SCALE (0.1)
+#define FILL_ANIM_MIN_DURATION (0.2)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
@@ -463,7 +464,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
-    const double fill_duration = MAX(0.1, last_segment_remaining);
+    const double fill_duration = MAX(FILL_ANIM_MIN_DURATION, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
 }
 
