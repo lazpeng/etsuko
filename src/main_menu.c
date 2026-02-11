@@ -136,7 +136,7 @@ MainMenu_t *menu_init() {
     menu->menu_artists = map_init();
     menu->album_art_drawables = map_init();
 
-    render_set_window_title("Etsuko");
+    render_set_window_title("etsuko");
 
     return menu;
 }
