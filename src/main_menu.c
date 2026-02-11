@@ -302,7 +302,6 @@ static void update_background(const MainMenu_t *menu) {
         return;
 
     ui_set_bg_gradient(0, 0, BACKGROUND_AM_LIKE_GRADIENT);
-    // ui_sample_bg_colors_from_image(art->image_data, (int)art->image_data_size);
     render_set_bg_colors(&art->sampled_colors[0]);
 }
 
@@ -311,7 +310,6 @@ void menu_setup(MainMenu_t *menu) {
     update_background(menu);
     etsuko_setup_version(menu->ui);
 
-    // Create a container that starts at 25% of the way from the top to align the rest below it
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
     menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
@@ -417,7 +415,6 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
 static void cleanup_album_art_data(const char *key, void *value, void *_) {
     AlbumArtData_t *data = value;
     if ( str_equals(key, NO_ART_KEY) ) {
-        // This one was manually allocated
         free(data->image_data);
     }
     // The other ones are owned by the Resource_t which is freed separately
