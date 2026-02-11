@@ -164,15 +164,16 @@ void etsuko_setup_version(Ui_t *ui) {
 
 #include <emscripten.h>
 
-EM_JS(void, navigate_to_song, (const char* url), {
-    const urlStr = UTF8ToString(url);
-    window.history.pushState({}, "", urlStr);
+EM_JS(void, navigate_to_song, (const char* url, const char *suffix), {
+    const urlString = UTF8ToString(url);
+    const suffixString = encodeURIComponent(UTF8ToString(suffix));
+    window.history.pushState({}, "", `${urlString}${suffixString}`);
 })
 #endif
 
-void etsuko_navigate(const char *relative_address) {
+void etsuko_navigate(const char *relative_address, const char *encoded_suffix) {
 #ifdef __EMSCRIPTEN__
-    navigate_to_song(relative_address);
+    navigate_to_song(relative_address, encoded_suffix);
 #else
     printf("etsuko_navigate: stub\n");
 #endif

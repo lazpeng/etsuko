@@ -391,10 +391,8 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
         asprintf(&file, "%s.txt", key);
         str_replace_char(file, '_', ' ');
         config->song_file = file;
-        char *addr;
-        asprintf(&addr, "/?song=%s", key);
-        etsuko_navigate(addr);
-        free(addr);
+        printf("file: %s\n", file);
+        etsuko_navigate("/?song=", key);
 
         global_mode_switch(APP_MODE_KARAOKE);
     }

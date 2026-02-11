@@ -625,7 +625,7 @@ static void handle_user_input(const Karaoke_t *state) {
     }
 
     if ( ui_mouse_clicked_drawable(state->back_button, 0, NULL, NULL, NULL) ) {
-        etsuko_navigate("/");
+        etsuko_navigate("/", "");
         global_mode_switch(APP_MODE_MENU);
     }
 }
