@@ -173,16 +173,18 @@ finish:
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
-    double w = layout->width, h = layout->height;
+    double w = layout->width, h = layout->height, padding_w = layout->padding_w, padding_h = layout->padding_h;
     if ( layout->width > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
             w = parent->bounds.w * w;
+            padding_w = parent->bounds.w * padding_w;
         }
     }
 
     if ( layout->height > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_H ) {
             h = parent->bounds.h * h;
+            padding_h = parent->bounds.h * padding_h;
         }
     }
 
@@ -193,12 +195,21 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_WIDTH ) {
             w = layout->relative_to_size->bounds.w * layout->width;
+            if ( layout->flags & LAYOUT_RELATION_WIDTH_APPLY_TO_PADDING ) {
+                padding_w = layout->relative_to_size->bounds.w * layout->padding_w;
+            }
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_HEIGHT ) {
             h = layout->relative_to_size->bounds.h * layout->height;
+            if ( layout->flags & LAYOUT_RELATION_HEIGHT_APPLY_TO_PADDING ) {
+                padding_h = layout->relative_to_size->bounds.h * layout->padding_h;
+            }
         }
     }
+
+    w += padding_w;
+    h += padding_h;
 
     const bool maintain_aspect_ratio = layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO;
     if ( maintain_aspect_ratio ) {

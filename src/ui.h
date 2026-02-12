@@ -49,6 +49,9 @@ typedef enum LayoutFlags_t {
     LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE = 1 << 19,
     LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE = 1 << 20,
     LAYOUT_PROPORTIONAL_POS_TO_RELATIVE = LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE | LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE,
+    LAYOUT_RELATION_HEIGHT_APPLY_TO_PADDING = 1 << 21,
+    LAYOUT_RELATION_WIDTH_APPLY_TO_PADDING = 1 << 22,
+    LAYOUT_RELATION_SIZE_APPLY_TO_PADDING = LAYOUT_RELATION_HEIGHT_APPLY_TO_PADDING | LAYOUT_RELATION_WIDTH_APPLY_TO_PADDING,
 } LayoutFlags_t;
 
 typedef enum SizeConstraintType_t {
@@ -67,6 +70,7 @@ typedef struct Layout_t {
     LayoutFlags_t flags;
     double offset_x, offset_y;
     double width, height;
+    double padding_w, padding_h;
     WEAK const Drawable_t *relative_to_size;
     WEAK const Drawable_t *relative_to;
     SizeConstraint_t min_width, max_width;

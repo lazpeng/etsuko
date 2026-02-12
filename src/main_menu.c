@@ -222,8 +222,9 @@ static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Draw
 
     Layout_t rect_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_SIZE,
-        .width = 1.5,
+        .width = 1.0,
         .height = 1.5,
+        .padding_w = 0.1,
         .relative_to_size = text,
     };
     if ( prev_pill != NULL ) {
