@@ -49,8 +49,6 @@ typedef enum LayoutFlags_t {
     LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE = 1 << 19,
     LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE = 1 << 20,
     LAYOUT_PROPORTIONAL_POS_TO_RELATIVE = LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE | LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE,
-    // Calculates all proportional sizing using the relative_to's bounds instead of the parent container's
-    LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE = 1 << 21,
 } LayoutFlags_t;
 
 typedef enum SizeConstraintType_t {

@@ -160,25 +160,16 @@ finish:
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
-    const Bounds_t *proportional_bounds = &parent->bounds;
-    if ( layout->flags & LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE ) {
-        if ( layout->relative_to_size == NULL ) {
-            printf("Warning: LAYOUT_PROPORTIONAL_SIZE_TO_RELATIVE is set but no relative_to_size has been assigned\n");
-        } else {
-            proportional_bounds = &layout->relative_to_size->bounds;
-        }
-    }
-
     double w = layout->width, h = layout->height;
     if ( layout->width > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
-            w = proportional_bounds->w * w;
+            w = parent->bounds.w * w;
         }
     }
 
     if ( layout->height > 0 ) {
         if ( layout->flags & LAYOUT_PROPORTIONAL_H ) {
-            h = proportional_bounds->h * h;
+            h = parent->bounds.h * h;
         }
     }
 
@@ -187,9 +178,8 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
             error_abort("Relative layout's parent is not the same as the container");
         }
 
-        if ( (layout->flags & LAYOUT_RELATIVE_TO_SIZE) == 0 ) {
-            puts("Warning: relative_to_size is set but no flag setting the "
-                 "relationship was passed.");
+        if ( (layout->flags & LAYOUT_RELATIVE_TO_SIZE) != 0 ) {
+            puts("Warning: relative_to_size is set but no flag setting the relationship was passed.");
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_WIDTH ) {
