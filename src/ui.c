@@ -606,7 +606,7 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
         ContainerAnimation_t *animation = container->animations->data[i];
 
         if ( animation->active ) {
-            const double progress = animation->elapsed / animation->duration;
+            const double progress = MIN(1.0, animation->elapsed / animation->duration);
 
             // TODO: Ease func
             if ( animation->type == ANIM_EASE_TRANSLATION ) {
