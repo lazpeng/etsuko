@@ -139,8 +139,8 @@ static double get_line_vertical_padding(const LyricsView_t *view) {
     return has_hints ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
 }
 
-static float get_active_line_scale() {
-    return config_get()->enlarge_active_line ? LINE_SCALE_FACTOR_ACTIVE : LINE_SCALE_FACTOR_INACTIVE;
+static float get_inactive_line_scale() {
+    return config_get()->enlarge_active_line ? LINE_SCALE_FACTOR_INACTIVE : LINE_SCALE_FACTOR_ACTIVE;
 }
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
@@ -474,7 +474,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     drawable->enabled = true;
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
-    ui_drawable_set_scale_factor(drawable, get_active_line_scale());
+    ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
 
@@ -580,9 +580,9 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
             // We're applying the initial values to the line, meaning it still has the defaults from creation
             // so we don't need to animate any of this or else it actually looks weird and like the ui "falls into place" after
             // the initial loading
-            ui_drawable_set_scale_factor_immediate(drawable, LINE_SCALE_FACTOR_INACTIVE);
+            ui_drawable_set_scale_factor_immediate(drawable, get_inactive_line_scale());
         } else {
-            ui_drawable_set_scale_factor_dur(drawable, LINE_SCALE_FACTOR_INACTIVE, LINE_SCALE_FACTOR_INACTIVE_DURATION);
+            ui_drawable_set_scale_factor_dur(drawable, get_inactive_line_scale(), LINE_SCALE_FACTOR_INACTIVE_DURATION);
         }
         scale_hint_for_line(view, index);
         fade_hint_for_line(view, index);
@@ -603,9 +603,17 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 
     const LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
+        double padding = 0;
+        if ( !config_get()->enlarge_active_line ) {
+            if ( view->song->has_reading_info && config_get()->enable_reading_hints ) {
+                padding = LINE_VERTICAL_PADDING_WITH_READINGS;
+            } else {
+                padding = LINE_VERTICAL_PADDING;
+            }
+        }
         view->line_states[index] = new_state;
         drawable->layout.relative_to = NULL;
-        drawable->layout.offset_y = 0; //-LINE_VERTICAL_PADDING;
+        drawable->layout.offset_y = -padding;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
         if ( drawable->layout.flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
@@ -614,7 +622,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
-        ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_INACTIVE);
+        ui_drawable_set_scale_factor(drawable, get_inactive_line_scale());
         scale_hint_for_line(view, index);
 
         view->layout_dirty = true;
