@@ -213,7 +213,6 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
 }
 
 static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Drawable_t *prev_pill, Container_t *container) {
-    printf("creating pill for %s\n", tag);
     const Drawable_TextData_t text_data = {
         .em = 0.5,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
@@ -258,6 +257,10 @@ static Container_t *setup_tag_pills(MainMenu_t *menu, const MenuSong_t *song, co
         .relative_to_size = entry->image,
     };
     Container_t *pills_container = ui_make_container(menu->ui, menu->container, &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
+    const Animation_EaseTranslationData_t translation_data = {
+        .duration = ALBUM_SCALE_DURATION,
+    };
+    ui_container_animate_translation(pills_container, &translation_data);
 
     const Drawable_t *prev_pill = NULL;
     if ( !str_is_empty(song->language) ) {

@@ -92,6 +92,7 @@ typedef struct Container_t {
     WEAK struct Container_t *parent;
     OWNING Vector_t *child_drawables;  // of Drawable_t*
     OWNING Vector_t *child_containers; // of Container_t*
+    OWNING Vector_t *animations; // of ContainerAnimation_t*
     Layout_t layout;
     bool enabled;
     ContainerFlags_t flags;
@@ -191,6 +192,15 @@ typedef struct Animation_t {
     // this reference is indeed a non-owning one.
     WEAK struct Animation_t *next;
 } Animation_t;
+
+typedef struct ContainerAnimation_t {
+    double duration, elapsed;
+    AnimationType_t type;
+    OWNING void *custom_data;
+    WEAK Container_t *target;
+    bool active;
+    AnimationEaseType_t ease_func;
+} ContainerAnimation_t;
 
 // Options and custom data
 typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } DrawableAlignment_t;
@@ -334,5 +344,6 @@ void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data);
 void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data);
 void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t *data);
 void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData_t *data);
+void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
 
 #endif // ETSUKO_UI_H

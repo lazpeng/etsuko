@@ -31,6 +31,7 @@ Ui_t *ui_init(void) {
 
     ui->root_container.child_containers = vec_init();
     ui->root_container.child_drawables = vec_init();
+    ui->root_container.animations = vec_init();
     ui->root_container.enabled = true;
 
     ui->null_texture = render_make_null();
@@ -101,6 +102,13 @@ static void container_update_animations(const Container_t *container, const doub
             if ( anim->elapsed < anim->duration ) {
                 anim->elapsed += delta_time;
             }
+        }
+    }
+
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *anim = container->animations->data[i];
+        if ( anim->elapsed < anim->duration ) {
+            anim->elapsed += delta_time;
         }
     }
 
@@ -582,12 +590,35 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     render_draw_texture(drawable->texture, &rect, &opts);
 }
 
+static void apply_container_animations(const Container_t *container, Bounds_t *bounds) {
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *animation = container->animations->data[i];
+
+        if ( animation->active ) {
+            const double progress = animation->elapsed / animation->duration;
+
+            // TODO: Ease func
+            if ( animation->type == ANIM_EASE_TRANSLATION ) {
+                const Animation_EaseTranslationData_t *data = animation->custom_data;
+                const double delta_x = data->to_x - data->from_x, delta_y = data->to_y - data->from_y;
+                bounds->x = data->from_x + delta_x * progress;
+                bounds->y = data->from_y + delta_y * progress;
+            }
+
+            if ( progress >= 1.0 )
+                animation->active = false;
+        }
+    }
+}
+
 static void draw_all_container(const Ui_t *ui, const Container_t *container, Bounds_t base_bounds) {
     if ( !container->enabled )
         return;
 
-    base_bounds.x += container->bounds.x + container->viewport_x;
-    base_bounds.y += container->bounds.y + container->viewport_y;
+    Bounds_t container_bounds = container->bounds;
+    apply_container_animations(container, &container_bounds);
+    base_bounds.x += container_bounds.x + container->viewport_x;
+    base_bounds.y += container_bounds.y + container->viewport_y;
 
     if ( container->draw_debug_overlay ) {
         Bounds_t con_bounds = base_bounds;
@@ -1202,6 +1233,7 @@ Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *la
     result->layout = *layout;
     result->child_drawables = vec_init();
     result->child_containers = vec_init();
+    result->animations = vec_init();
     result->enabled = true;
     result->flags = flags;
     measure_layout(layout, parent, &result->bounds);
@@ -1222,6 +1254,13 @@ void ui_destroy_container(Ui_t *ui, Container_t *container) {
         ui_destroy_container(ui, container->child_containers->data[i]);
     }
     vec_destroy(container->child_containers);
+
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *animation = container->animations->data[i];
+        free(animation->custom_data);
+        free(animation);
+    }
+    vec_destroy(container->animations);
 
     if ( container != &ui->root_container )
         free(container);
@@ -1305,9 +1344,31 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
 }
 
 void ui_reposition_container(Ui_t *ui, Container_t *container) {
+    const double old_x = container->bounds.x, old_y = container->bounds.y;
     if ( container->parent != NULL ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
         position_layout(ui, &container->layout, container->parent, &container->bounds);
+    }
+
+    if ( old_x != container->bounds.x || old_y != container->bounds.y ) {
+        ContainerAnimation_t *animation = NULL;
+        for ( size_t i = 0; i < container->animations->size; i++ ) {
+            ContainerAnimation_t *current = container->animations->data[i];
+            if ( current->type == ANIM_EASE_TRANSLATION ) {
+                animation = current;
+                break;
+            }
+        }
+
+        if ( animation != NULL ) {
+            animation->elapsed = 0;
+            animation->active = true;
+            Animation_EaseTranslationData_t *data = animation->custom_data;
+            data->from_x = old_x;
+            data->from_y = old_y;
+            data->to_x = container->bounds.x;
+            data->to_y = container->bounds.y;
+        }
     }
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -1814,4 +1875,24 @@ void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData
     result->apply_type = data->default_apply;
 
     vec_add(target->animations, result);
+}
+
+void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data) {
+    if ( container == NULL ) {
+        error_abort("Target drawable is NULL");
+    }
+
+    ContainerAnimation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_EASE_TRANSLATION;
+    result->custom_data = dup_anim_translate_data(data);
+    result->target = container;
+    result->duration = data->duration;
+    result->active = false;
+    result->ease_func = data->ease_func;
+
+    vec_add(container->animations, result);
 }
