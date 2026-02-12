@@ -21,6 +21,8 @@
 #define SONG_TITLE_SCALED_OFFSET_Y (0.04)
 #define SONG_ALBUM_REGULAR_OFFSET_Y (0.005)
 #define SONG_ALBUM_SCALED_OFFSET_Y (0.01)
+#define PILL_REGULAR_OFFSET_Y (0.06)
+#define PILL_SCALED_OFFSET_Y (0.1)
 
 // TODO: This shit shouldn't be here
 typedef struct GridLayoutInfo_t {
@@ -45,6 +47,7 @@ struct MainMenu_t {
 
 typedef struct SongEntryDrawables_t {
     WEAK Drawable_t *image, *title, *album;
+    WEAK Container_t *pills_container;
 } SongEntryDrawables_t;
 
 typedef enum AlbumArtState_t { ART_NOT_LOADED = 0, ART_PENDING_DRAW = 1, ART_OK } AlbumArtState_t;
@@ -209,6 +212,84 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
     return text;
 }
 
+static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Drawable_t *prev_pill, Container_t *container) {
+    printf("creating pill for %s\n", tag);
+    const Drawable_TextData_t text_data = {
+        .em = 0.5,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .text = tag,
+    };
+    Drawable_t *text = ui_make_text(menu->ui, &text_data, container, &(Layout_t){});
+
+    Layout_t rect_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_SIZE,
+        .width = 1.5,
+        .height = 1.5,
+        .relative_to_size = text,
+    };
+    if ( prev_pill != NULL ) {
+        rect_layout.relative_to = prev_pill;
+        rect_layout.offset_x = 0.025;
+        rect_layout.flags |= LAYOUT_RELATIVE_TO_X | LAYOUT_RELATION_X_INCLUDE_WIDTH;
+    }
+    const Drawable_RectangleData_t rect_data = {
+        .border_radius_em = BORDER_RADIUS_AUTO,
+        .color = {.r = 100, .g = 100, .b = 100, .a = 100}
+    };
+    Drawable_t *rect = ui_make_rectangle(menu->ui, &rect_data, container, &rect_layout);
+
+    // Reposition text inside the rect
+    text->layout.relative_to = rect;
+    text->layout.flags |= LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_CENTER_X | LAYOUT_ANCHOR_CENTER_Y;
+    text->layout.offset_x = text->layout.offset_y = 0.5;
+    // TODO: drawables are repositioned in the wrong order when the screen changes
+    ui_reposition_drawable(menu->ui, text);
+
+    return rect;
+}
+
+static Container_t *setup_tag_pills(MainMenu_t *menu, const MenuSong_t *song, const SongEntryDrawables_t *entry) {
+    const Layout_t layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_RELATIVE_TO_SIZE,
+        .offset_y = PILL_REGULAR_OFFSET_Y,
+        .width = 1.0,
+        .height = 1.0,
+        .relative_to = entry->image,
+        .relative_to_size = entry->image,
+    };
+    Container_t *pills_container = ui_make_container(menu->ui, menu->container, &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
+
+    const Drawable_t *prev_pill = NULL;
+    if ( !str_is_empty(song->language) ) {
+        char *lang_str = NULL;
+        asprintf(&lang_str, "lang:%s", song->language);
+        prev_pill = setup_single_tag_pill(menu, lang_str, prev_pill, pills_container);
+        free(lang_str);
+    }
+
+    prev_pill = setup_single_tag_pill(menu, "first test", prev_pill, pills_container);
+    prev_pill = setup_single_tag_pill(menu, "another test", prev_pill, pills_container);
+
+    StrBuffer_t *buf = str_buf_init();
+    if ( !str_is_empty(song->tags) ) {
+        char *tags = song->tags;
+        char *tags_end = tags + strlen(tags);
+        while ( tags < tags_end ) {
+            char *next = strchr(tags, ',');
+            str_buf_clear(buf);
+            str_buf_append(buf, tags, next);
+            if ( next == NULL )
+                tags = tags_end;
+            else tags = next + 1;
+
+            prev_pill = setup_single_tag_pill(menu, buf->data, prev_pill, pills_container);
+        }
+    }
+
+    str_buf_destroy(buf);
+    return pills_container;
+}
+
 static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_t *song, const Drawable_t *title) {
     const Layout_t layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE |
@@ -286,13 +367,14 @@ static void setup_album(const char *_, void *value, void *userdata) {
         image->center_on_scale = true;
         ui_animate_scale(image, &scale_data);
 
+        SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
         Drawable_t *title_text = setup_song_title(menu, song, image);
         Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
-
-        SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
         entry->image = image;
         entry->title = title_text;
         entry->album = album_text;
+
+        entry->pills_container = setup_tag_pills(menu, song, entry);
 
         grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
 
@@ -349,6 +431,7 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
     const SongEntryDrawables_t *entry = data;
     Drawable_t *image = entry->image;
 
+    // TODO: Sometimes the album image starts enlarged and gets stuck like that until a new mouse hover
     if ( ui_mouse_hovering_drawable(image, 0, NULL, NULL, NULL) ) {
         if ( menu->current_focused_image != image ) {
             menu->current_focused_image = image;
@@ -365,6 +448,8 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
             // also change the album to keep a uniform spacing when scaled
             entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
             ui_reposition_drawable(menu->ui, entry->album);
+            entry->pills_container->layout.offset_y = PILL_SCALED_OFFSET_Y;
+            ui_reposition_container(menu->ui, entry->pills_container);
         }
     } else {
         if ( menu->current_focused_image == image ) {
@@ -378,6 +463,8 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
             ui_reposition_drawable(menu->ui, entry->title);
             entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
             ui_reposition_drawable(menu->ui, entry->album);
+            entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
+            ui_reposition_container(menu->ui, entry->pills_container);
         }
     }
 
@@ -422,7 +509,7 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
 
     handle_user_input(menu);
 
-    // TODO: Figure out why sometimes some albums don't show up
+    // TODO: Figure out why sometimes some albums don't load
     map_iterate(menu->album_arts, iterate_pending_art, menu);
     if ( menu->album_data_dirty ) {
         update_background(menu);

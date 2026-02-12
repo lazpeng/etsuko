@@ -97,6 +97,7 @@ typedef struct Container_t {
     ContainerFlags_t flags;
     double align_content_offset_y, align_content_offset_x;
     double viewport_y, viewport_x;
+    bool draw_debug_overlay;
 } Container_t;
 
 typedef struct Drawable_t {

@@ -20,6 +20,7 @@
 
 struct Ui_t {
     Container_t root_container;
+    Texture_t *null_texture;
 };
 
 Ui_t *ui_init(void) {
@@ -31,6 +32,8 @@ Ui_t *ui_init(void) {
     ui->root_container.child_containers = vec_init();
     ui->root_container.child_drawables = vec_init();
     ui->root_container.enabled = true;
+
+    ui->null_texture = render_make_null();
 
     ui_on_window_changed(ui);
 
@@ -133,7 +136,9 @@ static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t 
 static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
     const Drawable_RectangleData_t *data = drawable->custom_data;
 
-    const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+    float border_radius = 1;//(float)data->border_radius_em;
+    if ( border_radius > 0 )
+        border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
     render_draw_rounded_rect(drawable->texture, bounds, &data->color, border_radius);
 }
 
@@ -174,11 +179,7 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
     }
 
     if ( layout->relative_to_size != NULL ) {
-        if ( layout->relative_to_size->parent != parent ) {
-            error_abort("Relative layout's parent is not the same as the container");
-        }
-
-        if ( (layout->flags & LAYOUT_RELATIVE_TO_SIZE) != 0 ) {
+        if ( (layout->flags & LAYOUT_RELATIVE_TO_SIZE) == 0 ) {
             puts("Warning: relative_to_size is set but no flag setting the relationship was passed.");
         }
 
@@ -250,6 +251,8 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 }
 
 static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
+    double con_x, con_y;
+    ui_get_container_canon_pos(container, &con_x, &con_y, false);
     double max_x = 0, min_x = 0;
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -257,11 +260,11 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         double draw_x, draw_y;
         ui_get_drawable_canon_pos(drawable, &draw_x, &draw_y);
 
-        max_x = fmax(max_x, draw_x + drawable->bounds.w);// * (1.0 + drawable->bounds.scale_mod));
-        min_x = fmin(min_x, draw_x);
+        max_x = fmax(max_x, draw_x - con_x + drawable->bounds.w);// * (1.0 + drawable->bounds.scale_mod));
+        min_x = fmin(min_x, draw_x - con_x);
 
-        max_y = fmax(max_y, draw_y + drawable->bounds.h);// * (1.0 + drawable->bounds.scale_mod));
-        min_y = fmin(min_y, draw_y);
+        max_y = fmax(max_y, draw_y - con_y + drawable->bounds.h);// * (1.0 + drawable->bounds.scale_mod));
+        min_y = fmin(min_y, draw_y - con_y);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
@@ -294,6 +297,10 @@ static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
         }
         if ( container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
             container->align_content_offset_x = (container->bounds.w - bounds.w) / 2.f;
+            if ( container->align_content_offset_x < 0 ) {
+                bounds = (Bounds_t){0};
+                measure_container_size(ui, container, &bounds);
+            }
         }
     }
 }
@@ -575,25 +582,35 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     render_draw_texture(drawable->texture, &rect, &opts);
 }
 
-static void draw_all_container(const Container_t *container, Bounds_t base_bounds) {
+static void draw_all_container(const Ui_t *ui, const Container_t *container, Bounds_t base_bounds) {
     if ( !container->enabled )
         return;
 
-    base_bounds.x += container->bounds.x + container->align_content_offset_x + container->viewport_x;
-    base_bounds.y += container->bounds.y + container->align_content_offset_y + container->viewport_y;
+    base_bounds.x += container->bounds.x + container->viewport_x;
+    base_bounds.y += container->bounds.y + container->viewport_y;
+
+    if ( container->draw_debug_overlay ) {
+        Bounds_t con_bounds = base_bounds;
+        con_bounds.w = container->bounds.w;
+        con_bounds.h = container->bounds.h;
+
+        render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r=255,.g=100,.b=100,.a=50}, 0);
+    }
+    base_bounds.x += container->align_content_offset_x;
+    base_bounds.y += container->align_content_offset_y;
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         perform_draw(container->child_drawables->data[i], &base_bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        draw_all_container(container->child_containers->data[i], base_bounds);
+        draw_all_container(ui, container->child_containers->data[i], base_bounds);
     }
 }
 
 void ui_draw(const Ui_t *ui) {
     const Bounds_t bounds = {0};
-    draw_all_container(&ui->root_container, bounds);
+    draw_all_container(ui, &ui->root_container, bounds);
 }
 
 void ui_end_loop(void) { render_present(); }
@@ -742,6 +759,7 @@ static Drawable_RectangleData_t *dup_rectangle_data(const Drawable_RectangleData
         error_abort("Failed to allocate rectangle data");
     }
     result->color = data->color;
+    result->border_radius_em = data->border_radius_em;
     return result;
 }
 
