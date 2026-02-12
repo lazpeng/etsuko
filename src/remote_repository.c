@@ -226,7 +226,7 @@ static void *fetch_thread_func(void *arg) {
         if ( header_ended ) {
             append_data_to_buffer(resource->buffer, buffer, bytes_received);
         } else {
-            char *new_acc = realloc(header_accum, header_accum_size + bytes_received);
+            char *new_acc = realloc(header_accum, header_accum_size + bytes_received + 1);
             if ( !new_acc ) {
                 if ( header_accum )
                     free(header_accum);
@@ -236,14 +236,26 @@ static void *fetch_thread_func(void *arg) {
             header_accum = new_acc;
             memcpy(header_accum + header_accum_size, buffer, bytes_received);
             header_accum_size += bytes_received;
+            header_accum[header_accum_size] = '\0';
 
             // Search for \r\n\r\n
             if ( header_accum_size >= 4 ) {
                 for ( size_t i = 0; i <= header_accum_size - 4; ++i ) {
-                    if ( header_accum[i] == '\r' &&
-                            header_accum[i + 1] == '\n' &&
-                            header_accum[i + 2] == '\r' &&
-                            header_accum[i + 3] == '\n' ) {
+                    if ( header_accum[i] == '\r' && header_accum[i + 1] == '\n' && header_accum[i + 2] == '\r' &&
+                         header_accum[i + 3] == '\n' ) {
+
+                        int status_code = 0;
+                        if ( sscanf(header_accum, "%*s %d", &status_code) == 1 ) {
+                            if ( status_code != 200 ) {
+                                printf("Fetch failed for '%s': HTTP Status %d\n", url, status_code);
+                                resource->status = LOAD_ERROR;
+                                free(header_accum);
+                                header_accum = NULL;
+                                header_accum_size = 0;
+                                break;
+                            }
+                        }
+
                         header_ended = 1;
                         size_t header_len = i + 4;
                         size_t body_len = header_accum_size - header_len;
@@ -256,6 +268,8 @@ static void *fetch_thread_func(void *arg) {
                         break;
                     }
                 }
+                if ( resource->status == LOAD_ERROR )
+                    break;
             }
         }
     }
@@ -270,9 +284,11 @@ static void *fetch_thread_func(void *arg) {
     }
     close(sockfd);
 
-    resource->status = LOAD_DONE;
-    if ( resource->on_resource_loaded ) {
-        resource->on_resource_loaded(resource);
+    if ( resource->status != LOAD_ERROR ) {
+        resource->status = LOAD_DONE;
+        if ( resource->on_resource_loaded ) {
+            resource->on_resource_loaded(resource);
+        }
     }
 
 cleanup_ctx:

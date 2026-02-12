@@ -75,9 +75,8 @@ void repo_resource_buffer_leak(Resource_t *resource);
 // Frees data related to the resource, and its buffer if it was not leaked
 void repo_resource_destroy(Resource_t *resource);
 // Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now
-// Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now
 void repo_resource_buffer_destroy(ResourceBuffer_t *buffer);
-
+// Appends a sized buffer of data to the resource buffer
 void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, uint64_t data_size);
 
 #endif // ETSUKO_REPOSITORY_H
