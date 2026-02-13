@@ -264,16 +264,6 @@ static Container_t *setup_tag_pills(MainMenu_t *menu, const MenuSong_t *song, co
     ui_container_animate_translation(pills_container, &translation_data);
 
     const Drawable_t *prev_pill = NULL;
-    if ( !str_is_empty(song->language) ) {
-        char *lang_str = NULL;
-        asprintf(&lang_str, "lang:%s", song->language);
-        prev_pill = setup_single_tag_pill(menu, lang_str, prev_pill, pills_container);
-        free(lang_str);
-    }
-
-    prev_pill = setup_single_tag_pill(menu, "first test", prev_pill, pills_container);
-    prev_pill = setup_single_tag_pill(menu, "another test", prev_pill, pills_container);
-
     StrBuffer_t *buf = str_buf_init();
     if ( !str_is_empty(song->tags) ) {
         char *tags = song->tags;
