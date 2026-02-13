@@ -268,7 +268,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
 
     if ( !str_is_empty(song->credits) && prev != NULL ) {
         view->credit_separator = ui_make_rectangle(
-            ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}, .border_radius_em = 1.0},
+            ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}},
             view->container,
             &(Layout_t){.offset_y = 0.02 + get_line_vertical_padding(view),
                         .offset_x = 0,
@@ -464,6 +464,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
+    // TODO: Skip min if segment is only punctuation (can limit to a single character)
     const double fill_duration = MAX(FILL_ANIM_MIN_DURATION, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
 }
