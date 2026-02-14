@@ -195,16 +195,10 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_WIDTH ) {
             w = layout->relative_to_size->bounds.w * layout->width;
-            if ( layout->flags & LAYOUT_RELATION_WIDTH_APPLY_TO_PADDING ) {
-                padding_w = layout->relative_to_size->bounds.w * layout->padding_w;
-            }
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_HEIGHT ) {
             h = layout->relative_to_size->bounds.h * layout->height;
-            if ( layout->flags & LAYOUT_RELATION_HEIGHT_APPLY_TO_PADDING ) {
-                padding_h = layout->relative_to_size->bounds.h * layout->padding_h;
-            }
         }
     }
 
