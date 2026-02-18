@@ -328,6 +328,6 @@ bool str_ch_is_japanese_particle(const int32_t c) {
 }
 
 bool str_ch_is_japanese_punctuation(const int32_t c) {
-    // (space), 、(comma), 。(period)
-    return c == 0x3000 || c == 0x3001 || c == 0x3002;
+    // (space), 、(comma), 。(period), ！ (exclamation), ？ (interrogation)
+    return c == 0x3000 || c == 0x3001 || c == 0x3002 || c == 0xFF01 || c == 0xFF1F;
 }

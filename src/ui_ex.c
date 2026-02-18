@@ -50,7 +50,7 @@ static void scale_hint_for_line(const LyricsView_t *view, int32_t index) {
     if ( index < (int32_t)view->line_read_hints->size ) {
         const Drawable_t *drawable = view->line_drawables->data[index];
         Drawable_t *hint = view->line_read_hints->data[index];
-        ui_drawable_set_scale_factor(hint, 1.f + drawable->bounds.scale_mod);
+        ui_drawable_set_scale_factor(hint, 1.f + (float)drawable->bounds.scale_mod);
     }
 }
 
@@ -346,6 +346,15 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
+static bool is_segment_single_punctuation(const Song_Line_t *line, const TextOffsetInfo_t *segment) {
+    if ( segment->num_chars > 1 )
+        return false;
+
+    int32_t idx = segment->start_byte_offset;
+    const int32_t c = str_u8_next(line->full_text, strlen(line->full_text), &idx);
+    return c == '(' || c == ')' || c == ',' || c == '.' || c == '!' || c == '?' || str_ch_is_japanese_punctuation(c);
+}
+
 static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t *drawable, const Song_t *song,
                                                  const Song_Line_t *line) {
     // A slight variation that highlights the entire portion of the segment
@@ -370,6 +379,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         }
     }
 
+    bool is_last_segment_single_punctuation = false;
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
@@ -454,6 +464,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 
             x1 += (float)segment_fill_contribution;
             last_segment_remaining = duration - elapsed_since_segment;
+            is_last_segment_single_punctuation = is_segment_single_punctuation(line, offset_info);
         }
         draw_regions.regions[i].x1_perc = MIN(1.f, x1);
 
@@ -464,8 +475,8 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
-    // TODO: Skip min if segment is only punctuation (can limit to a single character)
-    const double fill_duration = MAX(FILL_ANIM_MIN_DURATION, last_segment_remaining);
+    const double min_duration = is_last_segment_single_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
+    const double fill_duration = MAX(min_duration, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
 }
 
