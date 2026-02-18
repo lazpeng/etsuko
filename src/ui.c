@@ -273,11 +273,11 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         double draw_x, draw_y;
         ui_get_drawable_canon_pos(drawable, &draw_x, &draw_y);
 
-        max_x = fmax(max_x, draw_x - con_x + drawable->bounds.w);// * (1.0 + drawable->bounds.scale_mod));
-        min_x = fmin(min_x, draw_x - con_x);
+        max_x = fmax(max_x, drawable->bounds.x + drawable->bounds.w);
+        min_x = fmin(min_x, drawable->bounds.x);
 
-        max_y = fmax(max_y, draw_y - con_y + drawable->bounds.h);// * (1.0 + drawable->bounds.scale_mod));
-        min_y = fmin(min_y, draw_y - con_y);
+        max_y = fmax(max_y, drawable->bounds.y + drawable->bounds.h);
+        min_y = fmin(min_y, drawable->bounds.y);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
@@ -285,11 +285,11 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
         Bounds_t child_bounds = {0};
         measure_container_size(ui, child, &child_bounds);
 
-        max_x = fmax(max_x, child_bounds.x + child_bounds.w);
-        min_x = fmin(min_x, child_bounds.x);
+        max_x = fmax(max_x, child->bounds.x + child_bounds.x + child_bounds.w);
+        min_x = fmin(min_x, child->bounds.x + child_bounds.x);
 
-        max_y = fmax(max_y, child_bounds.y + child_bounds.h);
-        min_y = fmin(min_y, child_bounds.y);
+        max_y = fmax(max_y, child->bounds.y + child_bounds.y + child_bounds.h);
+        min_y = fmin(min_y, child->bounds.y + child_bounds.y);
     }
 
     out_bounds->h = fmax(out_bounds->h, max_y - min_y);
