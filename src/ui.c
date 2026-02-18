@@ -264,14 +264,10 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 }
 
 static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
-    double con_x, con_y;
-    ui_get_container_canon_pos(container, &con_x, &con_y, false);
     double max_x = 0, min_x = 0;
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
-        double draw_x, draw_y;
-        ui_get_drawable_canon_pos(drawable, &draw_x, &draw_y);
 
         max_x = fmax(max_x, drawable->bounds.x + drawable->bounds.w);
         min_x = fmin(min_x, drawable->bounds.x);
