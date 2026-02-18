@@ -10,20 +10,9 @@
 #include "etsuko.h"
 #include "constants.h"
 
-/**
- * The config should be a static and permanent way to tell the application how to behave and what to do
- * This should not change during runtime, so for example if reading hints are disabled, they should not be generated
- * because there's no way the user could turn them back on.
- * This is different from settings or preferences that the user can hide/show certain elements at runtime, but that
- * does not control whether those features are actually available at all or not
- */
-typedef struct {
-    // Font files to be used
-    OWNING char *ui_font, *lyrics_font;
-    // Main song file name. Only applicable in karaoke mode
+struct KaraokeOpts_t {
+    // Main song file name
     OWNING char *song_file;
-    // Operating mode
-    Config_OpMode_t op_mode;
     // Makes past lyrics fade away in karaoke mode
     bool hide_past_lyrics;
     // Enables shadow on the album art
@@ -40,8 +29,26 @@ typedef struct {
     bool enable_reading_hints;
     // Enable a "jumping" or pulsing effect that plays together with the dynamic fill effect. Requires dynamic fill to work
     bool enable_pulse_effect;
+    // Time in seconds to hide optional ui elements after elapsed
+    double hide_ui_elements_delay_sec;
+};
+
+/**
+ * The config should be a static and permanent way to tell the application how to behave and what to do
+ * This should not change during runtime, so for example if reading hints are disabled, they should not be generated
+ * because there's no way the user could turn them back on.
+ * This is different from settings or preferences that the user can hide/show certain elements at runtime, but that
+ * does not control whether those features are actually available at all or not
+ */
+typedef struct {
+    // Font files to be used
+    OWNING char *ui_font, *lyrics_font;
+    // Operating mode
+    Config_OpMode_t op_mode;
     // Global time scale, generally to debug animations (it applies to audio, and it's weird. use only for debugging)
     double time_scale;
+    // Karaoke opts
+    struct KaraokeOpts_t karaoke;
 } Config_t;
 
 // Returns the current configuration for the application

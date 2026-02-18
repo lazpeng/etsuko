@@ -120,6 +120,7 @@ typedef struct Drawable_t {
     bool draw_underlay;
     bool pending_recompute;
     bool center_on_scale;
+    OWNING Vector_t *events; // of EventDef_t*
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -286,6 +287,26 @@ typedef struct Animation_ScaleRegionData_t {
     AnimationApplyType_t default_apply;
 } Animation_ScaleRegionData_t;
 
+typedef enum UiEvent_t {
+    UI_EVENT_NONE = 0,
+    UI_EVENT_MOUSE_MOVE,
+    UI_EVENT_MOUSE_STOPPED,
+} UiEvent_t;
+
+typedef struct UiEventOpts_t {
+    UiEvent_t event;
+    struct {
+        double x, y;
+        bool clicked;
+        double duration;
+    } mouse;
+    struct {
+        double amount;
+    } scroll;
+} UiEventOpts_t;
+
+typedef void (*c_ui_event_callback)(const UiEventOpts_t *opts, MAYBE_NULL const Drawable_t *target, void *custom_data);
+
 // Init and lifetime functions
 Ui_t *ui_init(void);
 void ui_finish(Ui_t *ui);
@@ -293,6 +314,8 @@ void ui_begin_loop(Ui_t *ui);
 void ui_end_loop(void);
 void ui_load_font(const unsigned char *data, int data_size, FontType_t type);
 void ui_draw(const Ui_t *ui);
+void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c_ui_event_callback callback, void *custom_data);
+void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_set_bg_color(uint32_t color);
@@ -301,6 +324,7 @@ void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset);
+[[deprecated("Use events instead")]]
 bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                  int32_t *out_mouse_y);
 // Drawables
@@ -312,7 +336,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
-void ui_destroy_drawable(Drawable_t *drawable);
+void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable);
 double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent);
 void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
@@ -330,8 +354,10 @@ void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alph
 void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
                                       AnimationApplyType_t apply_type);
 // User-interaction checks
+[[deprecated("Use events instead")]]
 bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                 int32_t *out_mouse_y);
+[[deprecated("Use events instead")]]
 bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
                                int32_t *out_mouse_y);
 // Containers

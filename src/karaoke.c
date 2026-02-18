@@ -18,34 +18,41 @@
 
 struct Karaoke_t {
     Ui_t *ui;
-    Drawable_t *song_name_text;
-    Drawable_t *song_artist_album_text;
-    Drawable_t *elapsed_time_text;
-    Drawable_t *remaining_time_text;
-    Drawable_t *album_image;
-    Drawable_t *song_progressbar;
-    Drawable_t *play_button;
-    Drawable_t *pause_button;
-    Drawable_t *back_button;
-    Container_t *left_container;
-    Container_t *right_container;
-    Container_t *song_info_container;
-    Container_t *song_controls_container;
-    LyricsView_t *lyrics_view;
-    // Only exists during init
-    Drawable_t *loading_progress_bar;
-    Drawable_t *loading_text;
-    // Loading stuff
-    Resource_t *res_song;
-    Resource_t *res_ui_font;
-    Resource_t *res_lyrics_font;
-    Resource_t *res_audio;
-    Resource_t *res_album_art;
-    ResourceBuffer_t *res_album_art_buffer;
-    bool song_loaded;
-    bool ui_font_loaded, lyrics_font_loaded;
-    bool audio_loaded;
-    bool album_art_loaded;
+    struct {
+        Drawable_t *song_name_text;
+        Drawable_t *song_artist_album_text;
+        Drawable_t *elapsed_time_text;
+        Drawable_t *remaining_time_text;
+        Drawable_t *album_image;
+        Drawable_t *song_progressbar;
+        Drawable_t *play_button;
+        Drawable_t *pause_button;
+        Drawable_t *back_button;
+        Container_t *left_container;
+        Container_t *right_container;
+        Container_t *song_info_container;
+        Container_t *song_controls_container;
+        LyricsView_t *lyrics_view;
+        Drawable_t *hint_show_hints, *hint_show_lyrics, *hint_seek, *hint_play_pause;
+    } drawables;
+    bool hovering_controls;
+    struct {
+        Resource_t *song;
+        Resource_t *ui_font;
+        Resource_t *lyrics_font;
+        Resource_t *audio;
+        Resource_t *album_art;
+        ResourceBuffer_t *album_art_buffer;
+    } resources;
+    struct {
+        bool song_loaded;
+        bool ui_font_loaded, lyrics_font_loaded;
+        bool audio_loaded;
+        bool album_art_loaded;
+        // Only exists during init
+        Drawable_t *progress_bar;
+        Drawable_t *loading_text;
+    } loading;
 };
 
 Karaoke_t *karaoke_init(void) {
@@ -62,34 +69,34 @@ Karaoke_t *karaoke_init(void) {
 
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
     uint64_t total = 0;
-    if ( state->res_album_art != NULL )
-        total += state->res_album_art->buffer->downloaded_bytes;
+    if ( state->resources.album_art != NULL )
+        total += state->resources.album_art->buffer->downloaded_bytes;
 
-    if ( state->res_lyrics_font != NULL )
-        total += state->res_lyrics_font->buffer->downloaded_bytes;
+    if ( state->resources.lyrics_font != NULL )
+        total += state->resources.lyrics_font->buffer->downloaded_bytes;
 
-    if ( state->res_ui_font != NULL )
-        total += state->res_ui_font->buffer->downloaded_bytes;
+    if ( state->resources.ui_font != NULL )
+        total += state->resources.ui_font->buffer->downloaded_bytes;
 
-    if ( state->res_audio != NULL )
-        total += state->res_audio->buffer->downloaded_bytes;
+    if ( state->resources.audio != NULL )
+        total += state->resources.audio->buffer->downloaded_bytes;
 
     return total;
 }
 
 static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
     uint64_t total = 0;
-    if ( state->res_album_art != NULL )
-        total += state->res_album_art->buffer->total_bytes;
+    if ( state->resources.album_art != NULL )
+        total += state->resources.album_art->buffer->total_bytes;
 
-    if ( state->res_lyrics_font != NULL )
-        total += state->res_lyrics_font->buffer->total_bytes;
+    if ( state->resources.lyrics_font != NULL )
+        total += state->resources.lyrics_font->buffer->total_bytes;
 
-    if ( state->res_ui_font != NULL )
-        total += state->res_ui_font->buffer->total_bytes;
+    if ( state->resources.ui_font != NULL )
+        total += state->resources.ui_font->buffer->total_bytes;
 
-    if ( state->res_audio != NULL )
-        total += state->res_audio->buffer->total_bytes;
+    if ( state->resources.audio != NULL )
+        total += state->resources.audio->buffer->total_bytes;
 
     return total;
 }
@@ -110,10 +117,10 @@ static char *get_loading_files_names(const Karaoke_t *state) {
     str_buf_append(buf, "Loading ", NULL);
 
     bool first = true;
-    append_loading_file_name(buf, state->res_ui_font, &first);
-    append_loading_file_name(buf, state->res_lyrics_font, &first);
-    append_loading_file_name(buf, state->res_audio, &first);
-    append_loading_file_name(buf, state->res_album_art, &first);
+    append_loading_file_name(buf, state->resources.ui_font, &first);
+    append_loading_file_name(buf, state->resources.lyrics_font, &first);
+    append_loading_file_name(buf, state->resources.audio, &first);
+    append_loading_file_name(buf, state->resources.album_art, &first);
 
     str_buf_append(buf, "...", NULL);
     char *str = strdup(buf->data);
@@ -153,7 +160,7 @@ static void on_song_loaded(const Resource_t *res) {
     ui_set_bg_gradient(song_get()->bg_color, song_get()->bg_color_secondary, bg_type);
 
     Karaoke_t *state = res->custom_data;
-    state->song_loaded = true;
+    state->loading.song_loaded = true;
 }
 
 static void on_ui_font_loaded(const Resource_t *res) {
@@ -162,7 +169,7 @@ static void on_ui_font_loaded(const Resource_t *res) {
     ui_load_font(res->buffer->data, (int)res->buffer->downloaded_bytes, FONT_UI);
 
     Karaoke_t *state = res->custom_data;
-    state->ui_font_loaded = true;
+    state->loading.ui_font_loaded = true;
 }
 
 static void on_lyrics_font_loaded(const Resource_t *res) {
@@ -171,7 +178,7 @@ static void on_lyrics_font_loaded(const Resource_t *res) {
     ui_load_font(res->buffer->data, (int)res->buffer->downloaded_bytes, FONT_LYRICS);
 
     Karaoke_t *state = res->custom_data;
-    state->lyrics_font_loaded = true;
+    state->loading.lyrics_font_loaded = true;
 }
 
 static void on_audio_loaded(const Resource_t *res) {
@@ -180,7 +187,7 @@ static void on_audio_loaded(const Resource_t *res) {
     audio_load(res->buffer->data, (int)res->buffer->downloaded_bytes);
 
     Karaoke_t *state = res->custom_data;
-    state->audio_loaded = true;
+    state->loading.audio_loaded = true;
 }
 
 static void on_album_art_loaded(const Resource_t *res) {
@@ -192,50 +199,50 @@ static void on_album_art_loaded(const Resource_t *res) {
     render_set_bg_colors(colors);
 
     Karaoke_t *state = res->custom_data;
-    state->album_art_loaded = true;
-    state->res_album_art_buffer = res->buffer;
+    state->loading.album_art_loaded = true;
+    state->resources.album_art_buffer = res->buffer;
 }
 
 static bool load_async(Karaoke_t *state) {
     const Config_t *config = config_get();
     // UI Font
-    if ( state->res_ui_font == NULL ) {
-        state->res_ui_font = repo_load_resource(&(LoadRequest_t){.relative_path = config->ui_font,
+    if ( state->resources.ui_font == NULL ) {
+        state->resources.ui_font = repo_load_resource(&(LoadRequest_t){.relative_path = config->ui_font,
                                                                  .sub_dir = "files/",
                                                                  .on_resource_loaded = on_ui_font_loaded,
                                                                  .custom_data = state});
     }
     // Song
-    if ( state->res_song == NULL ) {
-        state->res_song = repo_load_resource(
-            &(LoadRequest_t){.relative_path = config->song_file, .on_resource_loaded = on_song_loaded, .custom_data = state});
+    if ( state->resources.song == NULL ) {
+        state->resources.song = repo_load_resource(
+            &(LoadRequest_t){.relative_path = config->karaoke.song_file, .on_resource_loaded = on_song_loaded, .custom_data = state});
     }
-    if ( !state->song_loaded )
+    if ( !state->loading.song_loaded )
         return false;
     // Finish loading the song before we load the rest
 
     // Lyrics font
     // It's important we begin downloading this _after_ the song has been loaded so we know which is the correct font to fetch
-    if ( state->res_lyrics_font == NULL ) {
+    if ( state->resources.lyrics_font == NULL ) {
         const char *font = song_get()->font_override;
         if ( font == NULL )
             font = config->lyrics_font;
-        state->res_lyrics_font = repo_load_resource(&(LoadRequest_t){
+        state->resources.lyrics_font = repo_load_resource(&(LoadRequest_t){
             .relative_path = font, .sub_dir = "files/", .on_resource_loaded = on_lyrics_font_loaded, .custom_data = state});
     }
 
     // Song audio file
-    if ( state->res_audio == NULL ) {
-        state->res_audio = repo_load_resource(&(LoadRequest_t){
+    if ( state->resources.audio == NULL ) {
+        state->resources.audio = repo_load_resource(&(LoadRequest_t){
             .relative_path = song_get()->file_path, .on_resource_loaded = on_audio_loaded, .custom_data = state});
     }
     // Album art
-    if ( state->res_album_art == NULL ) {
-        state->res_album_art = repo_load_resource(&(LoadRequest_t){
+    if ( state->resources.album_art == NULL ) {
+        state->resources.album_art = repo_load_resource(&(LoadRequest_t){
             .relative_path = song_get()->album_art_path, .on_resource_loaded = on_album_art_loaded, .custom_data = state});
     }
 
-    return state->ui_font_loaded && state->lyrics_font_loaded && state->audio_loaded && state->album_art_loaded;
+    return state->loading.ui_font_loaded && state->loading.lyrics_font_loaded && state->loading.audio_loaded && state->loading.album_art_loaded;
 }
 
 AppStatus_t karaoke_load_loop(Karaoke_t *state) {
@@ -243,8 +250,8 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
     if ( events_has_quit() )
         return APP_STATUS_FAILURE;
 
-    if ( state->ui_font_loaded && config_get()->show_loading_screen ) {
-        if ( state->loading_progress_bar == NULL ) {
+    if ( state->loading.ui_font_loaded && config_get()->karaoke.show_loading_screen ) {
+        if ( state->loading.progress_bar == NULL ) {
             const Drawable_ProgressBarData_t data = {
                 .progress = 0,
                 .border_radius_em = BORDER_RADIUS_AUTO,
@@ -256,30 +263,30 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
                 .width = 0.75,
                 .height = 0.02,
             };
-            state->loading_progress_bar = ui_make_progressbar(state->ui, &data, ui_root_container(state->ui), &layout);
+            state->loading.progress_bar = ui_make_progressbar(state->ui, &data, ui_root_container(state->ui), &layout);
         } else {
             const uint64_t total_size = get_total_loading_files_size(state);
             const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
-            Drawable_ProgressBarData_t *data = state->loading_progress_bar->custom_data;
+            Drawable_ProgressBarData_t *data = state->loading.progress_bar->custom_data;
             data->progress = (double)downloaded / (double)total_size;
         }
 
-        if ( state->loading_text == NULL ) {
+        if ( state->loading.loading_text == NULL ) {
             const Drawable_TextData_t data = {
                 .text = "Loading...", .em = 1.5, .color = {.r = 200, .g = 200, .b = 200, .a = 255}, .font_type = FONT_UI};
             const Layout_t layout = {.flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y |
                                               LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT,
                                      .offset_y = -0.035,
-                                     .relative_to = state->loading_progress_bar};
-            state->loading_text = ui_make_text(state->ui, &data, ui_root_container(state->ui), &layout);
+                                     .relative_to = state->loading.progress_bar};
+            state->loading.loading_text = ui_make_text(state->ui, &data, ui_root_container(state->ui), &layout);
         } else {
             char *current_loading_text = get_loading_files_names(state);
-            Drawable_TextData_t *text_data = state->loading_text->custom_data;
+            Drawable_TextData_t *text_data = state->loading.loading_text->custom_data;
 
             if ( strcmp(current_loading_text, text_data->text) != 0 ) {
                 free(text_data->text);
                 text_data->text = current_loading_text;
-                ui_recompute_drawable(state->ui, state->loading_text);
+                ui_recompute_drawable(state->ui, state->loading.loading_text);
             } else {
                 free(current_loading_text);
             }
@@ -296,13 +303,13 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
 
     if ( initialized ) {
         // Free loading resources
-        repo_resource_destroy(state->res_song);
-        repo_resource_destroy(state->res_ui_font);
-        repo_resource_destroy(state->res_lyrics_font);
-        repo_resource_destroy(state->res_audio);
+        repo_resource_destroy(state->resources.song);
+        repo_resource_destroy(state->resources.ui_font);
+        repo_resource_destroy(state->resources.lyrics_font);
+        repo_resource_destroy(state->resources.audio);
         // We will free later, when initializing the album art drawable
-        repo_resource_buffer_leak(state->res_album_art);
-        repo_resource_destroy(state->res_album_art);
+        repo_resource_buffer_leak(state->resources.album_art);
+        repo_resource_destroy(state->resources.album_art);
 
         return APP_STATUS_OK;
     }
@@ -310,10 +317,40 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
     return APP_STATUS_LOADING;
 }
 
+static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
+    Karaoke_t *state = custom_data;
+    state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
+    state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
+    state->drawables.song_controls_container->enabled = true;
+
+    state->drawables.hint_play_pause->enabled = true;
+    state->drawables.hint_seek->enabled = true;
+    state->drawables.hint_show_hints->enabled = true;
+    state->drawables.hint_show_lyrics->enabled = true;
+}
+
+static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void *custom_data) {
+    const Karaoke_t *state = custom_data;
+    const bool show_controls = state->hovering_controls || audio_elapsed_time() <= 0.1;
+
+    // Hide controls after the mouse stopped for more than 2 seconds
+    // TODO: Config this
+    if ( opt->mouse.duration > 2.0 ) {
+        if ( !show_controls ) {
+            state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = true;
+            state->drawables.song_controls_container->enabled = false;
+        }
+        state->drawables.hint_play_pause->enabled = false;
+        state->drawables.hint_seek->enabled = false;
+        state->drawables.hint_show_hints->enabled = false;
+        state->drawables.hint_show_lyrics->enabled = false;
+    }
+}
+
 void karaoke_setup(Karaoke_t *state) {
     if ( state->ui != NULL ) {
         ui_finish(state->ui);
-        state->loading_progress_bar = state->loading_text = NULL;
+        state->loading.progress_bar = state->loading.loading_text = NULL;
     }
     state->ui = ui_init();
 
@@ -322,16 +359,19 @@ void karaoke_setup(Karaoke_t *state) {
     ui_set_window_title(window_title);
     free(window_title);
 
+    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_MOVE, on_mouse_moved, state);
+    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_STOPPED, on_mouse_stopped, state);
+
     const double vertical_padding = 0.01;
 
     // Make the left container
-    state->left_container =
+    state->drawables.left_container =
         ui_make_container(state->ui, ui_root_container(state->ui),
                           &(Layout_t){.width = 0.5, .height = 1.0, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
                           CONTAINER_VERTICAL_ALIGN_CONTENT);
 
     // Make the right container
-    state->right_container = ui_make_container(state->ui, ui_root_container(state->ui),
+    state->drawables.right_container = ui_make_container(state->ui, ui_root_container(state->ui),
                                                &(Layout_t){.width = 0.5,
                                                            .height = 0.7,
                                                            .offset_x = 0.5,
@@ -342,103 +382,103 @@ void karaoke_setup(Karaoke_t *state) {
     // Version string
     etsuko_setup_version(state->ui);
     // Make the back (to menu) "button"
-    state->back_button = ui_make_text(
+    state->drawables.back_button = ui_make_text(
         state->ui, &(Drawable_TextData_t){.text = "< Back", .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .em = 0.8},
         ui_root_container(state->ui), &(Layout_t){.offset_x = 0.01, .offset_y = 0.01, .flags = LAYOUT_PROPORTIONAL_POS});
-    ui_drawable_set_alpha_immediate(state->back_button, 128);
+    ui_drawable_set_alpha_immediate(state->drawables.back_button, 128);
 
     // Album art
-    state->album_image = ui_make_image(
-        state->ui, state->res_album_art_buffer->data, (int)state->res_album_art_buffer->downloaded_bytes,
+    state->drawables.album_image = ui_make_image(
+        state->ui, state->resources.album_art_buffer->data, (int)state->resources.album_art_buffer->downloaded_bytes,
         &(Drawable_ImageData_t){
             .border_radius_em = 2.0,
-            .draw_shadow = config_get()->draw_album_art_shadow,
+            .draw_shadow = config_get()->karaoke.draw_album_art_shadow,
         },
-        state->left_container,
+        state->drawables.left_container,
         &(Layout_t){.height = 0.6,
                     .width = 0.6,
                     .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-                    .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->left_container->bounds, .value = 0.6},
-                    .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->left_container->bounds, .value = 0.6}});
-    repo_resource_buffer_destroy(state->res_album_art_buffer);
+                    .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
+                    .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
+    repo_resource_buffer_destroy(state->resources.album_art_buffer);
 
     // Song info container
-    state->song_info_container =
-        ui_make_container(state->ui, state->left_container,
+    state->drawables.song_info_container =
+        ui_make_container(state->ui, state->drawables.left_container,
                           &(Layout_t){.height = 0.3,
                                       .width = 1.0,
                                       .offset_y = vertical_padding,
-                                      .relative_to = state->album_image,
-                                      .relative_to_size = state->album_image,
+                                      .relative_to = state->drawables.album_image,
+                                      .relative_to_size = state->drawables.album_image,
                                       .flags = LAYOUT_CENTER_X | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_RELATIVE_TO_Y |
                                                LAYOUT_RELATIVE_TO_WIDTH | LAYOUT_PROPORTIONAL_H | LAYOUT_PROPORTIONAL_Y},
                           CONTAINER_NONE);
 
     // Elapsed time
-    state->elapsed_time_text =
+    state->drawables.elapsed_time_text =
         ui_make_text(state->ui,
                      &(Drawable_TextData_t){
                          .text = "00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
-                     state->song_info_container, &(Layout_t){0});
-    ui_drawable_set_alpha_immediate(state->elapsed_time_text, 200);
+                     state->drawables.song_info_container, &(Layout_t){0});
+    ui_drawable_set_alpha_immediate(state->drawables.elapsed_time_text, 200);
 
     // Remaining time
-    state->remaining_time_text = ui_make_text(
+    state->drawables.remaining_time_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
             .text = "-00:00", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 200}, .draw_shadow = true},
-        state->song_info_container, &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
-    ui_drawable_set_alpha_immediate(state->remaining_time_text, 200);
+        state->drawables.song_info_container, &(Layout_t){.offset_x = -1, .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X});
+    ui_drawable_set_alpha_immediate(state->drawables.remaining_time_text, 200);
 
     // Progress bar
-    state->song_progressbar = ui_make_progressbar(state->ui,
+    state->drawables.song_progressbar = ui_make_progressbar(state->ui,
                                                   &(Drawable_ProgressBarData_t){
                                                       .progress = 0,
                                                       .border_radius_em = BORDER_RADIUS_AUTO,
                                                       .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
                                                       .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 50},
                                                   },
-                                                  state->song_info_container,
+                                                  state->drawables.song_info_container,
                                                   &(Layout_t){.offset_y = 0.02,
                                                               .width = 1.0,
                                                               .height = 0.025,
-                                                              .relative_to = state->elapsed_time_text,
+                                                              .relative_to = state->drawables.elapsed_time_text,
                                                               .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
                                                                        LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
 
     // Song name
-    state->song_name_text = ui_make_text(
+    state->drawables.song_name_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
             .text = song_get()->name, .font_type = FONT_UI, .em = 0.9, .color = {255, 255, 255, 255}, .draw_shadow = true},
-        state->song_info_container,
+        state->drawables.song_info_container,
         &(Layout_t){.offset_y = 0.05,
-                    .relative_to = state->song_progressbar,
+                    .relative_to = state->drawables.song_progressbar,
                     .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
-    ui_drawable_set_alpha_immediate(state->song_name_text, 200);
+    ui_drawable_set_alpha_immediate(state->drawables.song_name_text, 200);
 
     // Song artist and album
     char *artist_album_text;
     asprintf(&artist_album_text, "%s - %s", song_get()->artist, song_get()->album);
 
-    state->song_artist_album_text = ui_make_text(
+    state->drawables.song_artist_album_text = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
             .text = artist_album_text, .font_type = FONT_UI, .em = 0.7, .color = {255, 255, 255, 255}, .draw_shadow = true},
-        state->song_info_container,
+        state->drawables.song_info_container,
         &(Layout_t){.offset_y = 0.01,
-                    .relative_to = state->song_name_text,
+                    .relative_to = state->drawables.song_name_text,
                     .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
-    ui_drawable_set_alpha_immediate(state->song_artist_album_text, 100);
+    ui_drawable_set_alpha_immediate(state->drawables.song_artist_album_text, 100);
     free(artist_album_text);
 
     // Song controls container
-    state->song_controls_container =
-        ui_make_container(state->ui, state->song_info_container,
+    state->drawables.song_controls_container =
+        ui_make_container(state->ui, state->drawables.song_info_container,
                           &(Layout_t){.width = 1.0,
                                       .height = 0.15,
                                       .offset_y = 0.07,
-                                      .relative_to = state->song_progressbar,
+                                      .relative_to = state->drawables.song_progressbar,
                                       .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
                                                LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y},
                           CONTAINER_NONE);
@@ -446,8 +486,8 @@ void karaoke_setup(Karaoke_t *state) {
     // Play and pause buttons
     const unsigned char *play_bytes = incbin_play_img;
     const int play_bytes_len = sizeof incbin_play_img;
-    state->play_button =
-        ui_make_image(state->ui, play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->song_controls_container,
+    state->drawables.play_button =
+        ui_make_image(state->ui, play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,
@@ -455,19 +495,19 @@ void karaoke_setup(Karaoke_t *state) {
 
     const unsigned char *pause_bytes = incbin_pause_img;
     const int pause_bytes_len = sizeof incbin_pause_img;
-    state->pause_button =
-        ui_make_image(state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->song_controls_container,
+    state->drawables.pause_button =
+        ui_make_image(state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,
                                   .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
-    state->pause_button->enabled = false;
+    state->drawables.pause_button->enabled = false;
 
-    state->lyrics_view = ui_ex_make_lyrics_view(state->ui, state->right_container, song_get());
+    state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
 
     // Help text on the bottom left
     // About how to show reading hints
-    Drawable_t *temp_text =
+    state->drawables.hint_show_hints =
         ui_make_text(state->ui,
                      &(Drawable_TextData_t){
                          .text = "R: Show/hide reading hints", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
@@ -475,35 +515,43 @@ void karaoke_setup(Karaoke_t *state) {
                      &(Layout_t){.offset_y = -0.005,
                                  .offset_x = 0.005,
                                  .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y});
-    ui_drawable_set_alpha_immediate(temp_text, 150);
+    ui_drawable_set_alpha_immediate(state->drawables.hint_show_hints, 150);
+    state->drawables.hint_show_hints->enabled = false;
     // About hiding lyrics
-    temp_text = ui_make_text(
+    state->drawables.hint_show_lyrics = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){.text = "L: Show/Hide lyrics", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
         ui_root_container(state->ui),
         &(Layout_t){.offset_y = -0.001,
                     .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = temp_text});
-    ui_drawable_set_alpha_immediate(temp_text, 150);
+                    .relative_to = state->drawables.hint_show_hints});
+    ui_drawable_set_alpha_immediate(state->drawables.hint_show_lyrics, 150);
+    state->drawables.hint_show_lyrics->enabled = false;
     // About seeking with arrow keys
-    temp_text = ui_make_text(
+    state->drawables.hint_seek = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){
             .text = "Arrow keys: Seek backward/forward", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
         ui_root_container(state->ui),
         &(Layout_t){.offset_y = -0.001,
                     .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = temp_text});
-    ui_drawable_set_alpha_immediate(temp_text, 150);
+                    .relative_to = state->drawables.hint_show_lyrics});
+    ui_drawable_set_alpha_immediate(state->drawables.hint_seek, 150);
+    state->drawables.hint_seek->enabled = false;
     // About using space to play/pause
-    temp_text = ui_make_text(
+    state->drawables.hint_play_pause = ui_make_text(
         state->ui,
         &(Drawable_TextData_t){.text = "Space: Play/pause", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
         ui_root_container(state->ui),
         &(Layout_t){.offset_y = -0.001,
                     .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = temp_text});
-    ui_drawable_set_alpha_immediate(temp_text, 150);
+                    .relative_to = state->drawables.hint_seek});
+    ui_drawable_set_alpha_immediate(state->drawables.hint_play_pause, 150);
+    state->drawables.hint_play_pause->enabled = false;
+
+    // Default state until mouse moves
+    state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
+    state->drawables.song_controls_container->enabled = true;
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
@@ -514,11 +562,11 @@ static void update_elapsed_text(const Karaoke_t *state) {
     char *time_str;
     asprintf(&time_str, "%.2d:%.2d", minutes, seconds);
 
-    Drawable_TextData_t *custom_data = state->elapsed_time_text->custom_data;
+    Drawable_TextData_t *custom_data = state->drawables.elapsed_time_text->custom_data;
     if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
         free(custom_data->text);
         custom_data->text = time_str;
-        ui_recompute_drawable(state->ui, state->elapsed_time_text);
+        ui_recompute_drawable(state->ui, state->drawables.elapsed_time_text);
     } else {
         free(time_str);
     }
@@ -531,35 +579,35 @@ static void update_remaining_text(const Karaoke_t *state) {
     char *time_str;
     asprintf(&time_str, "-%.2d:%.2d", minutes, seconds);
 
-    Drawable_TextData_t *custom_data = state->remaining_time_text->custom_data;
+    Drawable_TextData_t *custom_data = state->drawables.remaining_time_text->custom_data;
     if ( strcmp(time_str, custom_data->text) != 0 ) {
         free(custom_data->text);
         custom_data->text = time_str;
-        ui_recompute_drawable(state->ui, state->remaining_time_text);
+        ui_recompute_drawable(state->ui, state->drawables.remaining_time_text);
     } else {
         free(time_str);
     }
 }
 
 static void update_song_progressbar(const Karaoke_t *state) {
-    if ( state->song_progressbar != NULL ) {
+    if ( state->drawables.song_progressbar != NULL ) {
         const double progress = audio_elapsed_time() / audio_total_time();
-        ((Drawable_ProgressBarData_t *)state->song_progressbar->custom_data)->progress = (float)progress;
+        ((Drawable_ProgressBarData_t *)state->drawables.song_progressbar->custom_data)->progress = (float)progress;
     }
 }
 
 static void toggle_pause(const Karaoke_t *state) {
     if ( audio_is_paused() ) {
         audio_resume();
-        state->lyrics_view->container->viewport_y = 0;
+        state->drawables.lyrics_view->container->viewport_y = 0;
     } else
         audio_pause();
 }
 
 static void update_play_pause_state(const Karaoke_t *state) {
     const bool paused = audio_is_paused();
-    state->play_button->enabled = paused;
-    state->pause_button->enabled = !paused;
+    state->drawables.play_button->enabled = paused;
+    state->drawables.pause_button->enabled = !paused;
 }
 
 /**
@@ -567,10 +615,10 @@ static void update_play_pause_state(const Karaoke_t *state) {
  * to the lyrics disappearing and the album art (and song info) being centered in the screen
  */
 static void toggle_show_lyrics(const Karaoke_t *state) {
-    state->right_container->enabled = !state->right_container->enabled;
+    state->drawables.right_container->enabled = !state->drawables.right_container->enabled;
 
-    Layout_t *layout = &state->left_container->layout;
-    if ( state->right_container->enabled ) {
+    Layout_t *layout = &state->drawables.left_container->layout;
+    if ( state->drawables.right_container->enabled ) {
         // Left container stays on the left (duh)
         layout->flags &= ~LAYOUT_ANCHOR_CENTER_X;
         layout->offset_x = 0;
@@ -580,7 +628,7 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
         layout->offset_x = 0.5;
     }
 
-    ui_reposition_container(state->ui, state->left_container);
+    ui_reposition_container(state->ui, state->drawables.left_container);
 }
 
 static void handle_user_input(const Karaoke_t *state) {
@@ -598,33 +646,33 @@ static void handle_user_input(const Karaoke_t *state) {
     int32_t mouse_x;
     // Check if the user clicked the progress bar
     Bounds_t progress_bar_bounds;
-    if ( ui_mouse_clicked_drawable(state->song_progressbar, 10, &progress_bar_bounds, &mouse_x, NULL) ) {
+    if ( ui_mouse_clicked_drawable(state->drawables.song_progressbar, 10, &progress_bar_bounds, &mouse_x, NULL) ) {
         const double distance_from_x = mouse_x - progress_bar_bounds.x;
-        const double distance = distance_from_x / state->song_progressbar->bounds.w;
+        const double distance = distance_from_x / state->drawables.song_progressbar->bounds.w;
         audio_seek(audio_total_time() * distance);
         // Reset viewport
-        state->lyrics_view->container->viewport_y = 0;
+        state->drawables.lyrics_view->container->viewport_y = 0;
     }
     // Check if clicked on the play/pause button
     // it doesn't matter which we choose because they're both at the same position with the same size
-    if ( ui_mouse_clicked_drawable(state->play_button, 0, NULL, NULL, NULL) ) {
+    if ( ui_mouse_clicked_drawable(state->drawables.play_button, 0, NULL, NULL, NULL) ) {
         toggle_pause(state);
     }
 
-    if ( ui_mouse_hovering_container(state->song_info_container, NULL, NULL, NULL) ) {
-        state->song_name_text->enabled = state->song_artist_album_text->enabled = false;
-        state->song_controls_container->enabled = true;
-    } else {
-        const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
-        state->song_name_text->enabled = state->song_artist_album_text->enabled = !is_not_played;
-        state->song_controls_container->enabled = is_not_played;
+    // if ( ui_mouse_hovering_container(state->song_info_container, NULL, NULL, NULL) ) {
+    //     state->song_name_text->enabled = state->song_artist_album_text->enabled = false;
+    //     state->song_controls_container->enabled = true;
+    // } else {
+    //     const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
+    //     state->song_name_text->enabled = state->song_artist_album_text->enabled = !is_not_played;
+    //     state->song_controls_container->enabled = is_not_played;
+    // }
+
+    if ( ui_mouse_hovering_container(state->drawables.lyrics_view->container, NULL, NULL, NULL) ) {
+        ui_ex_lyrics_view_on_scroll(state->drawables.lyrics_view, events_get_mouse_scrolled());
     }
 
-    if ( ui_mouse_hovering_container(state->lyrics_view->container, NULL, NULL, NULL) ) {
-        ui_ex_lyrics_view_on_scroll(state->lyrics_view, events_get_mouse_scrolled());
-    }
-
-    if ( ui_mouse_clicked_drawable(state->back_button, 0, NULL, NULL, NULL) ) {
+    if ( ui_mouse_clicked_drawable(state->drawables.back_button, 0, NULL, NULL, NULL) ) {
         etsuko_navigate("/", "");
         global_mode_switch(APP_MODE_MENU);
     }
@@ -647,8 +695,8 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     update_play_pause_state(state);
     // Update the lyrics view
     if ( events_window_changed() )
-        ui_ex_lyrics_view_on_screen_change(state->ui, state->lyrics_view);
-    ui_ex_lyrics_view_loop(state->ui, state->lyrics_view);
+        ui_ex_lyrics_view_on_screen_change(state->ui, state->drawables.lyrics_view);
+    ui_ex_lyrics_view_loop(state->ui, state->drawables.lyrics_view);
 
     // Clear events after all checking has been done because under emscripten the events aren't polled inside glfw
     // so we would clear all the events before we could see them

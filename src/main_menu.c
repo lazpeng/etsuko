@@ -464,14 +464,14 @@ static void iterate_drawables_for_input(const char *key, void *data, void *userd
 
     if ( ui_mouse_clicked_drawable(image, 0, NULL, NULL, NULL) ) {
         Config_t *config = config_get();
-        if ( config->song_file != NULL )
-            free(config->song_file);
+        if ( config->karaoke.song_file != NULL )
+            free(config->karaoke.song_file);
 
         // TODO: Centralize this logic somewhere. right now it's duplicated and fragile
         char *file;
         asprintf(&file, "%s.txt", key);
         str_replace_char(file, '_', ' ');
-        config->song_file = file;
+        config->karaoke.song_file = file;
         printf("file: %s\n", file);
         etsuko_navigate("/?song=", key);
 

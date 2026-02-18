@@ -43,17 +43,20 @@ static Config_t *get_default_config(void) {
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
     config->ui_font = strdup("NotoSans-Regular.ttf");
-    config->song_file = strdup("tiny stars.txt");
-    config->hide_past_lyrics = true;
-    config->draw_album_art_shadow = true;
-    config->draw_lyric_shadow = true;
-    config->show_loading_screen = true;
-    config->enlarge_active_line = false;
     config->op_mode = APP_MODE_MENU;
-    config->enable_dynamic_fill = true;
-    config->enable_reading_hints = true;
-    config->enable_pulse_effect = true;
     config->time_scale = 1.0;
+    config->karaoke = (struct KaraokeOpts_t) {
+        .song_file = strdup("tiny stars.txt"),
+        .hide_ui_elements_delay_sec = 2.0,
+        .enable_dynamic_fill = true,
+        .enable_reading_hints = true,
+        .enable_pulse_effect = true,
+        .hide_past_lyrics = true,
+        .draw_album_art_shadow = true,
+        .draw_lyric_shadow = true,
+        .show_loading_screen = true,
+        .enlarge_active_line = false,
+    };
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

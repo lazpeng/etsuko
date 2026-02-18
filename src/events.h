@@ -45,4 +45,8 @@ bool events_key_was_pressed(Key_t key);
 // Returns a pixel scale from virtual pixel coordinates to real screen coordinates (in practice is 1.0 in all platforms other than macOS)
 void events_set_window_pixel_scale(double scale);
 
+bool events_mouse_moved(void);
+// Time since either the mouse stopped moving
+double events_time_since_mouse_stopped(void);
+
 #endif // ETSUKO_EVENTS_H

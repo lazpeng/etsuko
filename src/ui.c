@@ -18,10 +18,70 @@
 #include "constants.h"
 #include "container_utils.h"
 
+typedef struct ZLayer_t {
+    int index;
+    Vector_t *nodes; // of Drawable_t*
+    struct ZLayer_t *next, *prev;
+} ZLayer_t;
+
+typedef struct EventDef_t {
+    UiEvent_t type;
+    WEAK c_ui_event_callback callback;
+    WEAK Drawable_t *target;
+    WEAK void *custom_data;
+} EventDef_t;
+
 struct Ui_t {
     Container_t root_container;
     Texture_t *null_texture;
+    ZLayer_t *z_layers_head;
+    Vector_t *global_events;
 };
+
+static ZLayer_t *z_layer_init(const int index) {
+    ZLayer_t *z_layer = calloc(1, sizeof(*z_layer));
+    z_layer->index = index;
+    z_layer->next = NULL;
+    z_layer->prev = NULL;
+    z_layer->nodes = vec_init();
+    return z_layer;
+}
+
+static ZLayer_t *append_z_layer(ZLayer_t **head, const int index) {
+    if ( *head == NULL )
+        return *head = z_layer_init(index);
+
+    if ( (*head)->index < index ) {
+        // new head
+        ZLayer_t *new_head = z_layer_init(index);
+        (*head)->next = new_head;
+        new_head->prev = *head;
+        *head = new_head;
+        return new_head;
+    }
+
+    ZLayer_t *cur = *head;
+    while ( true ) {
+        if ( cur->prev == NULL ) {
+            ZLayer_t *new_tail = z_layer_init(index);
+            cur->prev = new_tail;
+            return new_tail;
+        }
+        if ( cur->index == index )
+            return cur;
+        if ( cur->prev->index < index ) {
+            // between these two
+            ZLayer_t *new_between = z_layer_init(index);
+            cur->prev->next = new_between;
+            cur->prev = new_between;
+            new_between->prev = cur->prev;
+            new_between->next = cur;
+            return new_between;
+        }
+
+        cur = cur->prev;
+    }
+}
 
 Ui_t *ui_init(void) {
     Ui_t *ui = calloc(1, sizeof(*ui));
@@ -35,6 +95,8 @@ Ui_t *ui_init(void) {
     ui->root_container.enabled = true;
 
     ui->null_texture = render_make_null();
+    ui->z_layers_head = append_z_layer(&ui->z_layers_head, 0);
+    ui->global_events = vec_init();
 
     ui_on_window_changed(ui);
 
@@ -122,9 +184,47 @@ static void update_animations(const Ui_t *ui, const double delta_time) {
     container_update_animations(&ui->root_container, delta_time);
 }
 
+static void handle_global_mouse_input(const Ui_t *ui) {
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+    for ( size_t i = 0; i < ui->global_events->size; i++ ) {
+        const EventDef_t *def = ui->global_events->data[i];
+
+        if ( def->type == UI_EVENT_MOUSE_MOVE && events_mouse_moved() ) {
+            const UiEventOpts_t opts = {
+                .event = def->type,
+                .mouse = {
+                    .x = mouse_x,
+                    .y = mouse_y,
+                    .clicked = false,
+                    .duration = 0
+                }
+            };
+            def->callback(&opts, NULL, def->custom_data);
+        } else if ( def->type == UI_EVENT_MOUSE_STOPPED && !events_mouse_moved() ) {
+            const UiEventOpts_t opts = {
+                .event = def->type,
+                .mouse = {
+                    .x = mouse_x,
+                    .y = mouse_y,
+                    .clicked = false,
+                    .duration = events_time_since_mouse_stopped()
+                }
+            };
+            def->callback(&opts, NULL, def->custom_data);
+        }
+    }
+}
+
+static void handle_user_input(Ui_t *ui, const double delta_time) {
+    handle_global_mouse_input(ui);
+}
+
 void ui_begin_loop(Ui_t *ui) {
     if ( events_window_changed() )
         ui_on_window_changed(ui);
+
+    handle_user_input(ui, events_get_delta_time());
 
     render_clear();
     update_animations(ui, events_get_delta_time());
@@ -144,7 +244,7 @@ static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t 
 static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
     const Drawable_RectangleData_t *data = drawable->custom_data;
 
-    float border_radius = 1;//(float)data->border_radius_em;
+    float border_radius = 1; //(float)data->border_radius_em;
     if ( border_radius > 0 )
         border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
     render_draw_rounded_rect(drawable->texture, bounds, &data->color, border_radius);
@@ -626,7 +726,7 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
         con_bounds.w = container->bounds.w;
         con_bounds.h = container->bounds.h;
 
-        render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r=255,.g=100,.b=100,.a=50}, 0);
+        render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r = 255, .g = 100, .b = 100, .a = 50}, 0);
     }
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y;
@@ -645,6 +745,47 @@ void ui_draw(const Ui_t *ui) {
     draw_all_container(ui, &ui->root_container, bounds);
 }
 
+void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *target, const c_ui_event_callback callback, void *custom_data) {
+    if ( callback == NULL )
+        error_abort("ui_add_event_callback: callback is NULL");
+
+    const int layer_idx = 0; // always 0 for now
+    const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_idx);
+
+    EventDef_t *event = calloc(1, sizeof(*event));
+    event->type = event_type;
+    event->target = target;
+    event->callback = callback;
+    event->custom_data = custom_data;
+
+    vec_add(target->events, event);
+
+    if ( target->events->size > 0 )
+        return; // it's been added to the z layers already
+    vec_add(layer->nodes, target);
+}
+
+void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, const c_ui_event_callback callback, void *custom_data) {
+    if ( callback == NULL )
+        error_abort("ui_add_event_callback: callback is NULL");
+
+    switch ( event_type ) {
+    case UI_EVENT_MOUSE_MOVE:
+    case UI_EVENT_MOUSE_STOPPED:
+        break;
+    default:
+        printf("Non-global event passed to ui_add_global_event_callback: nothing will happen\n");
+        return;
+    }
+
+    EventDef_t *event = calloc(1, sizeof(*event));
+    event->type = event_type;
+    event->callback = callback;
+    event->target = NULL;
+    event->custom_data = custom_data;
+    vec_add(ui->global_events, event);
+}
+
 void ui_end_loop(void) { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
@@ -652,6 +793,20 @@ void ui_set_window_title(const char *title) { render_set_window_title(title); }
 void ui_finish(Ui_t *ui) {
     // Free stored textures and drawables
     ui_destroy_container(ui, &ui->root_container);
+    // Free global events
+    for ( size_t i = 0; i < ui->global_events->size; i++ ) {
+        free(ui->global_events->data[i]);
+    }
+    vec_destroy(ui->global_events);
+    // Free z layers
+    ZLayer_t *cur = ui->z_layers_head;
+    while ( cur != NULL ) {
+        // No need to individually destroy the nodes since they're weak references to drawables
+        vec_destroy(cur->nodes);
+        ZLayer_t *temp = cur->prev;
+        free(cur);
+        cur = temp;
+    }
     // Cleanup
     free(ui);
 }
@@ -925,6 +1080,7 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     result->color_mod = 1.f;
     result->animations = vec_init();
     result->active_animations = vec_init();
+    result->events = vec_init();
 
     return result;
 }
@@ -992,7 +1148,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
 
     Drawable_TextData_t *data = dup_text_data(weak_data);
     const bool should_compute_offsets =
-        data->compute_offsets && (config_get()->enable_dynamic_fill || config_get()->enable_reading_hints);
+        data->compute_offsets && (config_get()->karaoke.enable_dynamic_fill || config_get()->karaoke.enable_reading_hints);
 
     if ( should_compute_offsets ) {
         if ( data->line_offsets != NULL ) {
@@ -1176,7 +1332,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
     return result;
 }
 
-void ui_destroy_drawable(Drawable_t *drawable) {
+void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     if ( drawable->texture != NULL ) {
         render_destroy_texture(drawable->texture);
     }
@@ -1207,9 +1363,16 @@ void ui_destroy_drawable(Drawable_t *drawable) {
     for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
         animation_destroy(drawable->active_animations->data[i], true);
     }
+    vec_destroy(drawable->active_animations);
     for ( size_t i = 0; i < drawable->animations->size; i++ ) {
         animation_destroy(drawable->animations->data[i], true);
     }
+    vec_destroy(drawable->animations);
+    const bool has_events = drawable->events->size > 0;
+    for ( size_t i = 0; i < drawable->events->size; i++ ) {
+        free(drawable->events->data[i]);
+    }
+    vec_destroy(drawable->events);
     // Find the drawable in the scene graph
     const Container_t *parent = drawable->parent;
     for ( size_t i = 0; i < parent->child_drawables->size; i++ ) {
@@ -1218,6 +1381,19 @@ void ui_destroy_drawable(Drawable_t *drawable) {
             break;
         }
     }
+    // Find the drawable in the z layers
+    if ( has_events ) {
+        const int layer_index = 0; // TODO: Find correct layer
+        // guaranteed (maybe?) to not allocate since it should have been already allocated when the drawable
+        //  was added to the z layers when an event was attached to it
+        const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_index);
+        for ( size_t i = 0; i < layer->nodes->size; i++ ) {
+            if ( layer->nodes->data[i] == drawable ) {
+                vec_remove(layer->nodes, i);
+            }
+        }
+    }
+
     free(drawable);
 }
 
@@ -1247,7 +1423,7 @@ Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *la
 
 void ui_destroy_container(Ui_t *ui, Container_t *container) {
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        ui_destroy_drawable(container->child_drawables->data[i]);
+        ui_destroy_drawable(ui, container->child_drawables->data[i]);
     }
     vec_destroy(container->child_drawables);
 

@@ -134,13 +134,13 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
 }
 
 static double get_line_vertical_padding(const LyricsView_t *view) {
-    const bool has_hints = view->song->has_reading_info && config_get()->enable_reading_hints;
+    const bool has_hints = view->song->has_reading_info && config_get()->karaoke.enable_reading_hints;
 
     return has_hints ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
 }
 
 static float get_inactive_line_scale() {
-    return config_get()->enlarge_active_line ? LINE_SCALE_FACTOR_INACTIVE : LINE_SCALE_FACTOR_ACTIVE;
+    return config_get()->karaoke.enlarge_active_line ? LINE_SCALE_FACTOR_INACTIVE : LINE_SCALE_FACTOR_ACTIVE;
 }
 
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
@@ -158,7 +158,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
 
-    const bool should_generate_reading_hints = song->has_reading_info && config_get()->enable_reading_hints;
+    const bool should_generate_reading_hints = song->has_reading_info && config_get()->karaoke.enable_reading_hints;
 
     if ( song->lyrics_lines->size == 0 ) {
         error_abort("Song has no lyrics");
@@ -225,7 +225,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .color = color,
                                     .line_padding_em = line_padding,
                                     .alignment = alignment,
-                                    .draw_shadow = config_get()->draw_lyric_shadow,
+                                    .draw_shadow = config_get()->karaoke.draw_lyric_shadow,
                                     .compute_offsets = song->has_sub_timings || song->has_reading_info};
         const double vertical_padding = get_line_vertical_padding(view);
         Layout_t layout = {
@@ -429,7 +429,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 
             const bool segment_visited = view->active_line_segment_visited[s] & (1 << i);
 
-            if ( !segment_visited && config_get()->enable_pulse_effect ) {
+            if ( !segment_visited && config_get()->karaoke.enable_pulse_effect ) {
                 ScaleRegionOpt_t region = {
                     .x0_perc = x1,
                     .x1_perc = x1 + (float)segment_fill_contribution,
@@ -605,8 +605,8 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     const LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
         double padding = 0;
-        if ( !config_get()->enlarge_active_line ) {
-            if ( view->song->has_reading_info && config_get()->enable_reading_hints ) {
+        if ( !config_get()->karaoke.enlarge_active_line ) {
+            if ( view->song->has_reading_info && config_get()->karaoke.enable_reading_hints ) {
                 padding = LINE_VERTICAL_PADDING_WITH_READINGS;
             } else {
                 padding = LINE_VERTICAL_PADDING;
@@ -629,7 +629,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         view->layout_dirty = true;
     }
 
-    const double threshold = config_get()->hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
+    const double threshold = config_get()->karaoke.hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( view->container->viewport_y < threshold ) {
         ui_drawable_set_alpha(drawable, 0);
