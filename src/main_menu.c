@@ -204,9 +204,7 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
-    const Animation_EaseTranslationData_t translation_data = {
-        .duration = ALBUM_SCALE_DURATION
-    };
+    const Animation_EaseTranslationData_t translation_data = {.duration = ALBUM_SCALE_DURATION};
     ui_animate_translation(text, &translation_data);
 
     return text;
@@ -232,15 +230,14 @@ static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Draw
         rect_layout.offset_x = 0.025;
         rect_layout.flags |= LAYOUT_RELATIVE_TO_X | LAYOUT_RELATION_X_INCLUDE_WIDTH;
     }
-    const Drawable_RectangleData_t rect_data = {
-        .border_radius_em = BORDER_RADIUS_AUTO,
-        .color = {.r = 100, .g = 100, .b = 100, .a = 100}
-    };
+    const Drawable_RectangleData_t rect_data = {.border_radius_em = BORDER_RADIUS_AUTO,
+                                                .color = {.r = 100, .g = 100, .b = 100, .a = 100}};
     Drawable_t *rect = ui_make_rectangle(menu->ui, &rect_data, container, &rect_layout);
 
     // Reposition text inside the rect
     text->layout.relative_to = rect;
-    text->layout.flags |= LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_CENTER_X | LAYOUT_ANCHOR_CENTER_Y;
+    text->layout.flags |= LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_RELATIVE_TO_POS |
+                          LAYOUT_ANCHOR_CENTER_X | LAYOUT_ANCHOR_CENTER_Y;
     text->layout.offset_x = text->layout.offset_y = 0.5;
     // TODO: drawables are repositioned in the wrong order when the screen changes
     ui_reposition_drawable(menu->ui, text);
@@ -274,7 +271,8 @@ static Container_t *setup_tag_pills(MainMenu_t *menu, const MenuSong_t *song, co
             str_buf_append(buf, tags, next);
             if ( next == NULL )
                 tags = tags_end;
-            else tags = next + 1;
+            else
+                tags = next + 1;
 
             prev_pill = setup_single_tag_pill(menu, buf->data, prev_pill, pills_container);
         }
@@ -307,9 +305,7 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
-    const Animation_EaseTranslationData_t translation_data = {
-        .duration = ALBUM_SCALE_DURATION
-    };
+    const Animation_EaseTranslationData_t translation_data = {.duration = ALBUM_SCALE_DURATION};
     ui_animate_translation(text, &translation_data);
 
     free(str);
@@ -341,7 +337,7 @@ static void setup_album(const char *_, void *value, void *userdata) {
             layout.relative_to = grid->last_in_row;
         }
 
-        const Drawable_ImageData_t data = {.border_radius_em = 1, .draw_shadow = true};
+        const Drawable_ImageData_t data = {.border_radius_em = 1};
         const AlbumArtData_t *no_data = map_get(menu->album_arts, NO_ART_KEY);
         if ( no_data == NULL ) {
             error_abort("Fatal error: Couldn't load the default album image");
