@@ -24,12 +24,12 @@ static void try_load_config_web(Config_t *config) {
     if ( strlen(song) > 0 ) {
         printf("song: %s\n", song);
 
-        if ( config->song_file != NULL ) {
-            free(config->song_file);
+        if ( config->karaoke.song_file != NULL ) {
+            free(config->karaoke.song_file);
         }
 
-        asprintf(&config->song_file, "%s.txt", song);
-        str_replace_char(config->song_file, '_', ' ');
+        asprintf(&config->karaoke.song_file, "%s.txt", song);
+        str_replace_char(config->karaoke.song_file, '_', ' ');
         config->op_mode = APP_MODE_KARAOKE;
     } // else use the default config (for now)
 }
