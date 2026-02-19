@@ -154,7 +154,6 @@ bool events_get_mouse_click(int32_t *x, int32_t *y) {
     return g_events.mouse.clicked;
 }
 
-[[deprecated("Use events instead")]]
 double events_get_mouse_scrolled(void) { return g_events.mouse.scrolled * SCROLL_MODIFIER; }
 
 bool events_any_key_was_pressed(void) {

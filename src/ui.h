@@ -359,13 +359,6 @@ void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
 void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
                                       AnimationApplyType_t apply_type);
-// User-interaction checks
-[[deprecated("Use events instead")]]
-bool ui_mouse_hovering_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                                int32_t *out_mouse_y);
-[[deprecated("Use events instead")]]
-bool ui_mouse_clicked_drawable(const Drawable_t *drawable, int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                               int32_t *out_mouse_y);
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);

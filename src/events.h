@@ -38,7 +38,8 @@ double events_get_elapsed_time(void);
 void events_get_mouse_position(int32_t *x, int32_t *y);
 // Returns whether there was a mouse click, along with the mouse cursor position relative to the pixel scale (in practice only applicable to macOS)
 bool events_get_mouse_click(int32_t *x, int32_t *y);
-// Returns the amount of mouse scroll performed by the user in the last frame. Varies by platform apparently
+// Returns the amount of mouse scroll performed by the user in the last frame.
+[[deprecated("Use events instead")]]
 double events_get_mouse_scrolled(void);
 // Whether any key was pressed in the last frame
 bool events_any_key_was_pressed(void);

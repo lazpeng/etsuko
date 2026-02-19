@@ -1991,38 +1991,6 @@ void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt
     }
 }
 
-bool ui_mouse_hovering_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                                int32_t *out_mouse_y) {
-    double canon_x, canon_y;
-    ui_get_drawable_canon_pos(drawable, &canon_x, &canon_y);
-
-    int32_t mouse_x, mouse_y;
-    events_get_mouse_position(&mouse_x, &mouse_y);
-
-    if ( out_canon_bounds ) {
-        out_canon_bounds->x = canon_x;
-        out_canon_bounds->y = canon_y;
-        out_canon_bounds->w = drawable->bounds.w;
-        out_canon_bounds->h = drawable->bounds.h;
-    }
-
-    if ( out_mouse_x )
-        *out_mouse_x = mouse_x;
-    if ( out_mouse_y )
-        *out_mouse_y = mouse_y;
-
-    return mouse_x >= canon_x - padding && mouse_x <= canon_x + drawable->bounds.w + padding && mouse_y >= canon_y - padding &&
-           mouse_y <= canon_y + drawable->bounds.h + padding;
-}
-
-bool ui_mouse_clicked_drawable(const Drawable_t *drawable, const int padding, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                               int32_t *out_mouse_y) {
-    if ( ui_mouse_hovering_drawable(drawable, padding, out_canon_bounds, out_mouse_x, out_mouse_y) ) {
-        return events_get_mouse_click(NULL, NULL);
-    }
-    return false;
-}
-
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data) {
     if ( target == NULL ) {
         error_abort("Target drawable is NULL");
