@@ -65,7 +65,7 @@ static ZLayer_t *append_z_layer(ZLayer_t **head, const int index) {
     while ( true ) {
         if ( cur->index == index )
             return cur;
-        if ( cur->prev->index < index ) {
+        if ( cur->prev != NULL && cur->prev->index < index ) {
             // between these two
             ZLayer_t *new_between = z_layer_init(index);
             cur->prev->next = new_between;
@@ -415,13 +415,13 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         double constraint_height = 0;
         measure_constraints(&layout->min_height, NULL, &constraint_height);
         if ( constraint_height != 0 )
-            h = MAX(w, constraint_height);
+            h = MAX(h, constraint_height);
     }
     if ( layout->max_height.type != CONSTRAINT_NONE ) {
         double constraint_height = 0;
         measure_constraints(&layout->max_height, NULL, &constraint_height);
         if ( constraint_height != 0 )
-            h = MIN(w, constraint_height);
+            h = MIN(h, constraint_height);
     }
 
     // width or height being zero means automatic so dependent on the actual size of the thing, e.g. text and images
