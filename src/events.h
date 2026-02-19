@@ -40,7 +40,9 @@ void events_get_mouse_position(int32_t *x, int32_t *y);
 bool events_get_mouse_click(int32_t *x, int32_t *y);
 // Returns the amount of mouse scroll performed by the user in the last frame. Varies by platform apparently
 double events_get_mouse_scrolled(void);
-// Returns whether or not the given key was pressed in the last frame
+// Whether any key was pressed in the last frame
+bool events_any_key_was_pressed(void);
+// Returns whether the given key was pressed in the last frame
 bool events_key_was_pressed(Key_t key);
 // Returns a pixel scale from virtual pixel coordinates to real screen coordinates (in practice is 1.0 in all platforms other than macOS)
 void events_set_window_pixel_scale(double scale);

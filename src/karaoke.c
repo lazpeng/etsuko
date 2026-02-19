@@ -317,9 +317,38 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
     return APP_STATUS_LOADING;
 }
 
+static void toggle_pause(const Karaoke_t *state) {
+    if ( audio_is_paused() ) {
+        audio_resume();
+        state->drawables.lyrics_view->container->viewport_y = 0;
+    } else
+        audio_pause();
+}
+
+/**
+ * Toggles the screen state between having the album art on the left and the lyrics on the right,
+ * to the lyrics disappearing and the album art (and song info) being centered in the screen
+ */
+static void toggle_show_lyrics(const Karaoke_t *state) {
+    state->drawables.right_container->enabled = !state->drawables.right_container->enabled;
+
+    Layout_t *layout = &state->drawables.left_container->layout;
+    if ( state->drawables.right_container->enabled ) {
+        // Left container stays on the left (duh)
+        layout->flags &= ~LAYOUT_ANCHOR_CENTER_X;
+        layout->offset_x = 0;
+    } else {
+        // Position the left container in the center of the screen (which should bring with it everything it holds)
+        layout->flags |= LAYOUT_ANCHOR_CENTER_X;
+        layout->offset_x = 0.5;
+    }
+
+    ui_reposition_container(state->ui, state->drawables.left_container);
+}
+
 static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
-    Karaoke_t *state = custom_data;
-    state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
+    const Karaoke_t *state = custom_data;
+    //state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
 
@@ -347,6 +376,49 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void 
     }
 }
 
+static void on_key_pressed(const UiEventOpts_t *opts, const Drawable_t *, void *custom_data) {
+    const Karaoke_t *state = custom_data;
+
+    if ( opts->keyboard.key == KEY_SPACE ) {
+        toggle_pause(state);
+    } else if ( opts->keyboard.key == KEY_ARROW_LEFT ) {
+        audio_seek_relative(-5);
+    } else if ( opts->keyboard.key == KEY_ARROW_RIGHT ) {
+        audio_seek_relative(+5);
+    } else if ( opts->keyboard.key == KEY_L ) {
+        toggle_show_lyrics(state);
+    }
+}
+
+static void on_mouse_play_button(const UiEventOpts_t *opts, const Drawable_t *, void *custom_data) {
+    Karaoke_t *state = custom_data;
+
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+        state->hovering_controls = true;
+    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        state->hovering_controls = false;
+    } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
+        toggle_pause(state);
+    }
+}
+
+static void on_back_clicked(const UiEventOpts_t *, const Drawable_t *, void *) {
+    etsuko_navigate("/", "");
+    global_mode_switch(APP_MODE_MENU);
+}
+
+static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *progress_bar, void *custom_data) {
+    const Karaoke_t *state = custom_data;
+
+    double progress_bar_x;
+    ui_get_drawable_canon_pos(progress_bar, &progress_bar_x, NULL);
+    const double distance_from_x = opt->mouse.x - progress_bar_x;
+    const double distance = distance_from_x / state->drawables.song_progressbar->bounds.w;
+    audio_seek(audio_total_time() * distance);
+    // Reset viewport
+    state->drawables.lyrics_view->container->viewport_y = 0;
+}
+
 void karaoke_setup(Karaoke_t *state) {
     if ( state->ui != NULL ) {
         ui_finish(state->ui);
@@ -358,9 +430,6 @@ void karaoke_setup(Karaoke_t *state) {
     asprintf(&window_title, "%s - %s", APP_NAME, song_get()->name);
     ui_set_window_title(window_title);
     free(window_title);
-
-    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_MOVE, on_mouse_moved, state);
-    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_STOPPED, on_mouse_stopped, state);
 
     const double vertical_padding = 0.01;
 
@@ -552,6 +621,19 @@ void karaoke_setup(Karaoke_t *state) {
     // Default state until mouse moves
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
+
+    // Global events
+    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_MOVE, on_mouse_moved, state);
+    ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_STOPPED, on_mouse_stopped, state);
+    ui_add_global_event_callback(state->ui, UI_EVENT_KEY_PRESSED, on_key_pressed, state);
+    // Play button events
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_ENTERED, state->drawables.play_button, on_mouse_play_button, state);
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.play_button, on_mouse_play_button, state);
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.play_button, on_mouse_play_button, state);
+    // Back button events
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.back_button, on_back_clicked, NULL);
+    // Progress bar events
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.song_progressbar, on_progress_bar_clicked, state);
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
@@ -596,85 +678,15 @@ static void update_song_progressbar(const Karaoke_t *state) {
     }
 }
 
-static void toggle_pause(const Karaoke_t *state) {
-    if ( audio_is_paused() ) {
-        audio_resume();
-        state->drawables.lyrics_view->container->viewport_y = 0;
-    } else
-        audio_pause();
-}
-
 static void update_play_pause_state(const Karaoke_t *state) {
     const bool paused = audio_is_paused();
     state->drawables.play_button->enabled = paused;
     state->drawables.pause_button->enabled = !paused;
 }
 
-/**
- * Toggles the screen state between having the album art on the left and the lyrics on the right,
- * to the lyrics disappearing and the album art (and song info) being centered in the screen
- */
-static void toggle_show_lyrics(const Karaoke_t *state) {
-    state->drawables.right_container->enabled = !state->drawables.right_container->enabled;
-
-    Layout_t *layout = &state->drawables.left_container->layout;
-    if ( state->drawables.right_container->enabled ) {
-        // Left container stays on the left (duh)
-        layout->flags &= ~LAYOUT_ANCHOR_CENTER_X;
-        layout->offset_x = 0;
-    } else {
-        // Position the left container in the center of the screen (which should bring with it everything it holds)
-        layout->flags |= LAYOUT_ANCHOR_CENTER_X;
-        layout->offset_x = 0.5;
-    }
-
-    ui_reposition_container(state->ui, state->drawables.left_container);
-}
-
 static void handle_user_input(const Karaoke_t *state) {
-    if ( events_key_was_pressed(KEY_SPACE) ) {
-        toggle_pause(state);
-    }
-    if ( events_key_was_pressed(KEY_ARROW_LEFT) ) {
-        audio_seek_relative(-5);
-    } else if ( events_key_was_pressed(KEY_ARROW_RIGHT) ) {
-        audio_seek_relative(+5);
-    } else if ( events_key_was_pressed(KEY_L) ) {
-        toggle_show_lyrics(state);
-    }
-
-    int32_t mouse_x;
-    // Check if the user clicked the progress bar
-    Bounds_t progress_bar_bounds;
-    if ( ui_mouse_clicked_drawable(state->drawables.song_progressbar, 10, &progress_bar_bounds, &mouse_x, NULL) ) {
-        const double distance_from_x = mouse_x - progress_bar_bounds.x;
-        const double distance = distance_from_x / state->drawables.song_progressbar->bounds.w;
-        audio_seek(audio_total_time() * distance);
-        // Reset viewport
-        state->drawables.lyrics_view->container->viewport_y = 0;
-    }
-    // Check if clicked on the play/pause button
-    // it doesn't matter which we choose because they're both at the same position with the same size
-    if ( ui_mouse_clicked_drawable(state->drawables.play_button, 0, NULL, NULL, NULL) ) {
-        toggle_pause(state);
-    }
-
-    // if ( ui_mouse_hovering_container(state->song_info_container, NULL, NULL, NULL) ) {
-    //     state->song_name_text->enabled = state->song_artist_album_text->enabled = false;
-    //     state->song_controls_container->enabled = true;
-    // } else {
-    //     const bool is_not_played = audio_elapsed_time() < 0.1 && audio_is_paused();
-    //     state->song_name_text->enabled = state->song_artist_album_text->enabled = !is_not_played;
-    //     state->song_controls_container->enabled = is_not_played;
-    // }
-
     if ( ui_mouse_hovering_container(state->drawables.lyrics_view->container, NULL, NULL, NULL) ) {
         ui_ex_lyrics_view_on_scroll(state->drawables.lyrics_view, events_get_mouse_scrolled());
-    }
-
-    if ( ui_mouse_clicked_drawable(state->drawables.back_button, 0, NULL, NULL, NULL) ) {
-        etsuko_navigate("/", "");
-        global_mode_switch(APP_MODE_MENU);
     }
 }
 

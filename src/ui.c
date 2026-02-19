@@ -36,6 +36,7 @@ struct Ui_t {
     Texture_t *null_texture;
     ZLayer_t *z_layers_head;
     Vector_t *global_events;
+    WEAK const Drawable_t *current_hovered_drawable;
 };
 
 static ZLayer_t *z_layer_init(const int index) {
@@ -62,11 +63,6 @@ static ZLayer_t *append_z_layer(ZLayer_t **head, const int index) {
 
     ZLayer_t *cur = *head;
     while ( true ) {
-        if ( cur->prev == NULL ) {
-            ZLayer_t *new_tail = z_layer_init(index);
-            cur->prev = new_tail;
-            return new_tail;
-        }
         if ( cur->index == index )
             return cur;
         if ( cur->prev->index < index ) {
@@ -77,6 +73,11 @@ static ZLayer_t *append_z_layer(ZLayer_t **head, const int index) {
             new_between->prev = cur->prev;
             new_between->next = cur;
             return new_between;
+        }
+        if ( cur->prev == NULL ) {
+            ZLayer_t *new_tail = z_layer_init(index);
+            cur->prev = new_tail;
+            return new_tail;
         }
 
         cur = cur->prev;
@@ -191,40 +192,107 @@ static void handle_global_mouse_input(const Ui_t *ui) {
         const EventDef_t *def = ui->global_events->data[i];
 
         if ( def->type == UI_EVENT_MOUSE_MOVE && events_mouse_moved() ) {
-            const UiEventOpts_t opts = {
-                .event = def->type,
-                .mouse = {
-                    .x = mouse_x,
-                    .y = mouse_y,
-                    .clicked = false,
-                    .duration = 0
-                }
-            };
+            const UiEventOpts_t opts = {.event = def->type,
+                                        .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = 0}};
             def->callback(&opts, NULL, def->custom_data);
         } else if ( def->type == UI_EVENT_MOUSE_STOPPED && !events_mouse_moved() ) {
             const UiEventOpts_t opts = {
                 .event = def->type,
-                .mouse = {
-                    .x = mouse_x,
-                    .y = mouse_y,
-                    .clicked = false,
-                    .duration = events_time_since_mouse_stopped()
-                }
-            };
+                .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = events_time_since_mouse_stopped()}};
             def->callback(&opts, NULL, def->custom_data);
         }
     }
 }
 
-static void handle_user_input(Ui_t *ui, const double delta_time) {
+static void handle_global_keyboard_input(const Ui_t *ui) {
+    if ( !events_any_key_was_pressed() )
+        return;
+    // fire one event for every key that was pressed
+    // but usually it'll be just one or two at most
+    for ( size_t i = 0; i < ui->global_events->size; i++ ) {
+        const EventDef_t *def = ui->global_events->data[i];
+        if ( def->type == UI_EVENT_KEY_PRESSED ) {
+            for ( Key_t key = 0; key < KEY_INVALID; key++ ) {
+                if ( events_key_was_pressed(key) ) {
+                    const UiEventOpts_t opts = {.event = def->type, .keyboard = {.key = key}};
+                    def->callback(&opts, NULL, def->custom_data);
+                }
+            }
+        }
+    }
+}
+
+static void handle_mouse_input(Ui_t *ui) {
+    const Drawable_t *hovered_drawable = NULL;
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+    const bool clicked = events_get_mouse_click(NULL, NULL);
+
+    const ZLayer_t *cur = ui->z_layers_head;
+    while ( cur != NULL ) {
+        for ( size_t i = 0; i < cur->nodes->size; i++ ) {
+            const Drawable_t *drawable = cur->nodes->data[i];
+            double d_pos_x, d_pos_y;
+            ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
+            const bool outside = mouse_x < d_pos_x || mouse_x > d_pos_x + drawable->bounds.w || mouse_y < d_pos_y ||
+                                 mouse_y > d_pos_y + drawable->bounds.h;
+            if ( outside )
+                continue;
+
+            for ( size_t e = 0; e < drawable->events->size; e++ ) {
+                const EventDef_t *def = drawable->events->data[e];
+                if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED && ui->current_hovered_drawable != drawable ) {
+                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    def->callback(&opts, drawable, def->custom_data);
+                } else if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
+                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    def->callback(&opts, drawable, def->custom_data);
+                }
+            }
+
+            hovered_drawable = drawable;
+            break;
+        }
+
+        if ( hovered_drawable != NULL )
+            break;
+
+        cur = cur->prev;
+    }
+
+    if ( ui->current_hovered_drawable != hovered_drawable ) {
+        if ( ui->current_hovered_drawable != NULL ) {
+            // Hover exit
+            for ( size_t i = 0; i < ui->current_hovered_drawable->events->size; i++ ) {
+                const EventDef_t *def = ui->current_hovered_drawable->events->data[i];
+                if ( def->type == UI_EVENT_MOUSE_HOVER_EXITED ) {
+                    const UiEventOpts_t opts = {.event = def->type,
+                                                .mouse = {
+                                                    .x = mouse_x,
+                                                    .y = mouse_y,
+                                                    .clicked = clicked,
+                                                    .duration = 0,
+                                                    .scroll = 0,
+                                                }};
+                    def->callback(&opts, ui->current_hovered_drawable, def->custom_data);
+                }
+            }
+        }
+        ui->current_hovered_drawable = hovered_drawable;
+    }
+}
+
+static void handle_user_input(Ui_t *ui) {
     handle_global_mouse_input(ui);
+    handle_global_keyboard_input(ui);
+    handle_mouse_input(ui);
 }
 
 void ui_begin_loop(Ui_t *ui) {
     if ( events_window_changed() )
         ui_on_window_changed(ui);
 
-    handle_user_input(ui, events_get_delta_time());
+    handle_user_input(ui);
 
     render_clear();
     update_animations(ui, events_get_delta_time());
@@ -745,7 +813,8 @@ void ui_draw(const Ui_t *ui) {
     draw_all_container(ui, &ui->root_container, bounds);
 }
 
-void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *target, const c_ui_event_callback callback, void *custom_data) {
+void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *target, const c_ui_event_callback callback,
+                           void *custom_data) {
     if ( callback == NULL )
         error_abort("ui_add_event_callback: callback is NULL");
 
@@ -758,20 +827,22 @@ void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *tar
     event->callback = callback;
     event->custom_data = custom_data;
 
+    // or else it's been added to the z layers already
+    if ( target->events->size == 0 ) {
+        vec_add(layer->nodes, target);
+    }
     vec_add(target->events, event);
-
-    if ( target->events->size > 0 )
-        return; // it's been added to the z layers already
-    vec_add(layer->nodes, target);
 }
 
-void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, const c_ui_event_callback callback, void *custom_data) {
+void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, const c_ui_event_callback callback,
+                                  void *custom_data) {
     if ( callback == NULL )
         error_abort("ui_add_event_callback: callback is NULL");
 
     switch ( event_type ) {
     case UI_EVENT_MOUSE_MOVE:
     case UI_EVENT_MOUSE_STOPPED:
+    case UI_EVENT_KEY_PRESSED:
         break;
     default:
         printf("Non-global event passed to ui_add_global_event_callback: nothing will happen\n");

@@ -11,15 +11,6 @@
 #define SCROLL_MODIFIER (10)
 #endif
 
-static bool g_quit = false;
-static bool g_window_resized = false;
-static double g_mouse_scroll = 0;
-static bool g_mouse_clicked = false;
-static bool g_key_presses[KEY_INVALID] = {0};
-static double g_window_pixel_scale = 1.0;
-static double g_prev_ticks = 0;
-static double g_delta_time = 0;
-
 struct Events_t {
     struct {
         int32_t x, y;
@@ -27,10 +18,24 @@ struct Events_t {
     struct {
         int32_t x, y;
         double elapsed_since_move;
+        bool clicked;
+        double scrolled;
     } mouse;
+    bool quit;
+    struct {
+        bool resized;
+        double pixel_scale;
+    } window;
+    struct {
+        double prev_ticks, delta;
+    } time;
+    struct {
+        bool any_pressed;
+        bool key_presses[KEY_INVALID];
+    } keyboard;
 } g_events;
 
-static void clear_key_presses(void) { memset(g_key_presses, 0, sizeof(g_key_presses)); }
+static void clear_key_presses(void) { memset(g_events.keyboard.key_presses, 0, sizeof(g_events.keyboard.key_presses)); }
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -58,17 +63,14 @@ static void key_callback(GLFWwindow *, const int key, int, const int action, int
             return;
         }
 
-        g_key_presses[k] = true;
+        g_events.keyboard.any_pressed = true;
+        g_events.keyboard.key_presses[k] = true;
     }
 }
 
-static void mouse_button_callback(GLFWwindow *window, const int button, const int action, int) {
+static void mouse_button_callback(GLFWwindow *, const int button, const int action, int) {
     if ( button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS ) {
-        double x, y;
-        glfwGetCursorPos(window, &x, &y);
-        // g_mouse_x = (int32_t)(x * g_window_pixel_scale);
-        // g_mouse_y = (int32_t)(y * g_window_pixel_scale);
-        g_mouse_clicked = true;
+        g_events.mouse.clicked = true;
     }
 }
 
@@ -77,14 +79,14 @@ static void cursor_position_callback(GLFWwindow *window, const double x_pos, con
     glfwGetWindowSize(window, &width, &height);
     if ( x_pos < 0.0 || x_pos > width || y_pos < 0.0 || y_pos > height )
         return;
-    g_events.mouse.x = (int32_t)(x_pos * g_window_pixel_scale);
-    g_events.mouse.y = (int32_t)(y_pos * g_window_pixel_scale);
+    g_events.mouse.x = (int32_t)(x_pos * g_events.window.pixel_scale);
+    g_events.mouse.y = (int32_t)(y_pos * g_events.window.pixel_scale);
 }
 
-static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_mouse_scroll += y_offset; }
+static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_events.mouse.scrolled = y_offset; }
 
 static void window_size_callback(GLFWwindow *, int, int) {
-    g_window_resized = true;
+    g_events.window.resized = true;
 }
 
 void events_setup_callbacks(void *window) {
@@ -104,37 +106,37 @@ void events_finish(void) {}
 
 void events_loop(void) {
     const double ticks = glfwGetTime();
-    if ( g_prev_ticks != 0 ) {
-        g_delta_time = ticks - g_prev_ticks;
+    if ( g_events.time.prev_ticks != 0 ) {
+        g_events.time.delta  = ticks - g_events.time.prev_ticks;
     }
-    g_prev_ticks = ticks;
+    g_events.time.prev_ticks = ticks;
 
     glfwPollEvents();
 
     if ( glfwWindowShouldClose(glfwGetCurrentContext()) ) {
-        g_quit = true;
+        g_events.quit = true;
     }
 
     if ( events_mouse_moved() ) {
         g_events.mouse.elapsed_since_move = 0.0;
     } else {
-        g_events.mouse.elapsed_since_move += g_delta_time;
+        g_events.mouse.elapsed_since_move += g_events.time.delta ;
     }
 }
 
 void events_frame_end(void) {
     // Reset
-    g_window_resized = false;
-    g_mouse_scroll = 0;
-    g_mouse_clicked = false;
-    // Don't clear mouse_x and mouse_y
+    g_events.window.resized = false;
+    g_events.mouse.scrolled = 0;
+    g_events.mouse.clicked = false;
+    g_events.keyboard.any_pressed = false;
     clear_key_presses();
     // Update prev
     g_events.prev_mouse.x = g_events.mouse.x;
     g_events.prev_mouse.y = g_events.mouse.y;
 }
 
-double events_get_delta_time(void) { return g_delta_time * config_get()->time_scale; }
+double events_get_delta_time(void) { return g_events.time.delta * config_get()->time_scale; }
 double events_get_elapsed_time(void) { return glfwGetTime(); }
 
 void events_get_mouse_position(int32_t *x, int32_t *y) {
@@ -145,23 +147,27 @@ void events_get_mouse_position(int32_t *x, int32_t *y) {
 }
 
 bool events_get_mouse_click(int32_t *x, int32_t *y) {
-    if ( g_mouse_clicked ) {
+    if ( g_events.mouse.clicked ) {
         events_get_mouse_position(x, y);
     }
 
-    return g_mouse_clicked;
+    return g_events.mouse.clicked;
 }
 
 [[deprecated("Use events instead")]]
-double events_get_mouse_scrolled(void) { return g_mouse_scroll * SCROLL_MODIFIER; }
+double events_get_mouse_scrolled(void) { return g_events.mouse.scrolled * SCROLL_MODIFIER; }
 
-bool events_key_was_pressed(const Key_t key) { return g_key_presses[key]; }
+bool events_any_key_was_pressed(void) {
+    return g_events.keyboard.any_pressed;
+}
 
-bool events_has_quit(void) { return g_quit; }
+bool events_key_was_pressed(const Key_t key) { return g_events.keyboard.key_presses[key]; }
 
-bool events_window_changed(void) { return g_window_resized; }
+bool events_has_quit(void) { return g_events.quit; }
 
-void events_set_window_pixel_scale(const double scale) { g_window_pixel_scale = scale; }
+bool events_window_changed(void) { return g_events.window.resized; }
+
+void events_set_window_pixel_scale(const double scale) { g_events.window.pixel_scale = scale; }
 
 bool events_mouse_moved(void) {
     return g_events.mouse.x != g_events.prev_mouse.x || g_events.mouse.y != g_events.prev_mouse.y;

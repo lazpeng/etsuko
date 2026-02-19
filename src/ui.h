@@ -10,6 +10,7 @@
 
 #include "constants.h"
 #include "container_utils.h"
+#include "events.h"
 #include "renderer.h"
 
 // Fw declarations
@@ -291,6 +292,10 @@ typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
     UI_EVENT_MOUSE_MOVE,
     UI_EVENT_MOUSE_STOPPED,
+    UI_EVENT_KEY_PRESSED,
+    UI_EVENT_MOUSE_HOVER_ENTERED,
+    UI_EVENT_MOUSE_HOVER_EXITED,
+    UI_EVENT_MOUSE_CLICK,
 } UiEvent_t;
 
 typedef struct UiEventOpts_t {
@@ -299,10 +304,11 @@ typedef struct UiEventOpts_t {
         double x, y;
         bool clicked;
         double duration;
+        double scroll;
     } mouse;
     struct {
-        double amount;
-    } scroll;
+        Key_t key;
+    } keyboard;
 } UiEventOpts_t;
 
 typedef void (*c_ui_event_callback)(const UiEventOpts_t *opts, MAYBE_NULL const Drawable_t *target, void *custom_data);
