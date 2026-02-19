@@ -38,7 +38,7 @@ typedef struct etsuko_LyricsView_t {
     WEAK const Song_t *song;
     OWNING Vector_t *line_drawables;  // of Drawable_t
     OWNING Vector_t *line_read_hints; // of Drawable_t
-    int32_t current_active_index;
+    int32_t current_active_index, current_hovered_index;
     LineState_t line_states[MAX_SONG_LINES];
     double prev_viewport_y;
     bool layout_dirty;

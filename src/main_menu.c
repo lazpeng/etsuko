@@ -40,7 +40,6 @@ struct MainMenu_t {
     OWNING Vector_t *album_art_loads;      // of Resource_t
     WEAK const char *selected_song;
     WEAK Container_t *container;
-    WEAK Drawable_t *current_focused_image;
     bool album_data_dirty;
     GridLayoutInfo_t grid_layout_info;
 };
@@ -48,6 +47,8 @@ struct MainMenu_t {
 typedef struct SongEntryDrawables_t {
     WEAK Drawable_t *image, *title, *album;
     WEAK Container_t *pills_container;
+    WEAK MainMenu_t *menu;
+    WEAK const char *key;
 } SongEntryDrawables_t;
 
 typedef enum AlbumArtState_t { ART_NOT_LOADED = 0, ART_PENDING_DRAW = 1, ART_OK } AlbumArtState_t;
@@ -186,6 +187,57 @@ AppStatus_t menu_load_loop(MainMenu_t *menu) {
     if ( loaded )
         return APP_STATUS_OK;
     return APP_STATUS_LOADING;
+}
+
+static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom_data) {
+    const SongEntryDrawables_t *entry = custom_data;
+    MainMenu_t *menu = entry->menu;
+
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+        menu->selected_song = entry->key;
+        ui_drawable_set_scale_factor(entry->image, ALBUM_SCALE_FACTOR);
+        ui_drawable_set_scale_factor(entry->title, ALBUM_SCALE_FACTOR);
+        ui_drawable_set_scale_factor(entry->album, ALBUM_SCALE_FACTOR);
+
+        // Change the layout slightly so the text gets out of the way of the enlarged image
+        // this is unfortunately necessary because the ui design is shit
+        // change the title only because it's the one right below. the rest should reposition accordingly
+        entry->title->layout.offset_y = SONG_TITLE_SCALED_OFFSET_Y;
+        ui_reposition_drawable(menu->ui, entry->title);
+        // also change the album to keep a uniform spacing when scaled
+        entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
+        ui_reposition_drawable(menu->ui, entry->album);
+        entry->pills_container->layout.offset_y = PILL_SCALED_OFFSET_Y;
+        ui_reposition_container(menu->ui, entry->pills_container);
+
+        // Update background
+        menu->album_data_dirty = true;
+    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        ui_drawable_set_scale_factor_dur(entry->image, 1.f, ALBUM_SCALE_DOWN_DURATION);
+        ui_drawable_set_scale_factor_dur(entry->title, 1.f, ALBUM_SCALE_DOWN_DURATION);
+        ui_drawable_set_scale_factor_dur(entry->album, 1.f, ALBUM_SCALE_DOWN_DURATION);
+
+        entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
+        ui_reposition_drawable(menu->ui, entry->title);
+        entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
+        ui_reposition_drawable(menu->ui, entry->album);
+        entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
+        ui_reposition_container(menu->ui, entry->pills_container);
+    } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
+        Config_t *config = config_get();
+        if ( config->karaoke.song_file != NULL )
+            free(config->karaoke.song_file);
+
+        // TODO: Centralize this logic somewhere. right now it's duplicated and fragile
+        char *file;
+        asprintf(&file, "%s.txt", entry->key);
+        str_replace_char(file, '_', ' ');
+        config->karaoke.song_file = file;
+        printf("file: %s\n", file);
+        etsuko_navigate("/?song=", entry->key);
+
+        global_mode_switch(APP_MODE_KARAOKE);
+    }
 }
 
 static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *song, const Drawable_t *image) {
@@ -360,11 +412,18 @@ static void setup_album(const char *_, void *value, void *userdata) {
         SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
         Drawable_t *title_text = setup_song_title(menu, song, image);
         Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
+
+        entry->menu = menu;
+        entry->key = song->id;
         entry->image = image;
         entry->title = title_text;
         entry->album = album_text;
-
         entry->pills_container = setup_tag_pills(menu, song, entry);
+
+        // Setup events
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_ENTERED, image, on_album_art_event, entry);
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_EXITED, image, on_album_art_event, entry);
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, image, on_album_art_event, entry);
 
         grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
 
@@ -416,65 +475,6 @@ static void iterate_pending_art(const char *key, void *data, void *userdata) {
     }
 }
 
-static void iterate_drawables_for_input(const char *key, void *data, void *userdata) {
-    MainMenu_t *menu = userdata;
-    const SongEntryDrawables_t *entry = data;
-    Drawable_t *image = entry->image;
-
-    // TODO: Sometimes the album image starts enlarged and gets stuck like that until a new mouse hover
-    if ( ui_mouse_hovering_drawable(image, 0, NULL, NULL, NULL) ) {
-        if ( menu->current_focused_image != image ) {
-            menu->current_focused_image = image;
-            menu->selected_song = key;
-            ui_drawable_set_scale_factor(entry->image, ALBUM_SCALE_FACTOR);
-            ui_drawable_set_scale_factor(entry->title, ALBUM_SCALE_FACTOR);
-            ui_drawable_set_scale_factor(entry->album, ALBUM_SCALE_FACTOR);
-
-            // Change the layout slightly so the text gets out of the way of the enlarged image
-            // this is unfortunately necessary because the ui design is shit
-            // change the title only because it's the one right below. the rest should reposition accordingly
-            entry->title->layout.offset_y = SONG_TITLE_SCALED_OFFSET_Y;
-            ui_reposition_drawable(menu->ui, entry->title);
-            // also change the album to keep a uniform spacing when scaled
-            entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
-            ui_reposition_drawable(menu->ui, entry->album);
-            entry->pills_container->layout.offset_y = PILL_SCALED_OFFSET_Y;
-            ui_reposition_container(menu->ui, entry->pills_container);
-        }
-    } else {
-        if ( menu->current_focused_image == image ) {
-            menu->current_focused_image = NULL;
-
-            ui_drawable_set_scale_factor_dur(entry->image, 1.f, ALBUM_SCALE_DOWN_DURATION);
-            ui_drawable_set_scale_factor_dur(entry->title, 1.f, ALBUM_SCALE_DOWN_DURATION);
-            ui_drawable_set_scale_factor_dur(entry->album, 1.f, ALBUM_SCALE_DOWN_DURATION);
-
-            entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
-            ui_reposition_drawable(menu->ui, entry->title);
-            entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
-            ui_reposition_drawable(menu->ui, entry->album);
-            entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
-            ui_reposition_container(menu->ui, entry->pills_container);
-        }
-    }
-
-    if ( ui_mouse_clicked_drawable(image, 0, NULL, NULL, NULL) ) {
-        Config_t *config = config_get();
-        if ( config->karaoke.song_file != NULL )
-            free(config->karaoke.song_file);
-
-        // TODO: Centralize this logic somewhere. right now it's duplicated and fragile
-        char *file;
-        asprintf(&file, "%s.txt", key);
-        str_replace_char(file, '_', ' ');
-        config->karaoke.song_file = file;
-        printf("file: %s\n", file);
-        etsuko_navigate("/?song=", key);
-
-        global_mode_switch(APP_MODE_KARAOKE);
-    }
-}
-
 static void handle_user_input(MainMenu_t *menu) {
     if ( events_get_mouse_scrolled() != 0 ) {
 #define PADDING 100
@@ -483,12 +483,6 @@ static void handle_user_input(MainMenu_t *menu) {
         final_scroll = MIN(0, final_scroll);
         final_scroll = MAX(-menu->grid_layout_info.max_y + menu->container->bounds.h * 0.9, final_scroll);
         menu->container->viewport_y = final_scroll;
-    }
-
-    const char *prev_selected_song = menu->selected_song;
-    map_iterate(menu->album_art_drawables, iterate_drawables_for_input, menu);
-    if ( !str_equals(menu->selected_song, prev_selected_song) ) {
-        update_background(menu);
     }
 }
 

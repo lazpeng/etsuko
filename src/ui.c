@@ -234,9 +234,11 @@ static void handle_mouse_input(Ui_t *ui) {
             const Drawable_t *drawable = cur->nodes->data[i];
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
+            const bool not_visible = d_pos_x + drawable->bounds.w < 0 || d_pos_y + drawable->bounds.h < 0 ||
+                                     d_pos_x > ui->root_container.bounds.w || d_pos_y > ui->root_container.bounds.h;
             const bool outside = mouse_x < d_pos_x || mouse_x > d_pos_x + drawable->bounds.w || mouse_y < d_pos_y ||
                                  mouse_y > d_pos_y + drawable->bounds.h;
-            if ( outside )
+            if ( outside || not_visible )
                 continue;
 
             for ( size_t e = 0; e < drawable->events->size; e++ ) {
@@ -673,7 +675,7 @@ static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptS
     opt->x1_perc = data->scale_region.x1_perc;
     opt->y0_perc = data->scale_region.y0_perc;
     opt->y1_perc = data->scale_region.y1_perc;
-    opt->relative_scale = data->scale_region.from_scale + scale_diff * progress;
+    opt->relative_scale = data->scale_region.from_scale + scale_diff * (float)progress;
     opt->from_scale = data->scale_region.from_scale;
     opt->to_scale = data->scale_region.to_scale;
 }

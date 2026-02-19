@@ -143,6 +143,42 @@ static float get_inactive_line_scale() {
     return config_get()->karaoke.enlarge_active_line ? LINE_SCALE_FACTOR_INACTIVE : LINE_SCALE_FACTOR_ACTIVE;
 }
 
+static int32_t calculate_alpha(const int32_t distance) {
+    const int32_t dec = ALPHA_DISTANCE_BASE_CALC / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
+    return MAX(ALPHA_DISTANCE_MIN_VALUE, ALPHA_DISTANCE_BASE_CALC - dec);
+}
+
+// this function name sounds like a concert that is broadcasted over the internet
+static void on_line_event(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom_data) {
+    LyricsView_t *view = custom_data;
+
+    int32_t index = -1;
+    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
+        const Drawable_t *i_d = view->line_drawables->data[i];
+        if ( i_d == drawable ) {
+            index = (int32_t)i;
+            break;
+        }
+    }
+    if ( index < 0 )
+        error_abort("on_line_event: could not find the index of the hovered line drawable");
+
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+        // If the user puts the cursor over a line, change its alpha to be the lowest under the active (0xFF)
+        // considering that alpha decreases with the distance from the active line
+        ui_drawable_set_alpha_immediate((Drawable_t *)drawable, calculate_alpha(0)); // this cast is bad
+        // otherwise, when this condition isn't true anymore, the main loop takes care of setting the correct alpha back
+        view->current_hovered_index = index;
+    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        view->current_hovered_index = -1;
+    } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
+        const Song_Line_t *line = view->song->lyrics_lines->data[index];
+        audio_seek(line->base_start_time);
+        // TODO: use the correct api in the future
+        view->container->viewport_y = 0;
+    }
+}
+
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is NULL");
@@ -239,6 +275,11 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         prev = ui_make_text(ui, &data, parent, &layout);
         vec_add(view->line_drawables, prev);
 
+        // Set events
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, prev, on_line_event, view);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, prev, on_line_event, view);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
+
         view->line_states[i] = LINE_NONE;
         ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
                                                                         .ease_func = ANIM_EASE_OUT_CUBIC});
@@ -317,11 +358,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     ensure_read_hints_initialized(ui, view);
 
     return view;
-}
-
-static int32_t calculate_alpha(const int32_t distance) {
-    const int32_t dec = ALPHA_DISTANCE_BASE_CALC / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
-    return MAX(ALPHA_DISTANCE_MIN_VALUE, ALPHA_DISTANCE_BASE_CALC - dec);
 }
 
 static int32_t calculate_distance(const LyricsView_t *view, const int32_t index, const int32_t prev_active) {
@@ -535,21 +571,6 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     }
 }
 
-static void check_line_hover(const LyricsView_t *view, Drawable_t *drawable, const int32_t index) {
-    const int padding = 0;
-    if ( ui_mouse_hovering_drawable(drawable, padding, NULL, NULL, NULL) ) {
-        // If the user puts the cursor over a line, change its alpha to be the lowest under the active (0xFF)
-        // considering that alpha decreases with the distance from the active line
-        ui_drawable_set_alpha_immediate(drawable, calculate_alpha(0));
-        // otherwise, when this condition isn't true anymore, the main loop takes care of setting the correct alpha back
-    }
-    if ( ui_mouse_clicked_drawable(drawable, padding, NULL, NULL, NULL) ) {
-        const Song_Line_t *line = view->song->lyrics_lines->data[index];
-        audio_seek(line->base_start_time);
-        view->container->viewport_y = 0;
-    }
-}
-
 static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     Drawable_t *drawable = view->line_drawables->data[index];
     if ( index > 0 ) {
@@ -568,7 +589,8 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         alpha = calculate_alpha(distance);
     }
 
-    if ( alpha != drawable->alpha_mod ) {
+    // don't change the alpha if the user is hovering over the line
+    if ( alpha != drawable->alpha_mod && view->current_hovered_index != index ) {
         ui_drawable_set_alpha(drawable, alpha);
         fade_hint_for_line(view, index);
     }
@@ -604,8 +626,6 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         ui_reposition_drawable(ui, drawable);
         reposition_hint_for_line(ui, view, index);
     }
-
-    check_line_hover(view, drawable, index);
 }
 
 static void set_line_hidden(LyricsView_t *view, const int32_t index) {
@@ -650,10 +670,10 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         } else {
             distance = calculate_distance(view, index, view->current_active_index);
         }
-        ui_drawable_set_alpha(drawable, calculate_alpha(distance));
+        // Don't change the alpha if the user is hovering over the line
+        if ( view->current_hovered_index != index )
+            ui_drawable_set_alpha(drawable, calculate_alpha(distance));
         fade_hint_for_line(view, index);
-        // If it's visible, let the user click on it to wind back to that line
-        check_line_hover(view, drawable, index);
     }
 }
 
