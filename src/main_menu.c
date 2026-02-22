@@ -291,7 +291,6 @@ static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Draw
     text->layout.flags |= LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_RELATIVE_TO_POS |
                           LAYOUT_ANCHOR_CENTER_X | LAYOUT_ANCHOR_CENTER_Y;
     text->layout.offset_x = text->layout.offset_y = 0.5;
-    // TODO: drawables are repositioned in the wrong order when the screen changes
     ui_reposition_drawable(menu->ui, text);
 
     return rect;

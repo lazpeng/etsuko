@@ -1582,8 +1582,15 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
         position_layout(ui, &container->layout, container->parent, &container->bounds);
     }
 
+    // First measure (recompute does that in all cases)
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        ui_recompute_drawable(ui, container->child_drawables->data[i]);
+        Drawable_t *drawable = container->child_drawables->data[i];
+        ui_recompute_drawable(ui, drawable);
+    }
+    // then position
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
+        Drawable_t *drawable = container->child_drawables->data[i];
+        position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
