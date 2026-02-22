@@ -179,6 +179,20 @@ static void on_line_event(const UiEventOpts_t *opts, const Drawable_t *drawable,
     }
 }
 
+static void toggle_hints_visibility(const LyricsView_t *view) {
+    for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
+        Drawable_t *hint = view->line_read_hints->data[i];
+        hint->enabled = !hint->enabled;
+    }
+}
+
+static void on_key_pressed(const UiEventOpts_t *opt, const Drawable_t *, void *custom_data) {
+    const LyricsView_t *view = custom_data;
+    if ( opt->keyboard.key == KEY_R ) {
+        toggle_hints_visibility(view);
+    }
+}
+
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is NULL");
@@ -193,6 +207,11 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->song = song;
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
+
+    // TODO: Check if the event was already set
+    //  doesn't happen currently because the ui is destroyed then reconstructed along with every make of this lyrics view
+    //  but it could happen
+    ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
 
     const bool should_generate_reading_hints = song->has_reading_info && config_get()->karaoke.enable_reading_hints;
 
@@ -731,27 +750,12 @@ static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *vie
     return drawable;
 }
 
-static void toggle_hints_visibility(const LyricsView_t *view) {
-    for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
-        Drawable_t *hint = view->line_read_hints->data[i];
-        hint->enabled = !hint->enabled;
-    }
-}
-
-static void check_user_input(const LyricsView_t *view) {
-    if ( events_key_was_pressed(KEY_R) ) {
-        toggle_hints_visibility(view);
-    }
-}
-
 void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
     }
     if ( view->container->enabled == false )
         return;
-
-    check_user_input(view);
 
     view->layout_dirty = false;
 
