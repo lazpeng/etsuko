@@ -1,6 +1,13 @@
+/**
+ * remote_repository.c - Only useful (and available) for debugging the desktop build
+ * Fetches remote resources using HTTPS and the CDN_BASE_PATH defined in secret.h just like
+ * emscripten's fetch API would (kinda)
+ * ENTIRELY AI GENERATED CODE BELOW because it's not important enough
+ */
 
 // No need to have this under the web target
 // TODO: Find a way to exclude this from build or better handle the absence of this functionality under emscripten
+//  because as of now it gives warnings about an empty source file
 #ifndef __EMSCRIPTEN__
 
 #include "remote_repository.h"
