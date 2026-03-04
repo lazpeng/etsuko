@@ -680,7 +680,9 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     const double threshold = config_get()->karaoke.hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( view->container->viewport_y < threshold ) {
-        ui_drawable_set_alpha(drawable, 0);
+        if ( view->current_hovered_index != index ) {
+            ui_drawable_set_alpha(drawable, 0);
+        }
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
