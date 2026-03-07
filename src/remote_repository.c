@@ -5,11 +5,6 @@
  * ENTIRELY AI GENERATED CODE BELOW because it's not important enough
  */
 
-// No need to have this under the web target
-// TODO: Find a way to exclude this from build or better handle the absence of this functionality under emscripten
-//  because as of now it gives warnings about an empty source file
-#ifndef __EMSCRIPTEN__
-
 #include "remote_repository.h"
 #include "repository.h"
 
@@ -30,6 +25,10 @@
 #define HTTP_PORT 80
 #define HTTPS_PORT 443
 #define BUFFER_SIZE 4096
+
+#ifdef __EMSCRIPTEN__
+# error "Do not include remote_repository.c in the wasm build"
+#endif
 
 typedef struct {
     char protocol[8];
@@ -328,5 +327,3 @@ void remote_load_resource(const char *path, Resource_t *resource) {
         pthread_detach(thread);
     }
 }
-
-#endif

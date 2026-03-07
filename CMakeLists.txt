@@ -34,7 +34,6 @@ add_executable(etsuko src/main.c
         src/renderer.c
         src/main_menu.c
         src/json.c
-        src/remote_repository.c
         src/contrib/stb_image.c
         src/contrib/stb_truetype.c
         src/contrib/minimp3.c
@@ -77,6 +76,8 @@ if (EMSCRIPTEN)
 
 else ()
     message(STATUS "Configuring regular desktop build")
+
+    target_sources(etsuko PRIVATE src/remote_repository.c)
 
     find_package(glfw3 REQUIRED)
     target_link_libraries(etsuko PRIVATE glfw)
