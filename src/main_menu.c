@@ -444,8 +444,11 @@ static void update_background(const MainMenu_t *menu) {
     if ( art == NULL || art->image_data == NULL )
         return;
 
-    ui_set_bg_gradient(0, 0, BACKGROUND_AM_LIKE_GRADIENT);
-    render_set_bg_colors(&art->sampled_colors[0]);
+    Background_t *bg = ui_root_container(menu->ui)->background;
+    for ( int i = 0; i < 5; i++ ) {
+        bg->colors[i] = art->sampled_colors[i];
+    }
+    bg->type = BACKGROUND_AM_LIKE_GRADIENT;
 }
 
 void menu_setup(MainMenu_t *menu) {

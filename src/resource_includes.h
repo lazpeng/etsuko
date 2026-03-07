@@ -51,10 +51,6 @@ static const char incbin_am_gradient_frag_shader[] = {
 #embed "shaders/am gradient.frag.glsl"
     ,'\0'
 };
-static const char incbin_cloud_gradient_frag_shader[] = {
-#embed "shaders/cloud gradient.frag.glsl"
-    ,'\0'
-};
 
 #endif
 

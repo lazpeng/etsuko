@@ -49,15 +49,10 @@ typedef struct Renderer_t {
     stbtt_fontinfo ui_font_info, lyrics_font_info;
     unsigned char *ui_font_data, *lyrics_font_data;
     double h_dpi, v_dpi;
-    Color_t bg_color, bg_color_secondary;
     RenderTarget_t *render_target;
     BlendMode_t blend_mode;
     bool rendering_to_fbo;
     double window_pixel_scale;
-    Texture_t *bg_texture;
-    BackgroundType_t bg_type;
-    float dynamic_bg_colors[5][3];
-    bool dynamic_bg_colors_initialized;
 
     // OpenGL objects
     GLuint active_shader_program;
@@ -126,6 +121,9 @@ static GLuint compile_shader(const GLenum type, const char *source, const char *
             break;
         case GL_FRAGMENT_SHADER:
             type_str = "frag";
+            break;
+        // ReSharper disable once CppDFAUnreachableCode
+        default:
             break;
         }
         printf("Shader compilation failed for %s.%s:\n%s\n", name, type_str, log);
@@ -291,9 +289,6 @@ void render_init(void) {
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, false, on_web_resize);
 #endif
 
-    g_renderer->bg_color = (Color_t){0, 0, 0, 255};
-    g_renderer->bg_type = BACKGROUND_NONE;
-
     render_on_window_changed();
 
     g_renderer->blend_mode = BLEND_MODE_NONE;
@@ -311,8 +306,6 @@ void render_init(void) {
         create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
     g_renderer->am_gradient_shader =
         create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
-    g_renderer->cloud_gradient_shader =
-        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_cloud_gradient_frag_shader, "cloud_gradient");
     g_renderer->rand_gradient_shader =
         create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
     g_renderer->blur_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_blur_frag_shader, "blur");
@@ -421,50 +414,42 @@ void render_on_window_changed(void) {
 
     glViewport(0, 0, outW, outH);
     update_projection_matrix();
-
-    // Update background texture
-    if ( g_renderer->bg_texture != NULL ) {
-        render_destroy_texture(g_renderer->bg_texture);
-        g_renderer->bg_texture = NULL;
-    }
 }
 
 static void deconstruct_colors_opengl(const Color_t *color, float *r, float *g, float *b, float *a) {
+    // ReSharper disable once CppDFAConstantConditions
     if ( r )
         *r = (float)color->r / 255.0f;
+    // ReSharper disable once CppDFAConstantConditions
     if ( g )
         *g = (float)color->g / 255.0f;
+    // ReSharper disable once CppDFAConstantConditions
     if ( b )
         *b = (float)color->b / 255.0f;
+    // ReSharper disable once CppDFAConstantConditions
     if ( a )
         *a = (float)color->a / 255.0f;
 }
 
-static void draw_random_gradient_bg(void) {
+static void draw_random_gradient_bg(const Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    if ( g_renderer->bg_texture == NULL ) {
-        g_renderer->bg_texture = render_make_null();
-        // At this point, the texture is unconfigured
-    }
-
     set_shader_program(g_renderer->rand_gradient_shader);
-    glBindVertexArray(g_renderer->bg_texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_renderer->bg_texture->vbo);
+    glBindVertexArray(background->null_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
-    const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const Bounds_t bounds = {.x = 0, .y = 0, .w = (double)width, .h = (double)height};
-    if ( texture_needs_reconfigure(g_renderer->bg_texture, &bounds) ) {
+    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
         // Update vertex data for the vbo
+        // TODO: Check if this is still correct
         static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
                                        -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        mark_texture_configured(g_renderer->bg_texture, &bounds);
+        mark_texture_configured(background->null_tex, bounds);
     }
 
     glUniform1f(g_renderer->rand_grad_time_loc, (float)events_get_elapsed_time());
-    glUniform2f(g_renderer->rand_grad_resolution_loc, (float)width, (float)height);
+    glUniform2f(g_renderer->rand_grad_resolution_loc, (float)bounds->w, (float)bounds->h);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -474,81 +459,82 @@ static void draw_random_gradient_bg(void) {
     render_set_blend_mode(saved_blend);
 }
 
-static void draw_dynamic_gradient_bg(void) {
+static void draw_dynamic_gradient_bg(const Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    if ( g_renderer->bg_texture == NULL ) {
-        g_renderer->bg_texture = render_make_null();
-    }
-
     set_shader_program(g_renderer->dyn_gradient_shader);
 
-    glBindVertexArray(g_renderer->bg_texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_renderer->bg_texture->vbo);
+    glBindVertexArray(background->null_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
-    const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const Bounds_t bounds = {.x = 0, .y = 0, .w = (double)width, .h = (double)height};
-    if ( texture_needs_reconfigure(g_renderer->bg_texture, &bounds) ) {
+    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
         // Update vertex data for the vbo
         static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
                                        -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        mark_texture_configured(g_renderer->bg_texture, &bounds);
+        mark_texture_configured(background->null_tex, bounds);
     }
 
     glUniform1f(g_renderer->dyn_grad_time_loc, (float)events_get_elapsed_time() / 5.f);
     glUniform1f(g_renderer->dyn_grad_noise_mag_loc, 0.1f);
-    glUniform3fv(g_renderer->dyn_grad_colors, 5, &g_renderer->dynamic_bg_colors[0][0]);
+
+    float colors[5][3];
+    for ( int i = 0; i < 5; i++ ) {
+        const Color_t *color = &background->colors[i];
+        float *r = &colors[i][0];
+        float *g = &colors[i][1];
+        float *b = &colors[i][2];
+        // TODO: Alpha channel
+        deconstruct_colors_opengl(color, r, g, b, NULL);
+    }
+    glUniform3fv(g_renderer->dyn_grad_colors, 5, &colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     render_set_blend_mode(saved_blend);
 }
 
-static void draw_am_like_bg(const BackgroundType_t type) {
+static void draw_am_like_bg(const Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    GLuint shader_program;
-    if ( type == BACKGROUND_AM_LIKE_GRADIENT ) {
-        shader_program = g_renderer->am_gradient_shader;
-    } else {
-        shader_program = g_renderer->cloud_gradient_shader;
-    }
+    set_shader_program(g_renderer->am_gradient_shader);
+    glBindVertexArray(background->null_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
-    if ( g_renderer->bg_texture == NULL ) {
-        g_renderer->bg_texture = render_make_null();
-    }
-
-    set_shader_program(shader_program);
-    glBindVertexArray(g_renderer->bg_texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_renderer->bg_texture->vbo);
-
-    const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
-    const Bounds_t bounds = {.x = 0, .y = 0, .w = (double)width, .h = (double)height};
-    if ( texture_needs_reconfigure(g_renderer->bg_texture, &bounds) ) {
+    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
 
         static float quadVertices[] = {-1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
                                        -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        mark_texture_configured(g_renderer->bg_texture, &bounds);
+        mark_texture_configured(background->null_tex, bounds);
     }
 
     glUniform1f(g_renderer->aml_time_loc, (float)events_get_elapsed_time());
     glUniform3f(g_renderer->aml_resolution_loc, 1.f, 1.f, 0.f);
-    glUniform3fv(g_renderer->aml_colors_loc, 5, &g_renderer->dynamic_bg_colors[0][0]);
+
+    float colors[5][3];
+    for ( int i = 0; i < 5; i++ ) {
+        const Color_t *color = &background->colors[i];
+        float *r = &colors[i][0];
+        float *g = &colors[i][1];
+        float *b = &colors[i][2];
+        // TODO: Alpha channel
+        deconstruct_colors_opengl(color, r, g, b, NULL);
+    }
+    glUniform3fv(g_renderer->aml_colors_loc, 5, &colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     render_set_blend_mode(saved_blend);
 }
 
-static Texture_t *internal_create_gradient_background_texture(void) {
+static Texture_t *internal_create_gradient_background_texture(const Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
-    const int32_t width = (int32_t)g_renderer->viewport.w, height = (int32_t)g_renderer->viewport.h;
+    const int32_t width = (int32_t)bounds->w, height = (int32_t)bounds->h;
     const RenderTarget_t *target = render_make_texture_target(width, height);
 
     set_shader_program(g_renderer->gradient_shader);
@@ -556,9 +542,9 @@ static Texture_t *internal_create_gradient_background_texture(void) {
     const float w = (float)width, h = (float)height;
 
     float r, g, b, a;
-    deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
+    deconstruct_colors_opengl(&background->colors[0], &r, &g, &b, &a);
     glUniform4f(g_renderer->gradient_top_color_loc, r, g, b, a);
-    deconstruct_colors_opengl(&g_renderer->bg_color_secondary, &r, &g, &b, &a);
+    deconstruct_colors_opengl(&background->colors[1], &r, &g, &b, &a);
     glUniform4f(g_renderer->gradient_bottom_color_loc, r, g, b, a);
     glUniformMatrix4fv(g_renderer->gradient_projection_loc, 1, GL_FALSE, target->projection);
 
@@ -633,35 +619,57 @@ Texture_t *render_blur_texture_replace(Texture_t *source, const float blur_radiu
 }
 
 void render_clear(void) {
-    // Return early if it's just a solid background, or we haven't initialized all the required params to draw the bg yet
-    const bool bg_not_initialized = g_renderer->bg_type != BACKGROUND_GRADIENT && !g_renderer->dynamic_bg_colors_initialized;
-    if ( g_renderer->bg_type == BACKGROUND_NONE || bg_not_initialized ) {
-        float r, g, b, a;
-        deconstruct_colors_opengl(&g_renderer->bg_color, &r, &g, &b, &a);
-        glClearColor(r, g, b, 255);
-        glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+Background_t *render_make_background(const BackgroundType_t type) {
+    Background_t *background = calloc(1, sizeof(*background));
+    background->null_tex = render_make_null();
+    background->type = type;
+    background->border_radius_em = 0;
+
+    return background;
+}
+
+void render_destroy_background(Background_t *background) {
+    if ( background != NULL )
+        free(background);
+}
+
+void render_draw_background(Background_t *background, const Bounds_t *bounds) {
+    if ( background->type == BACKGROUND_GRADIENT ) {
+        const bool is_null = background->null_tex == NULL || background->null_tex->id == 0;
+        const bool needs_configure = !is_null && texture_needs_reconfigure(background->null_tex, bounds);
+        if ( is_null || needs_configure ) {
+            if ( background->null_tex != NULL )
+                render_destroy_texture(background->null_tex);
+            background->null_tex = internal_create_gradient_background_texture(background, bounds);
+        }
+        static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
+        render_draw_texture(background->null_tex, &(Bounds_t){0}, &opts);
         return;
     }
 
-    glClearColor(0.f, 0.f, 0.f, 0.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    if ( g_renderer->bg_type == BACKGROUND_GRADIENT ) {
-        if ( g_renderer->bg_texture == NULL || g_renderer->bg_texture->id == 0 ) {
-            g_renderer->bg_texture = internal_create_gradient_background_texture();
-        }
-        static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
-        render_draw_texture(g_renderer->bg_texture, &(Bounds_t){0}, &opts);
-    } else if ( g_renderer->bg_type == BACKGROUND_SANDS_GRADIENT ) {
-        draw_dynamic_gradient_bg();
-    } else if ( g_renderer->bg_type == BACKGROUND_RANDOM_GRADIENT ) {
-        draw_random_gradient_bg();
-    } else if ( g_renderer->bg_type == BACKGROUND_AM_LIKE_GRADIENT || g_renderer->bg_type == BACKGROUND_CLOUD_GRADIENT ) {
-        draw_am_like_bg(g_renderer->bg_type);
+    switch ( background->type ) {
+    case BACKGROUND_SANDS_GRADIENT:
+        draw_dynamic_gradient_bg(background, bounds);
+        break;
+    case BACKGROUND_RANDOM_GRADIENT:
+        draw_random_gradient_bg(background, bounds);
+        break;
+    case BACKGROUND_AM_LIKE_GRADIENT:
+        draw_am_like_bg(background, bounds);
+        break;
+    default:
+        printf("Warning: Unrecognized background type\n");
+        break;
     }
 }
 
-void render_present(void) { glfwSwapBuffers(g_renderer->window); }
+void render_present(void) {
+    glfwSwapBuffers(g_renderer->window);
+}
 
 const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 
@@ -876,17 +884,6 @@ Color_t render_color_darken(Color_t color, const double amount) {
     return color;
 }
 
-void render_set_bg_color(const Color_t color) {
-    g_renderer->bg_color = color;
-    g_renderer->bg_type = BACKGROUND_NONE;
-}
-
-void render_set_bg_gradient(const Color_t top_color, const Color_t bottom_color, const BackgroundType_t type) {
-    g_renderer->bg_color = top_color;
-    g_renderer->bg_color_secondary = bottom_color;
-    g_renderer->bg_type = type;
-}
-
 static float calculate_color_luminance(const Color_t *color) {
     return 0.299f * (float)color->r + 0.587f * (float)color->g + 0.114f * (float)color->b;
 }
@@ -1029,17 +1026,6 @@ void render_sample_bg_colors_from_image(const unsigned char *bytes, const int le
     free(assignments);
     free(samples);
     stbi_image_free(image_data);
-}
-
-void render_set_bg_colors(const Color_t colors[5]) {
-    for ( int i = 0; i < K; i++ ) {
-        float *r = &g_renderer->dynamic_bg_colors[i][0];
-        float *g = &g_renderer->dynamic_bg_colors[i][1];
-        float *b = &g_renderer->dynamic_bg_colors[i][2];
-        deconstruct_colors_opengl(&colors[i], r, g, b, NULL);
-    }
-    // Mark as initialized
-    g_renderer->dynamic_bg_colors_initialized = true;
 }
 
 void render_set_blend_mode(const BlendMode_t mode) {
@@ -1410,7 +1396,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     // auto border radius using half of the smaller axis
     float border_radius = texture->border_radius;
     if ( border_radius < 0.f ) {
-        border_radius = MIN(w,h) * 0.5f;
+        border_radius = MIN(w, h) * 0.5f;
     }
     glUniform1f(g_renderer->tex_border_radius_loc, border_radius);
     glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);

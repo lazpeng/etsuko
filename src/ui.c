@@ -32,7 +32,7 @@ typedef struct EventDef_t {
 } EventDef_t;
 
 struct Ui_t {
-    Container_t root_container;
+    OWNING Container_t *root_container;
     Texture_t *null_texture;
     ZLayer_t *z_layers_head;
     Vector_t *global_events;
@@ -90,10 +90,9 @@ Ui_t *ui_init(void) {
         error_abort("Failed to allocate UI");
     }
 
-    ui->root_container.child_containers = vec_init();
-    ui->root_container.child_drawables = vec_init();
-    ui->root_container.animations = vec_init();
-    ui->root_container.enabled = true;
+    const Layout_t layout = {.width = 0, .height = 0 };
+    ui->root_container = ui_make_container(ui, NULL, &layout, CONTAINER_NONE);
+    ui->root_container->bounds = *render_get_viewport();
 
     ui->null_texture = render_make_null();
     ui->z_layers_head = append_z_layer(&ui->z_layers_head, 0);
@@ -114,7 +113,7 @@ static void animation_scale_data_destroy(Animation_ScaleData_t *data) { free(dat
 static void animation_draw_region_data_destroy(Animation_DrawRegionData_t *data) { free(data); }
 static void animation_scale_region_data_destroy(Animation_ScaleRegionData_t *data) { free(data); }
 
-static void animation_destroy(Animation_t *animation, bool recursive) {
+static void animation_destroy(Animation_t *animation, const bool recursive) {
     if ( animation->custom_data != NULL ) {
         if ( animation->type == ANIM_EASE_TRANSLATION ) {
             animation_translation_data_destroy(animation->custom_data);
@@ -182,7 +181,7 @@ static void container_update_animations(const Container_t *container, const doub
 }
 
 static void update_animations(const Ui_t *ui, const double delta_time) {
-    container_update_animations(&ui->root_container, delta_time);
+    container_update_animations(ui->root_container, delta_time);
 }
 
 static void handle_global_mouse_input(const Ui_t *ui) {
@@ -235,7 +234,7 @@ static void handle_mouse_input(Ui_t *ui) {
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
             const bool not_visible = d_pos_x + drawable->bounds.w < 0 || d_pos_y + drawable->bounds.h < 0 ||
-                                     d_pos_x > ui->root_container.bounds.w || d_pos_y > ui->root_container.bounds.h;
+                                     d_pos_x > ui->root_container->bounds.w || d_pos_y > ui->root_container->bounds.h;
             const bool outside = mouse_x < d_pos_x || mouse_x > d_pos_x + drawable->bounds.w || mouse_y < d_pos_y ||
                                  mouse_y > d_pos_y + drawable->bounds.h;
             if ( outside || not_visible )
@@ -791,6 +790,10 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
     base_bounds.x += container_bounds.x + container->viewport_x;
     base_bounds.y += container_bounds.y + container->viewport_y;
 
+    if ( container->background->type != BACKGROUND_NONE ) {
+        render_draw_background(container->background, &container_bounds);
+    }
+
     if ( container->draw_debug_overlay ) {
         Bounds_t con_bounds = base_bounds;
         con_bounds.w = container->bounds.w;
@@ -812,7 +815,7 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
 
 void ui_draw(const Ui_t *ui) {
     const Bounds_t bounds = {0};
-    draw_all_container(ui, &ui->root_container, bounds);
+    draw_all_container(ui, ui->root_container, bounds);
 }
 
 void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *target, const c_ui_event_callback callback,
@@ -865,7 +868,7 @@ void ui_set_window_title(const char *title) { render_set_window_title(title); }
 
 void ui_finish(Ui_t *ui) {
     // Free stored textures and drawables
-    ui_destroy_container(ui, &ui->root_container);
+    ui_destroy_container(ui, ui->root_container);
     // Free global events
     for ( size_t i = 0; i < ui->global_events->size; i++ ) {
         free(ui->global_events->data[i]);
@@ -884,15 +887,7 @@ void ui_finish(Ui_t *ui) {
     free(ui);
 }
 
-void ui_set_bg_color(const uint32_t color) { render_set_bg_color(render_color_parse(color)); }
-
-void ui_set_bg_gradient(const uint32_t primary, const uint32_t secondary, const BackgroundType_t type) {
-    const Color_t primary_color = render_color_parse(primary);
-    const Color_t secondary_color = render_color_parse(secondary);
-    render_set_bg_gradient(primary_color, secondary_color, type);
-}
-
-Container_t *ui_root_container(Ui_t *ui) { return &ui->root_container; }
+Container_t *ui_root_container(const Ui_t *ui) { return ui->root_container; }
 
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
@@ -1478,18 +1473,25 @@ Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *la
         error_abort("Failed to allocate container");
     }
 
+    if ( parent == NULL && ui->root_container != NULL ) {
+        error_abort("Attempted to initialize a container without a parent");
+    }
+
     result->parent = parent;
     // Make a copy of the layout
     result->layout = *layout;
     result->child_drawables = vec_init();
     result->child_containers = vec_init();
     result->animations = vec_init();
+    result->background = render_make_background(BACKGROUND_NONE);
     result->enabled = true;
     result->flags = flags;
-    measure_layout(layout, parent, &result->bounds);
-    position_layout(ui, layout, parent, &result->bounds);
 
-    vec_add(parent->child_containers, result);
+    if ( parent != NULL ) {
+        measure_layout(layout, parent, &result->bounds);
+        position_layout(ui, layout, parent, &result->bounds);
+        vec_add(parent->child_containers, result);
+    }
 
     return result;
 }
@@ -1512,8 +1514,9 @@ void ui_destroy_container(Ui_t *ui, Container_t *container) {
     }
     vec_destroy(container->animations);
 
-    if ( container != &ui->root_container )
-        free(container);
+    render_destroy_background(container->background);
+
+    free(container);
 }
 
 static void reapply_translate_animation(Animation_t *animation, const double old_x, const double old_y) {
@@ -1539,7 +1542,7 @@ static Animation_t *find_animation(const Drawable_t *drawable, const AnimationTy
 
 static Animation_t *find_active_animation(const Drawable_t *drawable, const AnimationType_t type) {
     // Traverse backwards so we find the most recent animation
-    for ( int32_t i = drawable->active_animations->size - 1; i >= 0; i-- ) {
+    for ( int32_t i = (int32_t)drawable->active_animations->size - 1; i >= 0; i-- ) {
         Animation_t *animation = drawable->active_animations->data[i];
         if ( animation->type == type ) {
             return animation;
@@ -1642,8 +1645,8 @@ void ui_reposition_container(Ui_t *ui, Container_t *container) {
 
 void ui_on_window_changed(Ui_t *ui) {
     render_on_window_changed();
-    ui->root_container.bounds = *render_get_viewport();
-    ui_recompute_container(ui, &ui->root_container);
+    ui->root_container->bounds = *render_get_viewport();
+    ui_recompute_container(ui, ui->root_container);
 }
 
 static Animation_EaseTranslationData_t *dup_anim_translate_data(const Animation_EaseTranslationData_t *data) {

@@ -111,11 +111,9 @@ typedef enum BackgroundType_t {
     BACKGROUND_RANDOM_GRADIENT,
     // A shader that imitates Apple Music's background effect
     BACKGROUND_AM_LIKE_GRADIENT,
-    // Variant of the same shader for the AM_LIKE effect but modified to generate clouds
-    BACKGROUND_CLOUD_GRADIENT,
 } BackgroundType_t;
 
-/*
+/**
  * Defines types of font to use when creating text textures and measuring glyphs
  */
 typedef enum FontType_t {
@@ -125,7 +123,7 @@ typedef enum FontType_t {
     FONT_LYRICS = 1
 } FontType_t;
 
-/*
+/**
  * Blend modes used by the renderer when drawing textures to the screen
  */
 typedef enum BlendMode_t {
@@ -135,7 +133,7 @@ typedef enum BlendMode_t {
     BLEND_MODE_ERASE
 } BlendMode_t;
 
-/*
+/**
  * Represents the bounds of a single character inside a bigger string of characters with the specified font
  */
 typedef struct CharBounds_t {
@@ -150,7 +148,7 @@ typedef struct CharBounds_t {
     double font_height;
 } CharBounds_t;
 
-/*
+/**
  * Allows for specifying which parts of the texture that should be drawn, with values
  * in percentages of the total size.
  * Example: 0, 0.5, 0, 0.5 will display the bottom left quarter of the texture (50% of each axis,
@@ -165,7 +163,7 @@ typedef struct DrawRegionOpt_t {
     float y0_perc, y1_perc;
 } DrawRegionOpt_t;
 
-/*
+/**
  * Set of draw regions that can be applied to a single texture at the same time. This allows for multi-line text
  * in a single texture to highlight each line separately, given that the percentages are calculated correctly
  * using the character bounds for each line and accounting for any padding and alignment
@@ -199,7 +197,7 @@ typedef struct ScaleRegionOptSet_t {
     int32_t num_regions;
 } ScaleRegionOptSet_t;
 
-/*
+/**
  * Options that can be specified when drawing a texture using the renderer
  */
 typedef struct DrawTextureOpts_t {
@@ -217,6 +215,18 @@ typedef struct DrawTextureOpts_t {
     // Center the final texture if any scale modifications are applied
     bool center_on_scale;
 } DrawTextureOpts_t;
+
+/**
+ * Defines a background that can be drawn to the screen, minus the bounds.
+ * Backgrounds can be drawn multiple times and on top of each other with different alpha values.
+ * A null texture is required to house the VAO and VBO
+ */
+typedef struct Background_t {
+    BackgroundType_t type;
+    Color_t colors[5];
+    OWNING Texture_t *null_tex;
+    double border_radius_em;
+} Background_t;
 
 /**
  * Initializes the rendering backend with the creation of a window (in case of a desktop build), an OpenGL context and initialization
@@ -240,11 +250,15 @@ void render_finish(void);
  */
 void render_on_window_changed(void);
 /**
- * Clears the framebuffer for drawing, also applying whatever background option is set with the provided colors.
- * Backgrounds can be disabled with BACKGROUND_NONE and setting the color black as the background.
- * Supposed to be called at the start of every frame.
+ * Clears the framebuffer for drawing.
  */
 void render_clear(void);
+Background_t *render_make_background(BackgroundType_t type);
+void render_destroy_background(Background_t *background);
+/**
+ * Draws a background based on a dynamic type and provided colors, using the provided bounds (e.g. a container's)
+ */
+void render_draw_background(Background_t *background, const Bounds_t *bounds);
 /**
  * Swaps framebuffers replacing the image being shown in the screen with the one that has been drawn to so far, essentially
  * presenting the image to the screen.
@@ -267,24 +281,11 @@ double render_get_pixel_scale(void);
  */
 void render_set_window_title(const char *title);
 /**
- * Sets a single color for background effects. For effects that use more than one color, every other one is going to be assigned
- * black (0,0,0), so for example a static gradient will go from this color to black.
- */
-void render_set_bg_color(Color_t color);
-/**
- * Assigns two colors and a background type option. For effects that use more than two colors (AM-like), the other colors are assigned black.
- */
-void render_set_bg_gradient(Color_t top_color, Color_t bottom_color, BackgroundType_t type);
-/**
  * Sample 5 colors from the given raw image data to be used in background effects.
  * Supported image types: JPEG, PNG
  * For effects that use less than 5 colors (static gradient, dynamic gradient, solid color), the first N colors will be used from this sample
  */
 void render_sample_bg_colors_from_image(const unsigned char *bytes, int length, Color_t colors[5]);
-/**
- * Updates the internal background color array
- */
-void render_set_bg_colors(const Color_t colors[5]);
 /**
  * Set the blend mode to be used when calling render_draw_texture
  */
@@ -343,7 +344,7 @@ Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t
  */
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 /**
- * Creates a texture with a checkboard pattern with fixed size and optional border radius.
+ * Creates a texture with a checkerboard pattern with fixed size and optional border radius.
  * Kinda useless.
  */
 Texture_t *render_make_dummy_image(double border_radius_em);

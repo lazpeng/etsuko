@@ -37,7 +37,6 @@ typedef enum Song_BgType_t {
     BG_SANDS_GRADIENT,
     BG_RANDOM_GRADIENT,
     BG_AM_LIKE_GRADIENT,
-    BG_CLOUD_GRADIENT,
 } Song_BgType_t;
 
 // Represents a part of reading hint that gets assigned to a portion of text of the original lyric text

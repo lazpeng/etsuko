@@ -137,29 +137,13 @@ static void on_song_loaded(const Resource_t *res) {
     if ( song_get() == NULL )
         error_abort("Failed to load song");
 
-    BackgroundType_t bg_type = BACKGROUND_NONE;
-    switch ( song_get()->bg_type ) {
-    case BG_SIMPLE_GRADIENT:
-        bg_type = BACKGROUND_GRADIENT;
-        break;
-    case BG_SANDS_GRADIENT:
-        bg_type = BACKGROUND_SANDS_GRADIENT;
-        break;
-    case BG_RANDOM_GRADIENT:
-        bg_type = BACKGROUND_RANDOM_GRADIENT;
-        break;
-    case BG_CLOUD_GRADIENT:
-        bg_type = BACKGROUND_CLOUD_GRADIENT;
-        break;
-    case BG_AM_LIKE_GRADIENT:
-        bg_type = BACKGROUND_AM_LIKE_GRADIENT;
-        break;
-    default:
-        break;
-    }
-    ui_set_bg_gradient(song_get()->bg_color, song_get()->bg_color_secondary, bg_type);
-
     Karaoke_t *state = res->custom_data;
+
+    Background_t *bg = ui_root_container(state->ui)->background;
+    bg->type = BACKGROUND_GRADIENT;
+    bg->colors[0] = render_color_parse(song_get()->bg_color);
+    bg->colors[1] = render_color_parse(song_get()->bg_color_secondary);
+
     state->loading.song_loaded = true;
 }
 
@@ -193,10 +177,6 @@ static void on_audio_loaded(const Resource_t *res) {
 static void on_album_art_loaded(const Resource_t *res) {
     if ( res->status == LOAD_ERROR )
         error_abort("Failed to load album art resource");
-
-    Color_t colors[5];
-    render_sample_bg_colors_from_image(res->buffer->data, (int)res->buffer->downloaded_bytes, colors);
-    render_set_bg_colors(colors);
 
     Karaoke_t *state = res->custom_data;
     state->loading.album_art_loaded = true;
@@ -419,6 +399,36 @@ static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *
     state->drawables.lyrics_view->container->viewport_y = 0;
 }
 
+static void setup_background(const Karaoke_t *state) {
+    BackgroundType_t bg_type = BACKGROUND_NONE;
+    switch ( song_get()->bg_type ) {
+    case BG_SIMPLE_GRADIENT:
+        bg_type = BACKGROUND_GRADIENT;
+        break;
+    case BG_SANDS_GRADIENT:
+        bg_type = BACKGROUND_SANDS_GRADIENT;
+        break;
+    case BG_RANDOM_GRADIENT:
+        bg_type = BACKGROUND_RANDOM_GRADIENT;
+        break;
+    case BG_AM_LIKE_GRADIENT:
+        bg_type = BACKGROUND_AM_LIKE_GRADIENT;
+        break;
+    default:
+        break;
+    }
+
+    const ResourceBuffer_t *buffer = state->resources.album_art_buffer;
+    Color_t colors[5];
+    render_sample_bg_colors_from_image(buffer->data, (int)buffer->downloaded_bytes, colors);
+
+    Background_t *bg = ui_root_container(state->ui)->background;
+    bg->type = bg_type;
+    for ( int i = 0; i < 5; i++ ) {
+        bg->colors[i] = colors[i];
+    }
+}
+
 void karaoke_setup(Karaoke_t *state) {
     if ( state->ui != NULL ) {
         ui_finish(state->ui);
@@ -469,6 +479,8 @@ void karaoke_setup(Karaoke_t *state) {
                     .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
                     .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
                     .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
+    // Set up the background shaders using the song's album art
+    setup_background(state);
     repo_resource_buffer_destroy(state->resources.album_art_buffer);
 
     // Song info container

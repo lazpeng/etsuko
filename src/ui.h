@@ -95,6 +95,7 @@ typedef struct Container_t {
     OWNING Vector_t *child_drawables;  // of Drawable_t*
     OWNING Vector_t *child_containers; // of Container_t*
     OWNING Vector_t *animations; // of ContainerAnimation_t*
+    OWNING Background_t *background;
     Layout_t layout;
     bool enabled;
     ContainerFlags_t flags;
@@ -324,10 +325,8 @@ void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c
 void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
 // Meta helpers
 void ui_set_window_title(const char *title);
-void ui_set_bg_color(uint32_t color);
-void ui_set_bg_gradient(uint32_t primary, uint32_t secondary, BackgroundType_t type);
 void ui_on_window_changed(Ui_t *ui);
-Container_t *ui_root_container(Ui_t *ui);
+Container_t *ui_root_container(const Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset);
 [[deprecated("Use events instead")]]
