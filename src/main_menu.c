@@ -24,7 +24,9 @@
 #define PILL_REGULAR_OFFSET_Y (0.06)
 #define PILL_SCALED_OFFSET_Y (0.1)
 
-// TODO: This shit shouldn't be here
+// Prev comment: "This shit shouldn't be here"
+// but unfortunately the "ui" is too barebones to offer a generic solution for this problem, so
+// it ultimately does need to be in here
 typedef struct GridLayoutInfo_t {
     WEAK Drawable_t *first_in_row, *last_in_row;
     int row_count;

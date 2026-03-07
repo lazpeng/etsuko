@@ -102,7 +102,6 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
                     const CharOffsetInfo_t *character = offset_info->char_offsets->data[index_on_this_line];
                     const int32_t character_x = offset_info->start_x + character->x;
 
-                    // TODO: Get a better anchoring for the x value from stb
                     // Place this hint below the segment it's supposed to hint at, but if the previous hint already
                     // overshoots the length of its segment, place it a few pixels to the right of wherever the last hint ended
                     x = MAX(x + 5, character_x + ui_compute_relative_horizontal(ui, 0.01, view->container));
