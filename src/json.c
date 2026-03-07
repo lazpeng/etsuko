@@ -65,7 +65,7 @@ static JsonTokenType_t peek(const char *src, int32_t idx, size_t size, int32_t *
 
     *skip = str_skip_whitespace(src, new_idx, size);
     new_idx += *skip;
-    int32_t c = str_u8_next(src, size, &new_idx);
+    const int32_t c = str_u8_next(src, size, &new_idx);
 
     switch ( c ) {
     case '{':
@@ -87,7 +87,6 @@ static JsonTokenType_t peek(const char *src, int32_t idx, size_t size, int32_t *
     if ( (c >= '0' && c <= '9') || c == '-' || c == '.' )
         return JSON_TOKEN_NUM;
 
-    // TODO: Only works with lowercase bool literals but who cares
     if ( str_equals_sized(src + idx, "true", strlen("true")) || str_equals_sized(src + idx, "false", strlen("false")) ) {
         return JSON_TOKEN_BOOL;
     }
@@ -102,7 +101,7 @@ static const char *parse_string(const char *src, int32_t *idx, size_t size) {
     StrBuffer_t *buffer = str_buf_init();
 
     int32_t skip = 0;
-    JsonTokenType_t token = peek(src, *idx, size, &skip);
+    const JsonTokenType_t token = peek(src, *idx, size, &skip);
     if ( token != JSON_TOKEN_QUOTE ) {
         fprintf(stderr, "Json: parse_string: Expected \" at %d\n", *idx);
         str_buf_destroy(buffer);
@@ -110,10 +109,9 @@ static const char *parse_string(const char *src, int32_t *idx, size_t size) {
     }
     *idx += skip + 1; // for the " character
 
-    // TODO: Handle escape sequences
     while ( true ) {
         int32_t tmp_idx = *idx;
-        int32_t c = str_u8_next(src, size, &tmp_idx);
+        const int32_t c = str_u8_next(src, size, &tmp_idx);
         if ( c < 0 ) {
             fprintf(stderr, "Json: parse_string: Unexpected end of input.\n");
             str_buf_destroy(buffer);
@@ -122,6 +120,56 @@ static const char *parse_string(const char *src, int32_t *idx, size_t size) {
         if ( c == '"' ) {
             *idx = tmp_idx;
             break;
+        }
+        if ( c == '\\' ) {
+            *idx = tmp_idx; // consume the backslash
+            int32_t esc_idx = *idx;
+            const int32_t esc = str_u8_next(src, size, &esc_idx);
+            if ( esc < 0 ) {
+                fprintf(stderr, "Json: parse_string: Unexpected end of input after \\.\n");
+                str_buf_destroy(buffer);
+                return NULL;
+            }
+            *idx = esc_idx;
+            switch ( esc ) {
+            case '"':  str_buf_append_ch(buffer, '"');  break;
+            case '\\': str_buf_append_ch(buffer, '\\'); break;
+            case '/':  str_buf_append_ch(buffer, '/');  break;
+            case 'n':  str_buf_append_ch(buffer, '\n'); break;
+            case 'r':  str_buf_append_ch(buffer, '\r'); break;
+            case 't':  str_buf_append_ch(buffer, '\t'); break;
+            case 'b':  str_buf_append_ch(buffer, '\b'); break;
+            case 'f':  str_buf_append_ch(buffer, '\f'); break;
+            case 'u': {
+                // Parse 4 hex digits and encode the codepoint as UTF-8
+                uint32_t codepoint = 0;
+                for ( int h = 0; h < 4; h++ ) {
+                    if ( *idx >= (int32_t)size ) {
+                        fprintf(stderr, "Json: parse_string: Unexpected end of input in \\uXXXX.\n");
+                        str_buf_destroy(buffer);
+                        return NULL;
+                    }
+                    const char hc = src[(*idx)++];
+                    uint32_t digit;
+                    if ( hc >= '0' && hc <= '9' )      digit = hc - '0';
+                    else if ( hc >= 'a' && hc <= 'f' ) digit = hc - 'a' + 10;
+                    else if ( hc >= 'A' && hc <= 'F' ) digit = hc - 'A' + 10;
+                    else {
+                        fprintf(stderr, "Json: parse_string: Invalid hex digit '%c' in \\uXXXX.\n", hc);
+                        str_buf_destroy(buffer);
+                        return NULL;
+                    }
+                    codepoint = (codepoint << 4) | digit;
+                }
+                str_buf_append_codepoint(buffer, codepoint);
+                break;
+            }
+            default:
+                fprintf(stderr, "Json: parse_string: Unknown escape sequence \\%c.\n", (char)esc);
+                str_buf_destroy(buffer);
+                return NULL;
+            }
+            continue;
         }
         str_buf_append_len(buffer, src + *idx, tmp_idx - *idx);
         *idx = tmp_idx;
@@ -141,10 +189,9 @@ static bool parse_number(const char *src, int32_t *idx, size_t size, double *res
     const int32_t skip = str_skip_whitespace(src, *idx, (int32_t)size);
     tmp_idx += skip;
 
-    // TODO: Handle scientific notation
     while ( tmp_idx < (int32_t)size ) {
-        int32_t prev_idx = tmp_idx;
-        int32_t c = str_u8_next(src, size, &tmp_idx);
+        const int32_t prev_idx = tmp_idx;
+        const int32_t c = str_u8_next(src, size, &tmp_idx);
         if ( c == '-' ) {
             if ( tmp_idx - skip - 1 == *idx ) { // - 1 : include amount skipped by the - character
                 // Ok
@@ -177,6 +224,52 @@ static bool parse_number(const char *src, int32_t *idx, size_t size, double *res
         }
     }
 
+    // Scientific notation: optional e/E followed by optional sign and digits
+    if ( tmp_idx < (int32_t)size ) {
+        const int32_t e_prev = tmp_idx;
+        const int32_t e_c = str_u8_next(src, size, &tmp_idx);
+        if ( e_c == 'e' || e_c == 'E' ) {
+            int32_t exp = 0;
+            bool exp_negative = false;
+
+            if ( tmp_idx < (int32_t)size ) {
+                const int32_t sign_prev = tmp_idx;
+                const int32_t sign_c = str_u8_next(src, size, &tmp_idx);
+                if ( sign_c == '-' ) {
+                    exp_negative = true;
+                } else if ( sign_c != '+' ) {
+                    tmp_idx = sign_prev; // not a sign, backtrack
+                }
+            }
+
+            bool has_exp_digits = false;
+            while ( tmp_idx < (int32_t)size ) {
+                const int32_t exp_prev = tmp_idx;
+                const int32_t exp_c = str_u8_next(src, size, &tmp_idx);
+                if ( exp_c >= '0' && exp_c <= '9' ) {
+                    exp = exp * 10 + (exp_c - '0');
+                    has_exp_digits = true;
+                } else {
+                    tmp_idx = exp_prev;
+                    break;
+                }
+            }
+
+            if ( !has_exp_digits ) {
+                fprintf(stderr, "Json: parse_number: Expected digits after e/E at %d\n", tmp_idx);
+                return false;
+            }
+
+            double multiplier = 1.0;
+            for ( int i = 0; i < exp; i++ ) {
+                multiplier *= 10.0;
+            }
+            num = exp_negative ? num / multiplier : num * multiplier;
+        } else {
+            tmp_idx = e_prev; // not scientific notation, backtrack
+        }
+    }
+
     *result = negative ? -num : num;
     *idx = tmp_idx;
     return true;
@@ -199,7 +292,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, size_t size, Json
 
     if ( !skip_name ) {
         int32_t skip = 0;
-        JsonTokenType_t token = peek(src, *idx, size, &skip);
+        const JsonTokenType_t token = peek(src, *idx, size, &skip);
         *idx += skip;
 
         if ( token != JSON_TOKEN_COLON ) {
@@ -211,7 +304,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, size_t size, Json
     }
 
     int32_t skip = 0;
-    JsonTokenType_t token = peek(src, *idx, size, &skip);
+    const JsonTokenType_t token = peek(src, *idx, size, &skip);
     *idx += skip;
 
     switch ( token ) {
@@ -397,7 +490,7 @@ JsonObject_t *parse_object(const char *src, int32_t *idx, size_t size, JsonConte
 }
 
 JsonObject_t *json_parse(const char *src, JsonContext_t *ctx) {
-    size_t size = (size_t)strlen(src);
+    const size_t size = (size_t)strlen(src);
     int32_t idx = 0;
     return parse_object(src, &idx, size, ctx);
 }
