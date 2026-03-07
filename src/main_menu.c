@@ -437,12 +437,25 @@ static void update_background(const MainMenu_t *menu) {
     if ( art == NULL || art->image_data == NULL )
         return;
 
-    Container_t *root = ui_root_container(menu->ui);
+    const Container_t *root = ui_root_container(menu->ui);
     if ( root->background->type == BACKGROUND_NONE )
         ui_container_update_background_colors_immediate(root, art->sampled_colors, 5);
     else
         ui_container_update_background_colors(root, art->sampled_colors, 5);
     root->background->type = BACKGROUND_AM_LIKE_GRADIENT;
+}
+
+static void destroy_resource_load(Resource_t **resource) {
+    if ( resource != NULL && *resource != NULL ) {
+        repo_resource_destroy(*resource);
+        *resource = NULL;
+    }
+}
+
+static void free_setup_resource_loads(MainMenu_t *menu) {
+    destroy_resource_load(&menu->load_ui_font);
+    destroy_resource_load(&menu->load_song_list);
+    destroy_resource_load(&menu->load_no_album_art);
 }
 
 void menu_setup(MainMenu_t *menu) {
@@ -456,6 +469,8 @@ void menu_setup(MainMenu_t *menu) {
     menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
 
     map_iterate(menu->menu_artists, setup_artist, menu);
+
+    free_setup_resource_loads(menu);
 }
 
 static void iterate_pending_art(const char *key, void *data, void *userdata) {
@@ -525,14 +540,6 @@ void menu_finish(MainMenu_t *menu) {
 
     if ( menu->menu_artists )
         menu_songs_destroy(menu->menu_artists);
-
-    // TODO: The resource loads should have been destroyed in the setup. Do this later
-    if ( menu->load_ui_font )
-        repo_resource_destroy(menu->load_ui_font);
-    if ( menu->load_song_list )
-        repo_resource_destroy(menu->load_song_list);
-    if ( menu->load_no_album_art )
-        repo_resource_destroy(menu->load_no_album_art);
 
     if ( menu->album_art_loads ) {
         for ( size_t i = 0; i < menu->album_art_loads->size; i++ ) {
