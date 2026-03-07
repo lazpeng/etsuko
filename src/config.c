@@ -24,7 +24,7 @@ EM_JS(const char *, get_song_param, (void), {
 static void try_load_config_web(Config_t *config) {
     const char *song = get_song_param();
     if ( strlen(song) > 0 ) {
-        config_set_karaoke_song_file(song);
+        config_set_karaoke_song_file(config, song);
         config->op_mode = APP_MODE_KARAOKE;
     }
 }
@@ -67,8 +67,7 @@ Config_t *config_get(void) {
     return g_config;
 }
 
-void config_set_karaoke_song_file(const char *id) {
-    Config_t *config = config_get();
+void config_set_karaoke_song_file(Config_t *config, const char *id) {
     if ( config->karaoke.song_file != NULL )
         free(config->karaoke.song_file);
 

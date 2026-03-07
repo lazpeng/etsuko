@@ -55,6 +55,6 @@ typedef struct {
 Config_t *config_get(void);
 
 // Sets the song file name for the karaoke portion based on an id
-void config_set_karaoke_song_file(const char *id);
+void config_set_karaoke_song_file(Config_t *config, const char *id);
 
 #endif // ETSUKO_CONFIG_H

@@ -226,7 +226,7 @@ static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *draw
         entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
         ui_reposition_container(menu->ui, entry->pills_container);
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
-        config_set_karaoke_song_file(entry->key);
+        config_set_karaoke_song_file(config_get(), entry->key);
         etsuko_navigate("/?song=", entry->key);
 
         global_mode_switch(APP_MODE_KARAOKE);
