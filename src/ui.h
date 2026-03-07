@@ -131,6 +131,7 @@ typedef enum AnimationType_t {
     ANIM_SCALE,
     ANIM_DRAW_REGION,
     ANIM_SCALE_REGION,
+    ANIM_BACKGROUND_COLOR,
 } AnimationType_t;
 
 /**
@@ -289,6 +290,13 @@ typedef struct Animation_ScaleRegionData_t {
     AnimationApplyType_t default_apply;
 } Animation_ScaleRegionData_t;
 
+typedef struct Animation_ColorLerpData_t {
+    Color_t from_colors[5];
+    Color_t to_colors[5];
+    double duration;
+    AnimationEaseType_t ease_func;
+} Animation_ColorLerpData_t;
+
 typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
     UI_EVENT_MOUSE_MOVE,
@@ -342,7 +350,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
 void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable);
-double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent);
+double ui_compute_relative_horizontal(Ui_t *ui, double value, const Container_t *parent);
 void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
@@ -356,7 +364,7 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, double duration);
 void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
-void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
+void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
                                       AnimationApplyType_t apply_type);
 // Containers
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
@@ -370,5 +378,8 @@ void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data);
 void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t *data);
 void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData_t *data);
 void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
+void ui_container_animate_color_lerp(Container_t *container, double duration, AnimationEaseType_t ease_func);
+void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
+void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);
 
 #endif // ETSUKO_UI_H

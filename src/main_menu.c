@@ -444,14 +444,16 @@ static void update_background(const MainMenu_t *menu) {
     if ( art == NULL || art->image_data == NULL )
         return;
 
-    Background_t *bg = ui_root_container(menu->ui)->background;
-    for ( int i = 0; i < 5; i++ ) {
-        bg->colors[i] = art->sampled_colors[i];
-    }
-    bg->type = BACKGROUND_AM_LIKE_GRADIENT;
+    Container_t *root = ui_root_container(menu->ui);
+    if ( root->background->type == BACKGROUND_NONE )
+        ui_container_update_background_colors_immediate(root, art->sampled_colors, 5);
+    else
+        ui_container_update_background_colors(root, art->sampled_colors, 5);
+    root->background->type = BACKGROUND_AM_LIKE_GRADIENT;
 }
 
 void menu_setup(MainMenu_t *menu) {
+    ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_OUT_CUBIC);
     // Set the initial background to the first album art loaded
     update_background(menu);
     etsuko_setup_version(menu->ui);

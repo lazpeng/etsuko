@@ -125,6 +125,8 @@ static void animation_destroy(Animation_t *animation, const bool recursive) {
             animation_draw_region_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_SCALE_REGION ) {
             animation_scale_region_data_destroy(animation->custom_data);
+        } else if ( animation->type == ANIM_BACKGROUND_COLOR ) {
+            free(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
         }
@@ -773,6 +775,19 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
                 const double delta_x = data->to_x - data->from_x, delta_y = data->to_y - data->from_y;
                 bounds->x = data->from_x + delta_x * progress;
                 bounds->y = data->from_y + delta_y * progress;
+            }
+
+            if ( animation->type == ANIM_BACKGROUND_COLOR ) {
+                const Animation_ColorLerpData_t *data = animation->custom_data;
+                const double eased = apply_ease_func(progress, animation->ease_func);
+                Color_t *colors = container->background->colors;
+                for ( int c = 0; c < 5; c++ ) {
+                    const Color_t from = data->from_colors[c], to = data->to_colors[c];
+                    colors[c].r = (uint8_t)(from.r + (to.r - from.r) * eased);
+                    colors[c].g = (uint8_t)(from.g + (to.g - from.g) * eased);
+                    colors[c].b = (uint8_t)(from.b + (to.b - from.b) * eased);
+                    colors[c].a = (uint8_t)(from.a + (to.a - from.a) * eased);
+                }
             }
 
             if ( progress >= 1.0 )
@@ -1465,7 +1480,7 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     free(drawable);
 }
 
-double ui_compute_relative_horizontal(Ui_t *ui, double value, Container_t *parent) { return parent->bounds.w * value; }
+double ui_compute_relative_horizontal(Ui_t *ui, double value, const Container_t *parent) { return parent->bounds.w * value; }
 
 Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));
@@ -1752,6 +1767,9 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     case ANIM_SCALE_REGION:
         animation->custom_data = dup_anim_scale_region_data(base_anim->custom_data);
         break;
+    case ANIM_BACKGROUND_COLOR:
+        error_abort("reapply_animation: ANIM_COLOR_LERP is container-only and cannot be reapplied as a drawable animation");
+        break;
     default:
         error_abort("reapply_animation: Unrecognized animation type");
     }
@@ -1985,7 +2003,7 @@ void ui_drawable_set_draw_underlay(Drawable_t *drawable, const bool draw, const 
     drawable->underlay_alpha = alpha;
 }
 
-void ui_drawable_add_scale_region_dur(Drawable_t *drawable, const ScaleRegionOpt_t *region, const double duration,
+void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, const double duration,
                                       AnimationApplyType_t apply_type) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE_REGION);
     // TODO: This function doesn't do anything if there's no animation attached
@@ -2123,4 +2141,72 @@ void ui_container_animate_translation(Container_t *container, const Animation_Ea
     result->ease_func = data->ease_func;
 
     vec_add(container->animations, result);
+}
+
+void ui_container_animate_color_lerp(Container_t *container, double duration, AnimationEaseType_t ease_func) {
+    ContainerAnimation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate color lerp animation");
+    }
+    Animation_ColorLerpData_t *data = calloc(1, sizeof(*data));
+    if ( data == NULL ) {
+        error_abort("Failed to allocate color lerp animation data");
+    }
+    data->duration = duration;
+    data->ease_func = ease_func;
+    result->type = ANIM_BACKGROUND_COLOR;
+    result->custom_data = data;
+    result->target = container;
+    result->duration = duration;
+    result->active = false;
+    result->ease_func = ease_func;
+    vec_add(container->animations, result);
+}
+
+void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size) {
+    ContainerAnimation_t *lerp_anim = NULL;
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *a = container->animations->data[i];
+        if ( a->type == ANIM_BACKGROUND_COLOR ) {
+            lerp_anim = a;
+            break;
+        }
+    }
+
+    if ( lerp_anim != NULL ) {
+        Animation_ColorLerpData_t *data = lerp_anim->custom_data;
+        for ( int i = 0; i < 5; i++ )
+            data->from_colors[i] = container->background->colors[i];
+        for ( int i = 0; i < 5; i++ ) {
+            if ( (size_t)i < size )
+                data->to_colors[i] = colors[i];
+            else
+                data->to_colors[i] = (Color_t){0, 0, 0, 255};
+        }
+        lerp_anim->elapsed = 0.0;
+        lerp_anim->active = true;
+    } else {
+        for ( int i = 0; i < 5; i++ ) {
+            if ( (size_t)i < size )
+                container->background->colors[i] = colors[i];
+            else
+                container->background->colors[i] = (Color_t){0, 0, 0, 255};
+        }
+    }
+}
+
+void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size) {
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *a = container->animations->data[i];
+        if ( a->type == ANIM_BACKGROUND_COLOR ) {
+            a->active = false;
+            break;
+        }
+    }
+    for ( int i = 0; i < 5; i++ ) {
+        if ( (size_t)i < size )
+            container->background->colors[i] = colors[i];
+        else
+            container->background->colors[i] = (Color_t){0, 0, 0, 255};
+    }
 }
