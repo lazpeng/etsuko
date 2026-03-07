@@ -16,11 +16,17 @@
 
 #include "contrib/minimp3_ex.h"
 
-#include "error.h"
 #include "constants.h"
+#include "error.h"
 
 #define NUM_BUFFERS 4
 #define BUFFER_SIZE (4096 * 4)
+
+typedef enum AudioPlayState_t {
+    AUDIO_STATE_PAUSED,
+    AUDIO_STATE_PLAYING,
+    AUDIO_STATE_STOPPED,
+} AudioPlayState_t;
 
 typedef struct {
     uint8_t *mp3_data;
@@ -36,8 +42,8 @@ typedef struct {
     double total_time;
     uint64_t total_samples;
     uint64_t last_first_decoded_sample;
-    bool paused;
-    bool stopped;
+    AudioPlayState_t state;
+    bool decoder_exhausted;
 } audio_state_t;
 
 static audio_state_t g_audio = {0};
@@ -64,8 +70,8 @@ void audio_init(void) {
         error_abort("Failed to make OpenAL context current");
     }
 
-    // TODO: Revise this whole thing
-    g_audio.paused = g_audio.stopped = false;
+    g_audio.state = AUDIO_STATE_PAUSED;
+    g_audio.decoder_exhausted = false;
     g_audio.last_first_decoded_sample = 0;
 
     alGenSources(1, &g_audio.source);
@@ -86,11 +92,6 @@ void audio_finish(void) {
         free(g_audio.mp3_data);
         g_audio.mp3_data = NULL;
     }
-}
-
-static void reset(void) {
-    audio_resume();
-    audio_pause();
 }
 
 void audio_load(const unsigned char *data, const int data_size) {
@@ -140,37 +141,53 @@ void audio_load(const unsigned char *data, const int data_size) {
         }
     }
 
-    reset();
+    alSourcePause(g_audio.source);
+    g_audio.state = AUDIO_STATE_PAUSED;
+    g_audio.decoder_exhausted = false;
+    g_audio.last_first_decoded_sample = 0;
 }
 
 void audio_resume(void) {
-    if ( g_audio.stopped ) {
-        mp3dec_ex_seek(&g_audio.decoder, 0);
-        g_audio.stopped = false;
-        g_audio.paused = false;
-        alSourcePlay(g_audio.source);
-    } else if ( g_audio.paused ) {
-        if ( audio_elapsed_time() >= audio_total_time() ) {
-            mp3dec_ex_seek(&g_audio.decoder, 0);
-        }
-        g_audio.paused = false;
-        alSourcePlay(g_audio.source);
-    }
-}
-
-void audio_pause(void) {
-    if ( g_audio.paused ) {
+    if ( g_audio.state == AUDIO_STATE_PLAYING ) {
         return;
     }
 
-    g_audio.paused = true;
+    if ( g_audio.state == AUDIO_STATE_STOPPED ) {
+        mp3dec_ex_seek(&g_audio.decoder, 0);
+        g_audio.decoder_exhausted = false;
+        g_audio.last_first_decoded_sample = 0;
+        for ( int i = 0; i < NUM_BUFFERS; i++ ) {
+            const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
+            if ( read > 0 ) {
+                const int format = g_audio.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+                alBufferData(g_audio.buffers[i], format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)),
+                             g_audio.playback_sample_rate);
+                alSourceQueueBuffers(g_audio.source, 1, &g_audio.buffers[i]);
+            }
+        }
+    }
+
+    g_audio.state = AUDIO_STATE_PLAYING;
+    alSourcePlay(g_audio.source);
+}
+
+void audio_pause(void) {
+    if ( g_audio.state != AUDIO_STATE_PLAYING ) {
+        return;
+    }
+
+    g_audio.state = AUDIO_STATE_PAUSED;
     alSourcePause(g_audio.source);
 }
 
 void audio_seek(double time) {
-    if ( g_audio.stopped ) {
-        reset();
+    const bool was_playing = (g_audio.state == AUDIO_STATE_PLAYING);
+
+    // Treat seeking while stopped as seeking while paused
+    if ( g_audio.state == AUDIO_STATE_STOPPED ) {
+        g_audio.state = AUDIO_STATE_PAUSED;
     }
+
     time = MAX(0.0, time);
 
     uint64_t sample_pos = (uint64_t)(time * (double)g_audio.sample_rate * (double)g_audio.channels);
@@ -180,6 +197,7 @@ void audio_seek(double time) {
     }
 
     mp3dec_ex_seek(&g_audio.decoder, sample_pos);
+    g_audio.decoder_exhausted = false;
 
     // Clear buffers and refill
     alSourceStop(g_audio.source);
@@ -198,12 +216,13 @@ void audio_seek(double time) {
         }
         if ( read > 0 ) {
             const int format = g_audio.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
-            alBufferData(g_audio.buffers[i], format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)), g_audio.playback_sample_rate);
+            alBufferData(g_audio.buffers[i], format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)),
+                         g_audio.playback_sample_rate);
             alSourceQueueBuffers(g_audio.source, 1, &g_audio.buffers[i]);
         }
     }
 
-    if ( !g_audio.paused ) {
+    if ( was_playing ) {
         alSourcePlay(g_audio.source);
     }
 }
@@ -223,10 +242,10 @@ double audio_elapsed_time(void) {
 
 double audio_total_time(void) { return g_audio.total_time; }
 
-bool audio_is_paused(void) { return g_audio.paused || g_audio.stopped; }
+bool audio_is_paused(void) { return g_audio.state != AUDIO_STATE_PLAYING; }
 
 void audio_loop(void) {
-    if ( g_audio.mp3_data == NULL || g_audio.paused || g_audio.stopped ) {
+    if ( g_audio.mp3_data == NULL || g_audio.state != AUDIO_STATE_PLAYING ) {
         return;
     }
 
@@ -242,25 +261,30 @@ void audio_loop(void) {
             g_audio.last_first_decoded_sample = g_audio.decoder.cur_sample;
             first = false;
         }
-        const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
 
-        if ( read > 0 ) {
-            const int format = g_audio.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
-            alBufferData(buffer, format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)), g_audio.playback_sample_rate);
-            check_al_error("alBufferData");
-            alSourceQueueBuffers(g_audio.source, 1, &buffer);
-            check_al_error("alSourceQueueBuffers");
-        } else {
-            // End of stream
-            g_audio.stopped = true;
+        if ( !g_audio.decoder_exhausted ) {
+            const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
+            if ( read > 0 ) {
+                const int format = g_audio.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+                alBufferData(buffer, format, g_audio.pcm_buffer, (ALsizei)(read * sizeof(int16_t)), g_audio.playback_sample_rate);
+                check_al_error("alBufferData");
+                alSourceQueueBuffers(g_audio.source, 1, &buffer);
+                check_al_error("alSourceQueueBuffers");
+            } else {
+                g_audio.decoder_exhausted = true;
+            }
         }
 
         processed--;
     }
 
-    ALint state;
-    alGetSourcei(g_audio.source, AL_SOURCE_STATE, &state);
-    if ( state != AL_PLAYING && !g_audio.paused && !g_audio.stopped ) {
+    ALint al_state, queued;
+    alGetSourcei(g_audio.source, AL_SOURCE_STATE, &al_state);
+    alGetSourcei(g_audio.source, AL_BUFFERS_QUEUED, &queued);
+
+    if ( g_audio.decoder_exhausted && queued == 0 && al_state == AL_STOPPED ) {
+        g_audio.state = AUDIO_STATE_STOPPED;
+    } else if ( al_state != AL_PLAYING && !g_audio.decoder_exhausted ) {
         alSourcePlay(g_audio.source);
         check_al_error("alSourcePlay restart");
     }
