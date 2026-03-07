@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// TODO: Refactor this shit holy shit
+// This is very messy, could be refactored into something at least consistent with the naming
 #define LINE_VERTICAL_PADDING (0.035)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.05)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
@@ -207,9 +207,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
 
-    // TODO: Check if the event was already set
-    //  doesn't happen currently because the ui is destroyed then reconstructed along with every make of this lyrics view
-    //  but it could happen
     ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
 
     const bool should_generate_reading_hints = song->has_reading_info && config_get()->karaoke.enable_reading_hints;

@@ -841,6 +841,13 @@ void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *tar
     const int layer_idx = 0; // always 0 for now
     const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_idx);
 
+    for ( size_t i = 0; i < target->events->size; i++ ) {
+        const EventDef_t *existing = target->events->data[i];
+        if ( existing->type == event_type && existing->callback == callback && existing->custom_data == custom_data ) {
+            return;
+        }
+    }
+
     EventDef_t *event = calloc(1, sizeof(*event));
     event->type = event_type;
     event->target = target;
@@ -867,6 +874,13 @@ void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, co
     default:
         printf("Non-global event passed to ui_add_global_event_callback: nothing will happen\n");
         return;
+    }
+
+    for ( size_t i = 0; i < ui->global_events->size; i++ ) {
+        const EventDef_t *existing = ui->global_events->data[i];
+        if ( existing->type == event_type && existing->callback == callback && existing->custom_data == custom_data ) {
+            return;
+        }
     }
 
     EventDef_t *event = calloc(1, sizeof(*event));
