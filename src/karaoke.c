@@ -342,9 +342,8 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void 
     const Karaoke_t *state = custom_data;
     const bool show_controls = state->hovering_controls || audio_elapsed_time() <= 0.1;
 
-    // Hide controls after the mouse stopped for more than 2 seconds
-    // TODO: Config this
-    if ( opt->mouse.duration > 2.0 ) {
+    // Hide controls after the mouse stopped for more than x seconds
+    if ( opt->mouse.duration > config_get()->karaoke.hide_ui_elements_delay_sec ) {
         if ( !show_controls ) {
             state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = true;
             state->drawables.song_controls_container->enabled = false;
