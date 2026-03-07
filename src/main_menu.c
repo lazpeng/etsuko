@@ -356,7 +356,7 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
     return text;
 }
 
-static void setup_album(const char *_, void *value, void *userdata) {
+static void setup_album(const char *_, const void *value, void *userdata) {
     const MenuAlbum_t *album = value;
     MainMenu_t *menu = userdata;
     GridLayoutInfo_t *grid = &menu->grid_layout_info;
@@ -423,10 +423,10 @@ static void setup_album(const char *_, void *value, void *userdata) {
     }
 }
 
-static void setup_artist(const char *_, void *value, void *userdata) {
+static void setup_artist(const char *_, const void *value, void *userdata) {
     const MenuArtist_t *artist = value;
 
-    map_iterate(artist->albums, setup_album, userdata);
+    map_iterate_const(artist->albums, setup_album, userdata);
 }
 
 static void update_background(const MainMenu_t *menu) {
@@ -468,7 +468,7 @@ void menu_setup(MainMenu_t *menu) {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
     menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
 
-    map_iterate(menu->menu_artists, setup_artist, menu);
+    map_iterate_const(menu->menu_artists, setup_artist, menu);
 
     free_setup_resource_loads(menu);
 }

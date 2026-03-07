@@ -277,16 +277,32 @@ void map_remove(HashMap_t *map, const char *key) {
     }
 }
 
-void map_iterate(HashMap_t *map, map_iterator_func func, void *user_data) {
+void map_iterate(const HashMap_t *map, const map_iterator_func func, void *user_data) {
     if ( map == NULL )
         error_abort("map_iterate: Map is NULL");
     if ( func == NULL )
         error_abort("map_iterate: Func is NULL");
 
     for ( size_t i = 0; i < map->capacity; i++ ) {
-        HashEntry_t *entry = map->buckets[i];
+        const HashEntry_t *entry = map->buckets[i];
         while ( entry ) {
-            HashEntry_t *next = entry->next;
+            const HashEntry_t *next = entry->next;
+            func(entry->key, entry->value, user_data);
+            entry = next;
+        }
+    }
+}
+
+void map_iterate_const(const HashMap_t *map, const map_iterator_func_const func, void *user_data) {
+    if ( map == NULL )
+        error_abort("map_iterate: Map is NULL");
+    if ( func == NULL )
+        error_abort("map_iterate: Func is NULL");
+
+    for ( size_t i = 0; i < map->capacity; i++ ) {
+        const HashEntry_t *entry = map->buckets[i];
+        while ( entry ) {
+            const HashEntry_t *next = entry->next;
             func(entry->key, entry->value, user_data);
             entry = next;
         }

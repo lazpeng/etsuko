@@ -65,8 +65,11 @@ void map_remove(HashMap_t *map, const char *key);
 void map_clear(HashMap_t *map);
 
 typedef void (*map_iterator_func)(const char *key, void *value, void *user_data);
+typedef void (*map_iterator_func_const)(const char *key, const void *value, void *user_data);
 
 // Iterates over all elements in the map
-void map_iterate(HashMap_t *map, map_iterator_func func, void *user_data);
+void map_iterate(const HashMap_t *map, map_iterator_func func, void *user_data);
+// Iterates over all elements in the map with a const pointer
+void map_iterate_const(const HashMap_t *map, map_iterator_func_const func, void *user_data);
 
 #endif // ETSUKO_CONTAINER_UTILS_H
