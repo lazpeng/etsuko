@@ -226,16 +226,7 @@ static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *draw
         entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
         ui_reposition_container(menu->ui, entry->pills_container);
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
-        Config_t *config = config_get();
-        if ( config->karaoke.song_file != NULL )
-            free(config->karaoke.song_file);
-
-        // TODO: Centralize this logic somewhere. right now it's duplicated and fragile
-        char *file;
-        asprintf(&file, "%s.txt", entry->key);
-        str_replace_char(file, '_', ' ');
-        config->karaoke.song_file = file;
-        printf("file: %s\n", file);
+        config_set_karaoke_song_file(entry->key);
         etsuko_navigate("/?song=", entry->key);
 
         global_mode_switch(APP_MODE_KARAOKE);

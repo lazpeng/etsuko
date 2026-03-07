@@ -54,4 +54,7 @@ typedef struct {
 // Returns the current configuration for the application
 Config_t *config_get(void);
 
+// Sets the song file name for the karaoke portion based on an id
+void config_set_karaoke_song_file(const char *id);
+
 #endif // ETSUKO_CONFIG_H

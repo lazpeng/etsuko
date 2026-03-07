@@ -1,5 +1,7 @@
 #include "config.h"
 
+#include "str_utils.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,16 +24,9 @@ EM_JS(const char *, get_song_param, (void), {
 static void try_load_config_web(Config_t *config) {
     const char *song = get_song_param();
     if ( strlen(song) > 0 ) {
-        printf("song: %s\n", song);
-
-        if ( config->karaoke.song_file != NULL ) {
-            free(config->karaoke.song_file);
-        }
-
-        asprintf(&config->karaoke.song_file, "%s.txt", song);
-        str_replace_char(config->karaoke.song_file, '_', ' ');
+        config_set_karaoke_song_file(song);
         config->op_mode = APP_MODE_KARAOKE;
-    } // else use the default config (for now)
+    }
 }
 
 #endif
@@ -70,4 +65,13 @@ Config_t *config_get(void) {
         g_config = get_default_config();
     }
     return g_config;
+}
+
+void config_set_karaoke_song_file(const char *id) {
+    Config_t *config = config_get();
+    if ( config->karaoke.song_file != NULL )
+        free(config->karaoke.song_file);
+
+    asprintf(&config->karaoke.song_file, "%s.txt", id);
+    str_replace_char(config->karaoke.song_file, '_', ' ');
 }
