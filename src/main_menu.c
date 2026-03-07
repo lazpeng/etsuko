@@ -497,7 +497,6 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
 
     handle_user_input(menu);
 
-    // TODO: Figure out why sometimes some albums don't load
     map_iterate(menu->album_arts, iterate_pending_art, menu);
     if ( menu->album_data_dirty ) {
         update_background(menu);
