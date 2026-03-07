@@ -810,7 +810,7 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
     }
 
     if ( container->draw_debug_overlay ) {
-        Bounds_t con_bounds = base_bounds;
+        Bounds_t con_bounds = container_bounds;
         con_bounds.w = container->bounds.w;
         con_bounds.h = container->bounds.h;
 
