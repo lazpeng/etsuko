@@ -224,6 +224,19 @@ void str_buf_append_len(StrBuffer_t *buf, const char *str, const size_t len) {
     str_buf_append(buf, str, str + len);
 }
 
+void str_buf_append_codepoint(StrBuffer_t *buf, const uint32_t codepoint) {
+    if ( codepoint <= 0x7F ) {
+        str_buf_append_ch(buf, (char)codepoint);
+    } else if ( codepoint <= 0x7FF ) {
+        str_buf_append_ch(buf, (char)(0xC0 | (codepoint >> 6)));
+        str_buf_append_ch(buf, (char)(0x80 | (codepoint & 0x3F)));
+    } else {
+        str_buf_append_ch(buf, (char)(0xE0 | (codepoint >> 12)));
+        str_buf_append_ch(buf, (char)(0x80 | ((codepoint >> 6) & 0x3F)));
+        str_buf_append_ch(buf, (char)(0x80 | (codepoint & 0x3F)));
+    }
+}
+
 void str_buf_append_ch(StrBuffer_t *buf, const char ch) {
     if ( buf->len + 2 > buf->cap ) {
         resize_str_buffer(buf, (buf->len + 2) * 2);

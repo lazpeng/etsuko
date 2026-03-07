@@ -101,6 +101,10 @@ void str_buf_append_len(StrBuffer_t *buf, const char *str, size_t len);
  */
 void str_buf_append_ch(StrBuffer_t *buf, char ch);
 /**
+ * Encodes a Unicode codepoint as UTF-8 and appends it to a StrBuffer_t.
+ */
+void str_buf_append_codepoint(StrBuffer_t *buf, uint32_t codepoint);
+/**
  * Frees all resources associated with a StrBuffer_t.
  */
 void str_buf_destroy(StrBuffer_t *buf);
