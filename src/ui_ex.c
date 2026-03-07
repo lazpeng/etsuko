@@ -4,11 +4,12 @@
 #include "config.h"
 #include "error.h"
 #include "events.h"
-#include "str_utils.h"
 #include "song.h"
+#include "str_utils.h"
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // This is very messy, could be refactored into something at least consistent with the naming
@@ -62,8 +63,13 @@ static void fade_hint_for_line(const LyricsView_t *view, int32_t index) {
     }
 }
 
+typedef struct ReadingEntry_t {
+    Texture_t *texture;
+    double x, y;
+} ReadingEntry_t;
+
 static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
-    for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
+    for ( int32_t i = 0; i < (int32_t)view->line_read_hints->size; i++ ) {
         Drawable_t *hint = view->line_read_hints->data[i];
 
         if ( is_line_intermission(view, i) )
@@ -78,21 +84,20 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
             if ( lyric_data->line_offsets == NULL )
                 continue;
 
-            // TODO: Measure actual final size
-            render_make_texture_target(drawable->bounds.w * 1.5, drawable->bounds.h * 1.5);
-            const BlendMode_t blend_mode = render_get_blend_mode();
-            render_set_blend_mode(BLEND_MODE_NONE);
-
-            int pixels = render_measure_pixels_from_em(0.8);
+            const int pixels = render_measure_pixels_from_em(0.8);
             const Color_t white = {255, 255, 255, 255};
 
             const Song_Line_t *line = view->song->lyrics_lines->data[i];
+
+            Vector_t *entries = vec_init();
+            double max_w = 0, max_h = 0;
+
             size_t read_i = 0;
             for ( size_t off_i = 0; off_i < lyric_data->line_offsets->size; off_i++ ) {
                 const TextOffsetInfo_t *offset_info = lyric_data->line_offsets->data[off_i];
-                int32_t y = offset_info->start_y + offset_info->height;
+                const double y = offset_info->start_y + offset_info->height;
 
-                int32_t x = 0;
+                double x = 0;
                 for ( ; read_i < line->readings->size; read_i++ ) {
                     const Song_LineReading_t *reading = line->readings->data[read_i];
                     if ( (int32_t)reading->start_ch_idx >= offset_info->start_char_idx + offset_info->num_chars )
@@ -100,31 +105,51 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
 
                     const int32_t index_on_this_line = MAX(0, reading->start_ch_idx - offset_info->start_char_idx);
                     const CharOffsetInfo_t *character = offset_info->char_offsets->data[index_on_this_line];
-                    const int32_t character_x = offset_info->start_x + character->x;
+                    const double character_x = offset_info->start_x + character->x;
 
                     // Place this hint below the segment it's supposed to hint at, but if the previous hint already
                     // overshoots the length of its segment, place it a few pixels to the right of wherever the last hint ended
                     x = MAX(x + 5, character_x + ui_compute_relative_horizontal(ui, 0.01, view->container));
 
-                    Texture_t *text = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
-                    const Bounds_t bounds = {
-                        .x = x,
-                        .y = y,
-                        .w = text->width,
-                        .h = text->height,
-                    };
-                    const DrawTextureOpts_t opts = {
-                        .alpha_mod = 255,
-                        .color_mod = 1.f,
-                    };
-                    render_draw_texture(text, &bounds, &opts);
-                    x += text->width;
+                    ReadingEntry_t *entry = calloc(1, sizeof(*entry));
+                    entry->texture = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
+                    entry->x = x;
+                    entry->y = y;
+                    vec_add(entries, entry);
 
-                    render_destroy_texture(text);
+                    max_w = MAX(max_w, x + entry->texture->width);
+                    max_h = MAX(max_h, y + entry->texture->height);
+                    x += entry->texture->width;
                 }
             }
-            hint->texture = render_restore_texture_target();
-            render_set_blend_mode(blend_mode);
+
+            if ( entries->size > 0 ) {
+                render_make_texture_target((int32_t)ceil(max_w), (int32_t)ceil(max_h));
+                const BlendMode_t blend_mode = render_get_blend_mode();
+                render_set_blend_mode(BLEND_MODE_NONE);
+
+                for ( size_t li = 0; li < entries->size; li++ ) {
+                    const ReadingEntry_t *entry = entries->data[li];
+                    const Bounds_t bounds = {
+                        .x = entry->x, .y = entry->y, .w = entry->texture->width, .h = entry->texture->height};
+                    const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
+                    render_draw_texture(entry->texture, &bounds, &opts);
+                }
+
+                hint->texture = render_restore_texture_target();
+                render_set_blend_mode(blend_mode);
+            } else {
+                hint->texture = NULL;
+                hint->enabled = false;
+            }
+
+            for ( size_t li = 0; li < entries->size; li++ ) {
+                ReadingEntry_t *entry = entries->data[li];
+                render_destroy_texture(entry->texture);
+                free(entry);
+            }
+            vec_destroy(entries);
+
             reposition_hint_for_line(ui, view, i);
 
             hint->pending_recompute = false;
@@ -323,16 +348,15 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     }
 
     if ( !str_is_empty(song->credits) && prev != NULL ) {
-        view->credit_separator = ui_make_rectangle(
-            ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}},
-            view->container,
-            &(Layout_t){.offset_y = 0.02 + get_line_vertical_padding(view),
-                        .offset_x = 0,
-                        .width = 0.8,
-                        .height = 1,
-                        .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT |
-                                 LAYOUT_PROPORTIONAL_Y,
-                        .relative_to = prev});
+        view->credit_separator =
+            ui_make_rectangle(ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}}, view->container,
+                              &(Layout_t){.offset_y = 0.02 + get_line_vertical_padding(view),
+                                          .offset_x = 0,
+                                          .width = 0.8,
+                                          .height = 1,
+                                          .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y |
+                                                   LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
+                                          .relative_to = prev});
         ui_animate_translation(view->credit_separator,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
 
@@ -473,7 +497,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
             double segment_width = 0.0;
             const int32_t segment_start_in_line = MAX(0, timing->start_char_idx - offset_info->start_char_idx);
             for ( int32_t ci = 0; ci < segment_length_in_current_line; ci++ ) {
-                size_t index = ci + segment_start_in_line;
+                const size_t index = ci + segment_start_in_line;
                 const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[index];
                 segment_width += char_info->width;
             }
@@ -539,7 +563,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
 
-    Drawable_t *prev_relative = NULL;
+    const Drawable_t *prev_relative = NULL;
     if ( prev_active >= 0 ) {
         prev_relative = view->line_drawables->data[prev_active];
     }
@@ -589,7 +613,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
 static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     Drawable_t *drawable = view->line_drawables->data[index];
     if ( index > 0 ) {
-        Drawable_t *prev = view->line_drawables->data[index - 1];
+        const Drawable_t *prev = view->line_drawables->data[index - 1];
         drawable->layout.relative_to = prev;
     }
 
