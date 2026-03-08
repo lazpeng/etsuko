@@ -1,8 +1,10 @@
 uniform float u_time;
 uniform vec2 u_resolution;
+uniform float u_borderRadius;
+uniform vec2 u_rectSize;
 
 out vec4 FragColor;
-in vec2 fragCoord;
+in vec2 FragPos;
 
 vec3 hash( vec3 p ) {
     p = vec3( dot(p, vec3(127.1,37.1,23.4)),
@@ -32,7 +34,8 @@ vec3 hsl2rgb( in vec3 c ) {
 }
 
 void main() {
-    vec2 pos = fragCoord * 2.5;
+    vec2 uv = FragPos / u_resolution;
+    vec2 pos = uv * 2.5;
     float n = noise( vec3( pos.x, pos.y, u_time * 0.05 ) );
     float noiseValue = n * 0.5 + 0.5;
     float hueRangeStart = 0.05;
@@ -42,5 +45,16 @@ void main() {
     float saturation = 0.4;
     float lightness = 0.8;
     vec3 finalColor = hsl2rgb(vec3(hue, saturation, lightness));
-    FragColor = vec4( finalColor, 1.0 );
+    float alpha = 1.0;
+    if (u_borderRadius > 0.0) {
+        vec2 halfSize = u_rectSize * 0.5;
+        vec2 localPos = FragPos - halfSize;
+        vec2 cornerDist = max(vec2(0.0), abs(localPos) - (halfSize - u_borderRadius));
+        float dist = length(cornerDist);
+        if (dist > u_borderRadius) {
+            discard;
+        }
+        alpha -= smoothstep(u_borderRadius - 1.0, u_borderRadius, dist);
+    }
+    FragColor = vec4( finalColor, alpha );
 }

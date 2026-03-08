@@ -12,7 +12,7 @@ float dither(vec2 coord) {
 
 void main() {
     float t = TexCoord.y;
-    vec4 color = vec4(mix(u_topColor.rgb, u_bottomColor.rgb, t), 1.0);
+    vec4 color = mix(u_topColor, u_bottomColor, t);
 
     float noise = (dither(gl_FragCoord.xy) - 0.5) / 255.0;
     color.rgb += noise;

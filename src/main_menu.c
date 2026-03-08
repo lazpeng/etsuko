@@ -438,10 +438,15 @@ static void update_background(const MainMenu_t *menu) {
         return;
 
     const Container_t *root = ui_root_container(menu->ui);
+    Color_t sampled_colors[5];
+    for ( int i = 0; i < 5; i++ ) {
+        sampled_colors[i] = art->sampled_colors[i];
+    }
     if ( root->background->type == BACKGROUND_NONE )
-        ui_container_update_background_colors_immediate(root, art->sampled_colors, 5);
+        ui_container_update_background_colors_immediate(root, sampled_colors, 5);
     else
-        ui_container_update_background_colors(root, art->sampled_colors, 5);
+        ui_container_update_background_colors(root, sampled_colors, 5);
+
     root->background->type = BACKGROUND_AM_LIKE_GRADIENT;
 }
 

@@ -1,10 +1,13 @@
 out vec4 FragColor;
 
-in vec2 fragCoord;
+in vec2 FragPos;
 
 uniform float u_time;
-uniform vec3 u_colors[5];
+uniform vec4 u_colors[5];
 uniform float u_noise_magnitude;
+uniform vec2 u_resolution;
+uniform float u_borderRadius;
+uniform vec2 u_rectSize;
 
 // 2D Simplex Noise function
 vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
@@ -33,7 +36,7 @@ float snoise(vec2 v) {
 }
 
 void main() {
-    vec2 uv = fragCoord;
+    vec2 uv = FragPos / u_resolution;
 
     // Fixed movement direction and speed
     float noise1 = snoise(uv + u_time * 0.1);
@@ -44,10 +47,22 @@ void main() {
 
     float mix_val = smoothstep(0.2, 0.8, distorted_uv.x + distorted_uv.y * 0.5 + noise2 * 0.3);
 
-    vec3 color = mix(u_colors[0], u_colors[1], mix_val);
+    vec4 color = mix(u_colors[0], u_colors[1], mix_val);
     color = mix(color, u_colors[2], smoothstep(0.4, 1.0, distorted_uv.y + noise1 * 0.2));
     color = mix(color, u_colors[3], smoothstep(0.6, 0.9, distorted_uv.x + noise2 * 0.5));
     color = mix(color, u_colors[4], smoothstep(0.8, 1.0, length(distorted_uv - 0.5) + noise1 * 0.1));
 
-    FragColor = vec4(color, 1.0);
+    float alpha = color.a;
+    if (u_borderRadius > 0.0) {
+        vec2 halfSize = u_rectSize * 0.5;
+        vec2 localPos = FragPos - halfSize;
+        vec2 cornerDist = max(vec2(0.0), abs(localPos) - (halfSize - u_borderRadius));
+        float dist = length(cornerDist);
+        if (dist > u_borderRadius) {
+            discard;
+        }
+        alpha -= smoothstep(u_borderRadius - 1.0, u_borderRadius, dist);
+    }
+
+    FragColor = vec4(color.rgb, alpha);
 }

@@ -1,9 +1,11 @@
 out vec4 fragColor;
-in vec2 fragCoord;
+in vec2 FragPos;
 
 uniform vec3 iResolution;
 uniform float iTime;
-uniform vec3 iColors[5];
+uniform vec4 iColors[5];
+uniform float u_borderRadius;
+uniform vec2 u_rectSize;
 
 #define S(a, b, t) smoothstep(a, b, t)
 
@@ -40,7 +42,7 @@ float noise(in vec2 p)
 
 void main()
 {
-    vec2 uv = fragCoord / iResolution.xy;
+    vec2 uv = FragPos / iResolution.xy;
     float ratio = iResolution.x / iResolution.y;
 
     vec2 tuv = uv;
@@ -65,15 +67,27 @@ void main()
     // draw the image
     //vec3 colorYellow = vec3(.957, .804, .623);
     //vec3 colorDeepBlue = vec3(.192, .384, .933);
-    vec3 layer1 = mix(iColors[0], iColors[1], S(- .3, .2, (tuv * Rot(radians(- 5.))).x));
+    vec4 layer1 = mix(iColors[0], iColors[1], S(- .3, .2, (tuv * Rot(radians(- 5.))).x));
 
     //vec3 colorRed = vec3(.910, .510, .8);
     //vec3 colorBlue = vec3(0.350, .71, .953);
-    vec3 layer2 = mix(iColors[2], iColors[3], S(- .3, .2, (tuv * Rot(radians(- 5.))).x));
+    vec4 layer2 = mix(iColors[2], iColors[3], S(- .3, .2, (tuv * Rot(radians(- 5.))).x));
 
-    vec3 finalComp = mix(layer1, layer2, S(.5, - .3, tuv.y));
+    vec4 finalComp = mix(layer1, layer2, S(.5, - .3, tuv.y));
 
-    vec3 col = finalComp;
+    vec4 col = finalComp;
 
-    fragColor = vec4(col * 0.5, 1.0);
+    float alpha = col.a;
+    if (u_borderRadius > 0.0) {
+        vec2 halfSize = u_rectSize * 0.5;
+        vec2 localPos = FragPos - halfSize;
+        vec2 cornerDist = max(vec2(0.0), abs(localPos) - (halfSize - u_borderRadius));
+        float dist = length(cornerDist);
+        if (dist > u_borderRadius) {
+            discard;
+        }
+        alpha -= smoothstep(u_borderRadius - 1.0, u_borderRadius, dist);
+    }
+
+    fragColor = vec4(col.rgb * 0.5, alpha);
 }
