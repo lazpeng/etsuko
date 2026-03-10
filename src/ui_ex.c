@@ -231,6 +231,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->song = song;
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
+    view->current_hovered_index = -1;
 
     ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
 
