@@ -812,12 +812,12 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
         if ( animation->active ) {
             const double progress = MIN(1.0, animation->elapsed / animation->duration);
 
-            // TODO: Ease func
             if ( animation->type == ANIM_EASE_TRANSLATION ) {
                 const Animation_EaseTranslationData_t *data = animation->custom_data;
+                const double eased = apply_ease_func(progress, animation->ease_func);
                 const double delta_x = data->to_x - data->from_x, delta_y = data->to_y - data->from_y;
-                bounds->x = data->from_x + delta_x * progress;
-                bounds->y = data->from_y + delta_y * progress;
+                bounds->x = data->from_x + delta_x * eased;
+                bounds->y = data->from_y + delta_y * eased;
             }
 
             if ( animation->type == ANIM_BACKGROUND_COLOR ) {
