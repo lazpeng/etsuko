@@ -464,7 +464,7 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
 }
 
 void menu_setup(MainMenu_t *menu) {
-    ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_OUT_CUBIC);
+    ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_NONE);
     // Set the initial background to the first album art loaded
     update_background(menu);
     etsuko_setup_version(menu->ui);
