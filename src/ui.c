@@ -751,11 +751,35 @@ static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptS
 
     // progress = apply_ease_func(progress, data->ease_func);
     // Consider this will be the num_region'th region of the final set
+    ScaleRegionOpt_t *opt = NULL;
     if ( regions->num_regions >= MAX_SCALE_SUB_REGIONS ) {
-        error_abort("apply_scale_region_animation: Max number of scale regions exceeded");
+        // Find the oldest scale region so we can replace it
+
+        // Special case, it just wrapped around
+        if ( regions->regions[0].sequence < regions->regions[regions->num_regions - 1].sequence ) {
+            opt = &regions->regions[0];
+            opt->sequence = regions->regions[regions->num_regions - 1].sequence + 1;
+        } else {
+            // Find sequentially
+            for ( int32_t i = 1; i < regions->num_regions; i++ ) {
+                if ( regions->regions[i - 1].sequence < regions->regions[i].sequence ) {
+                    opt = &regions->regions[i - 1];
+                    opt->sequence = regions->regions[i].sequence + 1;
+                }
+            }
+        }
+    } else {
+        opt = &regions->regions[regions->num_regions];
+        if ( regions->num_regions > 0 ) {
+            opt->sequence = regions->regions[regions->num_regions - 1].sequence + 1;
+        }
+        regions->num_regions += 1;
+    }
+
+    if ( opt == NULL ) {
+        error_abort("Failed to find opt to replace");
     }
     const float scale_diff = data->scale_region.to_scale - data->scale_region.from_scale;
-    ScaleRegionOpt_t *opt = &regions->regions[regions->num_regions++];
     opt->x0_perc = data->scale_region.x0_perc;
     opt->x1_perc = data->scale_region.x1_perc;
     opt->y0_perc = data->scale_region.y0_perc;
