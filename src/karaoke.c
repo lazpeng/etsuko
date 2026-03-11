@@ -25,6 +25,7 @@ struct Karaoke_t {
         Drawable_t *remaining_time_text;
         Drawable_t *album_image;
         Drawable_t *song_progressbar;
+        Drawable_t *progressbar_handle;
         Drawable_t *play_button;
         Drawable_t *pause_button;
         Drawable_t *back_button;
@@ -387,6 +388,34 @@ static void on_back_clicked(const UiEventOpts_t *, const Drawable_t *, void *) {
     global_mode_switch(APP_MODE_MENU);
 }
 
+static void on_drag_progressbar_handle(const UiEventOpts_t *opts, const Drawable_t *_, void *custom) {
+    const Karaoke_t *state = custom;
+    const Drawable_t *pb = state->drawables.song_progressbar;
+
+    double pb_x;
+    ui_get_drawable_canon_pos(pb, &pb_x, NULL);
+    const double distance = (opts->mouse.x - pb_x) / pb->bounds.w;
+    audio_seek(audio_total_time() * MAX(0.0, MIN(1.0, distance)));
+
+    // Keep handle visible during fast drags (mouse may leave handle bounds briefly)
+    state->drawables.progressbar_handle->enabled = true;
+}
+
+static void on_progressbar_area_hover_entered(const UiEventOpts_t *opts, const Drawable_t *d, void *custom) {
+    (void)opts;
+    (void)d;
+    Karaoke_t *state = custom;
+    state->drawables.progressbar_handle->enabled = true;
+}
+
+static void on_progressbar_area_hover_exited(const UiEventOpts_t *opts, const Drawable_t *d, void *custom) {
+    (void)opts;
+    (void)d;
+    Karaoke_t *state = custom;
+    if ( !events_mouse_button_down() )
+        state->drawables.progressbar_handle->enabled = false;
+}
+
 static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *progress_bar, void *custom_data) {
     const Karaoke_t *state = custom_data;
 
@@ -528,6 +557,20 @@ void karaoke_setup(Karaoke_t *state) {
                                         .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
                                                  LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
 
+    // Progress bar circle handle
+    state->drawables.progressbar_handle = ui_make_rectangle(
+        state->ui,
+        &(Drawable_RectangleData_t){
+            .border_radius_em = BORDER_RADIUS_AUTO,
+            .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        },
+        state->drawables.song_info_container,
+        &(Layout_t){
+            .absolute = true,
+            .z_index = 1,
+        });
+    state->drawables.progressbar_handle->enabled = false;
+
     // Song name
     state->drawables.song_name_text = ui_make_text(
         state->ui,
@@ -647,6 +690,19 @@ void karaoke_setup(Karaoke_t *state) {
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.back_button, on_back_clicked, NULL);
     // Progress bar events
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.song_progressbar, on_progress_bar_clicked, state);
+    // Progress bar hover events (show/hide handle)
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_ENTERED, state->drawables.song_progressbar,
+                          on_progressbar_area_hover_entered, state);
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.song_progressbar,
+                          on_progressbar_area_hover_exited, state);
+    // Circle handle hover events (keep handle visible while hovering circle)
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_ENTERED, state->drawables.progressbar_handle,
+                          on_progressbar_area_hover_entered, state);
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.progressbar_handle,
+                          on_progressbar_area_hover_exited, state);
+    // Circle drag event for seeking
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_DRAG, state->drawables.progressbar_handle,
+                          on_drag_progressbar_handle, state);
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
@@ -688,6 +744,17 @@ static void update_song_progressbar(const Karaoke_t *state) {
     if ( state->drawables.song_progressbar != NULL ) {
         const double progress = audio_elapsed_time() / audio_total_time();
         ((Drawable_ProgressBarData_t *)state->drawables.song_progressbar->custom_data)->progress = (float)progress;
+
+        if ( state->drawables.progressbar_handle != NULL ) {
+            const Drawable_t *pb = state->drawables.song_progressbar;
+            const double circle_size = pb->bounds.h * 2.5;
+            state->drawables.progressbar_handle->bounds.w = circle_size;
+            state->drawables.progressbar_handle->bounds.h = circle_size;
+            state->drawables.progressbar_handle->bounds.x =
+                pb->bounds.x + progress * pb->bounds.w - circle_size / 2.0;
+            state->drawables.progressbar_handle->bounds.y =
+                pb->bounds.y + pb->bounds.h / 2.0 - circle_size / 2.0;
+        }
     }
 }
 

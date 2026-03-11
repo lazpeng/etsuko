@@ -70,9 +70,10 @@ static ZLayer_t *append_z_layer(ZLayer_t **head, const int index) {
         if ( cur->prev != NULL && cur->prev->index < index ) {
             // between these two
             ZLayer_t *new_between = z_layer_init(index);
-            cur->prev->next = new_between;
+            ZLayer_t *old_prev = cur->prev;
+            old_prev->next = new_between;
             cur->prev = new_between;
-            new_between->prev = cur->prev;
+            new_between->prev = old_prev;
             new_between->next = cur;
             return new_between;
         }
@@ -272,10 +273,7 @@ static void handle_mouse_input(Ui_t *ui) {
 
             for ( size_t e = 0; e < drawable->events->size; e++ ) {
                 const EventDef_t *def = drawable->events->data[e];
-                if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED && ui->current_hovered_drawable != drawable ) {
-                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
-                    def->callback(&opts, drawable, def->custom_data);
-                } else if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
+                if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
                     const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, drawable, def->custom_data);
                 }
@@ -323,6 +321,17 @@ static void handle_mouse_input(Ui_t *ui) {
             }
         }
         ui->current_hovered_drawable = hovered_drawable;
+        // Hover enter (always after hover exit so callbacks see a consistent transition)
+        if ( hovered_drawable != NULL ) {
+            for ( size_t e = 0; e < hovered_drawable->events->size; e++ ) {
+                const EventDef_t *def = hovered_drawable->events->data[e];
+                if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+                    const UiEventOpts_t opts = {.event = def->type,
+                                                .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    def->callback(&opts, hovered_drawable, def->custom_data);
+                }
+            }
+        }
     }
 }
 
@@ -2171,6 +2180,9 @@ void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
     position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
+        // recompute scrollable bounds
+        drawable->parent->content_size_dirty = true;
+
         const Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);
         if ( base_anim != NULL ) {
             Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);

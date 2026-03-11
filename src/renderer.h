@@ -187,6 +187,7 @@ typedef struct ScaleRegionOpt_t {
     float y0_perc, y1_perc;
     float from_scale, to_scale;
     float relative_scale;
+    int sequence;
 } ScaleRegionOpt_t;
 
 /**
