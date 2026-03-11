@@ -480,6 +480,8 @@ static void measure_container_size(const Container_t *container, Bounds_t *out_b
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
+        if ( drawable->layout.absolute )
+            continue;
 
         max_x = fmax(max_x, drawable->bounds.x + drawable->bounds.w);
         min_x = fmin(min_x, drawable->bounds.x);
@@ -766,6 +768,11 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     rect.x += base_bounds->x;
     rect.y += base_bounds->y;
 
+    if ( drawable->layout.absolute ) {
+        rect.x -= drawable->parent->align_content_offset_x;
+        rect.y -= drawable->parent->align_content_offset_y + drawable->parent->overflow_y.current_amount;
+    }
+
     if ( drawable->dynamic ) {
         if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
             draw_dynamic_progressbar(drawable, &rect);
@@ -900,8 +907,8 @@ static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Conta
     }
     recompute_vertical_scroll_bar_bounds(container);
 
-    const Drawable_t *background = container->overflow_y.scrollbar.background;
-    const Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    Drawable_t *background = container->overflow_y.scrollbar.background;
+    Drawable_t *handle = container->overflow_y.scrollbar.handle;
     if ( handle->bounds.h >= 1.0 )
         return;
 
@@ -912,10 +919,10 @@ static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Conta
         .width = background->bounds.w,
         .height = 0.9,
     };
-    Bounds_t bounds = {0};
-    measure_layout(&layout, container, &bounds);
-    position_layout(&layout, container, &bounds);
+    measure_layout(&layout, container, &background->bounds);
+    position_layout(&layout, container, &background->bounds);
 
+    Bounds_t bounds = background->bounds;
     bounds.x += acc_bounds->x;
     bounds.y += acc_bounds->y;
     const Color_t *bg_color = &container->overflow_y.scrollbar.background_color;
@@ -926,8 +933,10 @@ static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Conta
     layout.height = handle->bounds.h;
     layout.offset_y = 0.05 + scroll_ratio * (0.9 - handle->bounds.h);
 
-    measure_layout(&layout, container, &bounds);
-    position_layout(&layout, container, &bounds);
+    measure_layout(&layout, container, &handle->bounds);
+    position_layout(&layout, container, &handle->bounds);
+
+    bounds = handle->bounds;
 
     bounds.x += acc_bounds->x;
     bounds.y += acc_bounds->y;
@@ -1069,7 +1078,18 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     return result;
 }
 
-void ui_container_add_vertical_scrollbar(Container_t *container, ScrollBarKind_t kind) {
+static void on_click_scrollbar_background(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom) {
+    Container_t *container = custom;
+    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
+
+    double bg_top;
+    ui_get_drawable_canon_pos(drawable, NULL, &bg_top);
+
+    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.y - bg_top) / drawable->bounds.h));
+    ui_container_scroll_y_to_dur(container, container->scrollable_area.min_content_y + total_height * progress, 0.5);
+}
+
+void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const ScrollBarKind_t kind) {
     if ( container->overflow_y.scrollbar.handle != NULL ) {
         printf("Warning: ui_container_add_vertical_scrollbar: Already has scrollbar\n");
         return;
@@ -1082,11 +1102,16 @@ void ui_container_add_vertical_scrollbar(Container_t *container, ScrollBarKind_t
     container->overflow_y.scrollbar.handle->texture = render_make_null();
 
     container->overflow_y.scrollbar.background->skip_during_draw = true;
+    container->overflow_y.scrollbar.background->layout.absolute = true;
     container->overflow_y.scrollbar.handle->skip_during_draw = true;
+    container->overflow_y.scrollbar.handle->layout.absolute = true;
 
     container->overflow_y.scrollbar.width_em = 0.5;
     container->overflow_y.scrollbar.background_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 150};
     container->overflow_y.scrollbar.handle_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 255};
+
+    Drawable_t *background = container->overflow_y.scrollbar.background;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, background, on_click_scrollbar_background, container);
 
     recompute_vertical_scroll_bar_bounds(container);
 }
@@ -1185,7 +1210,12 @@ Container_t *ui_root_container(const Ui_t *ui) { return ui->root_container; }
 
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y) {
     double parent_x = 0, parent_y = 0;
-    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y, true);
+    ui_get_container_canon_pos(drawable->parent, &parent_x, &parent_y, !drawable->layout.absolute);
+
+    if ( !drawable->layout.absolute ) {
+        parent_x += drawable->parent->align_content_offset_x;
+        parent_y += drawable->parent->align_content_offset_y;
+    }
 
     if ( x != NULL )
         *x = parent_x + drawable->bounds.x;
@@ -1195,13 +1225,18 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
 
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, const bool include_viewport_offset) {
     double parent_x = 0, parent_y = 0;
-    const Container_t *parent = container;
+    const Container_t *parent = container, *prev = NULL;
     while ( parent != NULL ) {
-        parent_x += parent->bounds.x + parent->align_content_offset_x;
-        parent_y += parent->bounds.y + parent->align_content_offset_y;
+        parent_x += parent->bounds.x;
+        parent_y += parent->bounds.y;
+        if ( prev != NULL ) {
+            parent_x += parent->align_content_offset_x;
+            parent_y += parent->align_content_offset_y;
+        }
         if ( include_viewport_offset ) {
             parent_y -= parent->overflow_y.current_amount;
         }
+        prev = parent;
         parent = parent->parent;
     }
 

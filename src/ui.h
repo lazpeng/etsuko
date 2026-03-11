@@ -73,6 +73,9 @@ typedef struct Layout_t {
     WEAK const Drawable_t *relative_to;
     SizeConstraint_t min_width, max_width;
     SizeConstraint_t min_height, max_height;
+    // The position is set as absolute, so it's not used to compute the container's size, nor it's affected by
+    // the align_content_* and overflow_* values
+    bool absolute;
 } Layout_t;
 
 typedef enum DrawableType_t {
@@ -374,7 +377,7 @@ void ui_load_font(const unsigned char *data, int data_size, FontType_t type);
 void ui_draw(const Ui_t *ui);
 void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c_ui_event_callback callback, void *custom_data);
 void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
-void ui_container_add_vertical_scrollbar(Container_t *container, ScrollBarKind_t kind);
+void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, ScrollBarKind_t kind);
 void ui_container_scroll_y_by(Container_t *container, double amount);
 void ui_container_scroll_y_to(Container_t *container, double position);
 void ui_container_scroll_y_to_dur(Container_t *container, double position, double duration);
