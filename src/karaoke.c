@@ -70,16 +70,16 @@ Karaoke_t *karaoke_init(void) {
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
     uint64_t total = 0;
     if ( state->resources.album_art != NULL )
-        total += state->resources.album_art->buffer->downloaded_bytes;
+        total += state->resources.album_art->buffer->fetch_progress_bytes;
 
     if ( state->resources.lyrics_font != NULL )
-        total += state->resources.lyrics_font->buffer->downloaded_bytes;
+        total += state->resources.lyrics_font->buffer->fetch_progress_bytes;
 
     if ( state->resources.ui_font != NULL )
-        total += state->resources.ui_font->buffer->downloaded_bytes;
+        total += state->resources.ui_font->buffer->fetch_progress_bytes;
 
     if ( state->resources.audio != NULL )
-        total += state->resources.audio->buffer->downloaded_bytes;
+        total += state->resources.audio->buffer->fetch_progress_bytes;
 
     return total;
 }
@@ -102,7 +102,7 @@ static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
 }
 
 static void append_loading_file_name(StrBuffer_t *buffer, const Resource_t *res, bool *first) {
-    if ( res != NULL ) {
+    if ( res != NULL && res->status == LOAD_IN_PROGRESS ) {
         if ( *first ) {
             *first = false;
         } else {

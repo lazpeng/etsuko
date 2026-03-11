@@ -28,6 +28,10 @@ typedef enum LoadStatus_t {
 typedef struct ResourceBuffer_t {
     OWNING unsigned char *data;
     uint64_t total_bytes, downloaded_bytes;
+    // Tracks fetch progress separately from downloaded_bytes, which is the write cursor.
+    // On emscripten, the fetch API reports download progress before data is written to the buffer,
+    // so this field allows tracking network progress without corrupting the write offset.
+    uint64_t fetch_progress_bytes;
     uint64_t data_capacity;
 } ResourceBuffer_t;
 

@@ -71,7 +71,7 @@ static void on_fetch_ready(emscripten_fetch_t *fetch) {
 static void on_fetch_progress(emscripten_fetch_t *fetch) {
     const Resource_t *resource = fetch->userData;
     resource->buffer->total_bytes = fetch->totalBytes;
-    resource->buffer->downloaded_bytes = fetch->dataOffset + fetch->numBytes;
+    resource->buffer->fetch_progress_bytes = fetch->dataOffset + fetch->numBytes;
 }
 
 #else
