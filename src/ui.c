@@ -885,6 +885,7 @@ ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *co
 static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
     if ( container->content_size_dirty ) {
         container->scrollable_area = gather_container_scrollable_area(container);
+        container->content_size_dirty = false;
     }
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
@@ -950,6 +951,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
 
     if ( container->content_size_dirty ) {
         container->scrollable_area = gather_container_scrollable_area(container);
+        container->content_size_dirty = false;
     }
 
     Bounds_t container_bounds = container->bounds;
