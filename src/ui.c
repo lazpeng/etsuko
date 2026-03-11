@@ -37,6 +37,8 @@ struct Ui_t {
     ZLayer_t *z_layers_head;
     Vector_t *global_events;
     WEAK const Drawable_t *current_hovered_drawable;
+    WEAK const Drawable_t *current_dragged_drawable;
+    int32_t current_drag_grab_offset_x, current_drag_grab_offset_y;
 };
 
 static ZLayer_t *z_layer_init(const int index) {
@@ -229,6 +231,32 @@ static void handle_mouse_input(Ui_t *ui) {
     events_get_mouse_position(&mouse_x, &mouse_y);
     const bool clicked = events_get_mouse_click(NULL, NULL);
 
+    const bool button_down = events_mouse_button_down();
+    int32_t drag_dx = 0, drag_dy = 0;
+    if ( button_down && events_mouse_moved() )
+        events_get_mouse_drag_delta(&drag_dx, &drag_dy);
+
+    if ( ui->current_dragged_drawable != NULL && button_down && events_mouse_moved() ) {
+        for ( size_t e = 0; e < ui->current_dragged_drawable->events->size; e++ ) {
+            const EventDef_t *def = ui->current_dragged_drawable->events->data[e];
+            if ( def->type == UI_EVENT_MOUSE_DRAG ) {
+                const UiEventOpts_t opts = {.event = UI_EVENT_MOUSE_DRAG,
+                                            .mouse = {
+                                                .x = mouse_x,
+                                                .y = mouse_y,
+                                                .dx = drag_dx,
+                                                .dy = drag_dy,
+                                                .grab_offset_x = ui->current_drag_grab_offset_x,
+                                                .grab_offset_y = ui->current_drag_grab_offset_y,
+                                            }};
+                def->callback(&opts, ui->current_dragged_drawable, def->custom_data);
+            }
+        }
+    }
+    // TODO: Maybe a leave dragging event dispatch?
+    if ( !button_down )
+        ui->current_dragged_drawable = NULL;
+
     const ZLayer_t *cur = ui->z_layers_head;
     while ( cur != NULL ) {
         for ( size_t i = 0; i < cur->nodes->size; i++ ) {
@@ -250,6 +278,19 @@ static void handle_mouse_input(Ui_t *ui) {
                 } else if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
                     const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, drawable, def->custom_data);
+                }
+            }
+
+            // On click, capture drawable for drag if it has a drag listener
+            if ( clicked && ui->current_dragged_drawable == NULL ) {
+                for ( size_t e = 0; e < drawable->events->size; e++ ) {
+                    if ( ((EventDef_t *)drawable->events->data[e])->type == UI_EVENT_MOUSE_DRAG ) {
+                        ui->current_dragged_drawable = drawable;
+
+                        ui->current_drag_grab_offset_x = mouse_x - (int32_t)d_pos_x;
+                        ui->current_drag_grab_offset_y = mouse_y - (int32_t)d_pos_y;
+                        break;
+                    }
                 }
             }
 
@@ -879,6 +920,9 @@ ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *co
     result.min_content_y -= container->bounds.h * container->overflow_y.relative_start_padding;
     result.max_content_y += container->bounds.h * container->overflow_y.relative_end_padding;
 
+    result.total_height = result.max_content_y - result.min_content_y;
+    result.total_width = result.max_content_x - result.min_content_x;
+
     return result;
 }
 
@@ -892,7 +936,7 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
     background->bounds.h = container->bounds.h;
     background->bounds.w = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
 
-    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
+    const double total_height = container->scrollable_area.total_height;
 
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
     handle->bounds.h = container->bounds.h / (total_height + container->bounds.h) * 0.9;
@@ -929,8 +973,9 @@ static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Conta
     const Color_t *bg_color = &container->overflow_y.scrollbar.background_color;
     render_draw_rounded_rect(background->texture, &bounds, bg_color, BORDER_RADIUS_AUTO);
 
-    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
-    const double scroll_ratio = (container->overflow_y.current_amount - container->scrollable_area.min_content_y) / total_height;
+    const double total_height = container->scrollable_area.total_height;
+    const double min_y = container->scrollable_area.min_content_y;
+    const double scroll_ratio = (container->overflow_y.current_amount - min_y) / total_height;
     layout.height = handle->bounds.h;
     layout.offset_y = 0.05 + scroll_ratio * (0.9 - handle->bounds.h);
 
@@ -996,7 +1041,7 @@ void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *tar
     if ( callback == NULL )
         error_abort("ui_add_event_callback: callback is NULL");
 
-    const int layer_idx = 0; // always 0 for now
+    const int layer_idx = target->layout.z_index;
     const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_idx);
 
     for ( size_t i = 0; i < target->events->size; i++ ) {
@@ -1080,15 +1125,36 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     return result;
 }
 
+static void on_drag_scrollbar_handle(const UiEventOpts_t *opts, const Drawable_t *_, void *custom) {
+    Container_t *container = custom;
+    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
+
+    const Drawable_t *bg = container->overflow_y.scrollbar.background;
+    const double bg_height = bg->bounds.h;
+    const double handle_height = container->overflow_y.scrollbar.handle->bounds.h;
+    const double travel = bg_height - handle_height;
+    if ( travel <= 0 )
+        return;
+
+    double bg_top;
+    ui_get_drawable_canon_pos(bg, NULL, &bg_top);
+
+    const double desired_handle_top = opts->mouse.y - opts->mouse.grab_offset_y - bg_top;
+    const double scroll_ratio = MAX(0.0, MIN(1.0, desired_handle_top / travel));
+    const double pos = area.min_content_y + scroll_ratio * area.total_height;
+    ui_container_scroll_y_to(container, pos);
+}
+
 static void on_click_scrollbar_background(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom) {
     Container_t *container = custom;
-    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
+    const double total_height = container->scrollable_area.total_height;
 
     double bg_top;
     ui_get_drawable_canon_pos(drawable, NULL, &bg_top);
 
     const double progress = MAX(0.0, MIN(1.0, (opts->mouse.y - bg_top) / drawable->bounds.h));
-    ui_container_scroll_y_to_dur(container, container->scrollable_area.min_content_y + total_height * progress, 0.5);
+    const double pos = container->scrollable_area.min_content_y + total_height * progress;
+    ui_container_scroll_y_to_dur(container, pos, 0.5);
 }
 
 void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const ScrollBarKind_t kind) {
@@ -1100,8 +1166,11 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
     container->overflow_y.scrollbar.kind = kind;
     container->overflow_y.scrollbar.background = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
     container->overflow_y.scrollbar.background->texture = render_make_null();
+    container->overflow_y.scrollbar.background->layout.z_index = 999;
+
     container->overflow_y.scrollbar.handle = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
     container->overflow_y.scrollbar.handle->texture = render_make_null();
+    container->overflow_y.scrollbar.handle->layout.z_index = 999 + 1;
 
     container->overflow_y.scrollbar.background->skip_during_draw = true;
     container->overflow_y.scrollbar.background->layout.absolute = true;
@@ -1114,6 +1183,9 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
     ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, background, on_click_scrollbar_background, container);
+
+    Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, handle, on_drag_scrollbar_handle, container);
 
     recompute_vertical_scroll_bar_bounds(container);
 }

@@ -19,6 +19,7 @@ struct Events_t {
         int32_t x, y;
         double elapsed_since_move;
         bool clicked;
+        bool mouse_button_down;
         double scrolled;
     } mouse;
     bool quit;
@@ -69,8 +70,13 @@ static void key_callback(GLFWwindow *, const int key, int, const int action, int
 }
 
 static void mouse_button_callback(GLFWwindow *, const int button, const int action, int) {
-    if ( button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS ) {
-        g_events.mouse.clicked = true;
+    if ( button == GLFW_MOUSE_BUTTON_LEFT ) {
+        if ( action == GLFW_PRESS ) {
+            g_events.mouse.clicked = true;
+            g_events.mouse.mouse_button_down = true;
+        } else if ( action == GLFW_RELEASE ) {
+            g_events.mouse.mouse_button_down = false;
+        }
     }
 }
 
@@ -174,4 +180,11 @@ bool events_mouse_moved(void) {
 
 double events_time_since_mouse_stopped(void) {
     return g_events.mouse.elapsed_since_move;
+}
+
+bool events_mouse_button_down(void) { return g_events.mouse.mouse_button_down; }
+
+void events_get_mouse_drag_delta(int32_t *dx, int32_t *dy) {
+    if ( dx ) *dx = g_events.mouse.x - g_events.prev_mouse.x;
+    if ( dy ) *dy = g_events.mouse.y - g_events.prev_mouse.y;
 }

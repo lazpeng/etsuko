@@ -73,6 +73,7 @@ typedef struct Layout_t {
     WEAK const Drawable_t *relative_to;
     SizeConstraint_t min_width, max_width;
     SizeConstraint_t min_height, max_height;
+    int32_t z_index;
     // The position is set as absolute, so it's not used to compute the container's size, nor it's affected by
     // the align_content_* and overflow_* values
     bool absolute;
@@ -120,6 +121,7 @@ typedef struct ContainerOverflow_t {
 typedef struct ContainerScrollableArea_t {
     double min_content_x, min_content_y;
     double max_content_x, max_content_y;
+    double total_height, total_width;
 } ContainerScrollableArea_t;
 
 typedef struct Container_t {
@@ -351,6 +353,7 @@ typedef enum UiEvent_t {
     UI_EVENT_MOUSE_HOVER_ENTERED,
     UI_EVENT_MOUSE_HOVER_EXITED,
     UI_EVENT_MOUSE_CLICK,
+    UI_EVENT_MOUSE_DRAG,
 } UiEvent_t;
 
 typedef struct UiEventOpts_t {
@@ -360,6 +363,8 @@ typedef struct UiEventOpts_t {
         bool clicked;
         double duration;
         double scroll;
+        double dx, dy;
+        double grab_offset_x, grab_offset_y;
     } mouse;
     struct {
         Key_t key;

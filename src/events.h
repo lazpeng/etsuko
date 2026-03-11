@@ -50,5 +50,9 @@ void events_set_window_pixel_scale(double scale);
 bool events_mouse_moved(void);
 // Time since either the mouse stopped moving
 double events_time_since_mouse_stopped(void);
+// Returns true while the left mouse button is held down (across frames)
+bool events_mouse_button_down(void);
+// Returns pixel delta of mouse movement this frame (only meaningful when button is down and mouse moved)
+void events_get_mouse_drag_delta(int32_t *dx, int32_t *dy);
 
 #endif // ETSUKO_EVENTS_H
