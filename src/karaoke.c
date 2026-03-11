@@ -301,7 +301,7 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
 static void toggle_pause(const Karaoke_t *state) {
     if ( audio_is_paused() ) {
         audio_resume();
-        // state->drawables.lyrics_view->container->viewport_y = 0;
+        ui_container_scroll_y_to_dur(state->drawables.lyrics_view->container, 0, 0.5);
     } else
         audio_pause();
 }

@@ -90,7 +90,7 @@ Ui_t *ui_init(void) {
         error_abort("Failed to allocate UI");
     }
 
-    const Layout_t layout = {.width = 0, .height = 0 };
+    const Layout_t layout = {.width = 0, .height = 0};
     ui->root_container = ui_make_container(ui, NULL, &layout, CONTAINER_NONE);
     ui->root_container->bounds = *render_get_viewport();
 
@@ -833,6 +833,13 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
                 }
             }
 
+            if ( animation->type == ANIM_SCROLL_Y ) {
+                const Animation_ScrollYData_t *data = animation->custom_data;
+                const double eased = apply_ease_func(progress, animation->ease_func);
+                ((Container_t *)container)->overflow_y.current_amount =
+                    data->from_amount + (data->to_amount - data->from_amount) * eased;
+            }
+
             if ( progress >= 1.0 )
                 animation->active = false;
         }
@@ -970,15 +977,35 @@ ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *co
     return result;
 }
 
+static ContainerAnimation_t *find_container_scroll_y_anim(const Container_t *container) {
+    for ( size_t i = 0; i < container->animations->size; i++ ) {
+        ContainerAnimation_t *a = container->animations->data[i];
+        if ( a->type == ANIM_SCROLL_Y )
+            return a;
+    }
+    return NULL;
+}
+
 void ui_container_scroll_y_by(Container_t *container, const double amount) {
     if ( container->overflow_y.kind != OVERFLOW_SCROLL )
         error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
 
     const double current_amount = container->overflow_y.current_amount;
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
+    const double target = MAX(area.min_content_y, MIN(area.max_content_y, current_amount - amount));
 
-    printf("amount: %.2f, min: %.2f, max: %.2f, current - amount: %.2f\n", amount, area.min_content_y, area.max_content_y, current_amount - amount);
-    container->overflow_y.current_amount = MAX(area.min_content_y, MIN(area.max_content_y, current_amount - amount));
+    ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
+    if ( scroll_anim != NULL ) {
+        Animation_ScrollYData_t *data = scroll_anim->custom_data;
+        data->from_amount = container->overflow_y.current_amount;
+        data->to_amount = target;
+        scroll_anim->elapsed = 0.0;
+        scroll_anim->active = true;
+        scroll_anim->duration = data->duration;
+        scroll_anim->ease_func = data->ease_func;
+    } else {
+        container->overflow_y.current_amount = target;
+    }
 }
 
 void ui_container_scroll_y_to(Container_t *container, const double position) {
@@ -986,7 +1013,42 @@ void ui_container_scroll_y_to(Container_t *container, const double position) {
         error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
 
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
-    container->overflow_y.current_amount = MAX(area.min_content_y, MIN(area.max_content_y, position));
+    const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
+
+    ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
+    if ( scroll_anim != NULL ) {
+        Animation_ScrollYData_t *data = scroll_anim->custom_data;
+        data->from_amount = container->overflow_y.current_amount;
+        data->to_amount = target;
+        scroll_anim->elapsed = 0.0;
+        scroll_anim->active = true;
+        scroll_anim->duration = data->duration;
+        scroll_anim->ease_func = data->ease_func;
+    } else {
+        container->overflow_y.current_amount = target;
+    }
+}
+
+void ui_container_scroll_y_to_dur(Container_t *container, const double position, const double duration) {
+    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
+        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
+
+    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
+    const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
+
+    ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
+    if ( scroll_anim != NULL ) {
+        Animation_ScrollYData_t *data = scroll_anim->custom_data;
+        data->from_amount = container->overflow_y.current_amount;
+        data->to_amount = target;
+        scroll_anim->elapsed = 0.0;
+        scroll_anim->active = true;
+        scroll_anim->duration = duration;
+        scroll_anim->ease_func = data->ease_func;
+    } else {
+        printf("Warning: ui_container_scroll_y_to_dur: no scroll y animation set, no duration is applied.\n");
+        container->overflow_y.current_amount = target;
+    }
 }
 
 void ui_end_loop(void) { render_present(); }
@@ -2228,7 +2290,7 @@ void ui_container_animate_translation(Container_t *container, const Animation_Ea
     vec_add(container->animations, result);
 }
 
-void ui_container_animate_color_lerp(Container_t *container, double duration, AnimationEaseType_t ease_func) {
+void ui_container_animate_color_lerp(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
     ContainerAnimation_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
         error_abort("Failed to allocate color lerp animation");
@@ -2240,6 +2302,27 @@ void ui_container_animate_color_lerp(Container_t *container, double duration, An
     data->duration = duration;
     data->ease_func = ease_func;
     result->type = ANIM_BACKGROUND_COLOR;
+    result->custom_data = data;
+    result->target = container;
+    result->duration = duration;
+    result->active = false;
+    result->ease_func = ease_func;
+    vec_add(container->animations, result);
+}
+
+void ui_container_animate_scroll_y(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
+    ContainerAnimation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate scroll y animation");
+    }
+    Animation_ScrollYData_t *data = calloc(1, sizeof(*data));
+    if ( data == NULL ) {
+        error_abort("Failed to allocate scroll y animation data");
+    }
+    data->duration = duration;
+    data->ease_func = ease_func;
+
+    result->type = ANIM_SCROLL_Y;
     result->custom_data = data;
     result->target = container;
     result->duration = duration;

@@ -476,6 +476,7 @@ void menu_setup(MainMenu_t *menu) {
         .kind = OVERFLOW_SCROLL,
         .relative_end_padding = 0.15
     };
+    ui_container_animate_scroll_y(menu->container, 0.1, ANIM_EASE_OUT_CUBIC);
 
     map_iterate_const(menu->menu_artists, setup_artist, menu);
 

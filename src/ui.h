@@ -143,6 +143,7 @@ typedef enum AnimationType_t {
     ANIM_DRAW_REGION,
     ANIM_SCALE_REGION,
     ANIM_BACKGROUND_COLOR,
+    ANIM_SCROLL_Y,
 } AnimationType_t;
 
 /**
@@ -308,6 +309,12 @@ typedef struct Animation_ColorLerpData_t {
     AnimationEaseType_t ease_func;
 } Animation_ColorLerpData_t;
 
+typedef struct Animation_ScrollYData_t {
+    double from_amount, to_amount;
+    double duration;
+    AnimationEaseType_t ease_func;
+} Animation_ScrollYData_t;
+
 typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
     UI_EVENT_MOUSE_MOVE,
@@ -344,6 +351,7 @@ void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c
 void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
 void ui_container_scroll_y_by(Container_t *container, double amount);
 void ui_container_scroll_y_to(Container_t *container, double position);
+void ui_container_scroll_y_to_dur(Container_t *container, double position, double duration);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_on_window_changed(Ui_t *ui);
@@ -389,6 +397,7 @@ void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t
 void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData_t *data);
 void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
 void ui_container_animate_color_lerp(Container_t *container, double duration, AnimationEaseType_t ease_func);
+void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
 void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);
 
