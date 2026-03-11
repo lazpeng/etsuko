@@ -459,6 +459,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     int32_t timing_offset_start = 0;
 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
+    // TODO: Clear fill for past lines when scrolling backwards
     for ( int32_t s = 0; s < line->num_timings; s++ ) {
         if ( view->active_line_segment_visited[s] ) {
             const Song_LineTiming_t *timing = &line->timings[s];
