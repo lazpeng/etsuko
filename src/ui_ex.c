@@ -237,6 +237,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         .kind = OVERFLOW_SCROLL,
         .relative_end_padding = -0.2
     };
+    ui_container_add_vertical_scrollbar(view->container, SCROLL_BAR_AUTO_HIDE);
     ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
 
     ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);

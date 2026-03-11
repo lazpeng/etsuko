@@ -317,12 +317,10 @@ static void handle_container_scroll(const Ui_t *ui) {
     const double amount = events_get_mouse_scrolled();
     if ( amount == 0 )
         return;
-    printf("handling scrolling\n");
     // Find the deepest container under the mouse cursor that has overflow enabled
     Container_t *scrollable = find_deepest_scrollable_container(ui->root_container, (Bounds_t){0});
     if ( scrollable == NULL )
         return;
-    printf("found scrollable\n");
 
     ui_container_scroll_y_by(scrollable, amount);
 }
@@ -753,7 +751,7 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
 }
 
 static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds) {
-    if ( !drawable->enabled || drawable->pending_recompute ) {
+    if ( !drawable->enabled || drawable->pending_recompute || drawable->skip_during_draw ) {
         return;
     }
 
@@ -846,9 +844,104 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
     }
 }
 
-static void draw_all_container(const Ui_t *ui, const Container_t *container, Bounds_t base_bounds) {
+ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *container) {
+    ContainerScrollableArea_t result = {0};
+
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
+        const Drawable_t *drawable = container->child_drawables->data[i];
+        result.min_content_y = MIN(result.min_content_y, drawable->bounds.y);
+        result.max_content_y = MAX(result.max_content_y, drawable->bounds.y + drawable->bounds.h - container->bounds.h);
+
+        result.min_content_x = MIN(result.min_content_x, drawable->bounds.x);
+        result.max_content_x = MAX(result.max_content_x, drawable->bounds.x + drawable->bounds.w - container->bounds.w);
+    }
+
+    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
+        const Container_t *child = container->child_containers->data[i];
+
+        Bounds_t bounds = {0};
+        measure_container_size(child, &bounds);
+
+        result.min_content_x = MIN(result.min_content_x, child->bounds.x);
+        result.max_content_x = MAX(result.max_content_x, child->bounds.x + bounds.w - container->bounds.w);
+
+        result.min_content_y = MIN(result.min_content_y, child->bounds.y);
+        result.max_content_y = MAX(result.max_content_y, child->bounds.y + bounds.h - container->bounds.h);
+    }
+
+    result.min_content_y -= container->bounds.h * container->overflow_y.relative_start_padding;
+    result.max_content_y += container->bounds.h * container->overflow_y.relative_end_padding;
+
+    return result;
+}
+
+static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
+    if ( container->content_size_dirty ) {
+        container->scrollable_area = gather_container_scrollable_area(container);
+    }
+
+    Drawable_t *background = container->overflow_y.scrollbar.background;
+    background->bounds.h = container->bounds.h;
+    background->bounds.w = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
+
+    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
+
+    Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    handle->bounds.h = container->bounds.h / (total_height + container->bounds.h) * 0.9;
+    handle->bounds.w = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
+}
+
+static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Container_t *container) {
+    if ( container->overflow_y.scrollbar.kind == SCROLL_BAR_NONE ) {
+        return;
+    }
+    if ( container->overflow_y.scrollbar.handle == NULL || container->overflow_y.scrollbar.background == NULL ) {
+        error_abort("draw_container_vertical_scroll_bar: Manually set scrollbar type without initialization");
+    }
+    recompute_vertical_scroll_bar_bounds(container);
+
+    const Drawable_t *background = container->overflow_y.scrollbar.background;
+    const Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    if ( handle->bounds.h >= 1.0 )
+        return;
+
+    Layout_t layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_H | LAYOUT_WRAP_AROUND_X,
+        .offset_x = -0.005,
+        .offset_y = 0.05,
+        .width = background->bounds.w,
+        .height = 0.9,
+    };
+    Bounds_t bounds = {0};
+    measure_layout(&layout, container, &bounds);
+    position_layout(&layout, container, &bounds);
+
+    bounds.x += acc_bounds->x;
+    bounds.y += acc_bounds->y;
+    const Color_t *bg_color = &container->overflow_y.scrollbar.background_color;
+    render_draw_rounded_rect(background->texture, &bounds, bg_color, BORDER_RADIUS_AUTO);
+
+    const double total_height = container->scrollable_area.max_content_y - container->scrollable_area.min_content_y;
+    const double scroll_ratio = (container->overflow_y.current_amount - container->scrollable_area.min_content_y) / total_height;
+    layout.height = handle->bounds.h;
+    layout.offset_y = 0.05 + scroll_ratio * (0.9 - handle->bounds.h);
+
+    measure_layout(&layout, container, &bounds);
+    position_layout(&layout, container, &bounds);
+
+    bounds.x += acc_bounds->x;
+    bounds.y += acc_bounds->y;
+    const Color_t *handle_color = &container->overflow_y.scrollbar.handle_color;
+    render_draw_rounded_rect(handle->texture, &bounds, handle_color, BORDER_RADIUS_AUTO);
+}
+
+static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t base_bounds) {
     if ( !container->enabled )
         return;
+
+    if ( container->content_size_dirty ) {
+        container->scrollable_area = gather_container_scrollable_area(container);
+    }
 
     Bounds_t container_bounds = container->bounds;
     apply_container_animations(container, &container_bounds);
@@ -875,6 +968,10 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         draw_all_container(ui, container->child_containers->data[i], base_bounds);
+    }
+
+    if ( container->overflow_y.kind == OVERFLOW_SCROLL ) {
+        draw_container_vertical_scroll_bar(&container_bounds, container);
     }
 }
 
@@ -941,42 +1038,6 @@ void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, co
     vec_add(ui->global_events, event);
 }
 
-typedef struct ContainerScrollableArea_t {
-    double min_content_x, min_content_y;
-    double max_content_x, max_content_y;
-} ContainerScrollableArea_t;
-
-ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *container) {
-    ContainerScrollableArea_t result = {0};
-
-    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        const Drawable_t *drawable = container->child_drawables->data[i];
-        result.min_content_y = MIN(result.min_content_y, drawable->bounds.y);
-        result.max_content_y = MAX(result.max_content_y, drawable->bounds.y + drawable->bounds.h - container->bounds.h);
-
-        result.min_content_x = MIN(result.min_content_x, drawable->bounds.x);
-        result.max_content_x = MAX(result.max_content_x, drawable->bounds.x + drawable->bounds.w - container->bounds.w);
-    }
-
-    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        const Container_t *child = container->child_containers->data[i];
-
-        Bounds_t bounds = {0};
-        measure_container_size(child, &bounds);
-
-        result.min_content_x = MIN(result.min_content_x, child->bounds.x);
-        result.max_content_x = MAX(result.max_content_x, child->bounds.x + bounds.w - container->bounds.w);
-
-        result.min_content_y = MIN(result.min_content_y, child->bounds.y);
-        result.max_content_y = MAX(result.max_content_y, child->bounds.y + bounds.h - container->bounds.h);
-    }
-
-    result.min_content_y -= container->bounds.h * container->overflow_y.relative_start_padding;
-    result.max_content_y += container->bounds.h * container->overflow_y.relative_end_padding;
-
-    return result;
-}
-
 static ContainerAnimation_t *find_container_scroll_y_anim(const Container_t *container) {
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *a = container->animations->data[i];
@@ -984,6 +1045,50 @@ static ContainerAnimation_t *find_container_scroll_y_anim(const Container_t *con
             return a;
     }
     return NULL;
+}
+
+static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type, const bool dynamic) {
+    Drawable_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate drawable");
+    }
+
+    result->dynamic = dynamic;
+    result->type = type;
+    result->parent = parent;
+    result->enabled = true;
+    result->alpha_mod = 0xFF;
+    result->color_mod = 1.f;
+    result->animations = vec_init();
+    result->active_animations = vec_init();
+    result->events = vec_init();
+
+    // Recalculate true size on next draw
+    parent->content_size_dirty = true;
+
+    return result;
+}
+
+void ui_container_add_vertical_scrollbar(Container_t *container, ScrollBarKind_t kind) {
+    if ( container->overflow_y.scrollbar.handle != NULL ) {
+        printf("Warning: ui_container_add_vertical_scrollbar: Already has scrollbar\n");
+        return;
+    }
+
+    container->overflow_y.scrollbar.kind = kind;
+    container->overflow_y.scrollbar.background = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
+    container->overflow_y.scrollbar.background->texture = render_make_null();
+    container->overflow_y.scrollbar.handle = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
+    container->overflow_y.scrollbar.handle->texture = render_make_null();
+
+    container->overflow_y.scrollbar.background->skip_during_draw = true;
+    container->overflow_y.scrollbar.handle->skip_during_draw = true;
+
+    container->overflow_y.scrollbar.width_em = 0.5;
+    container->overflow_y.scrollbar.background_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 150};
+    container->overflow_y.scrollbar.handle_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 255};
+
+    recompute_vertical_scroll_bar_bounds(container);
 }
 
 void ui_container_scroll_y_by(Container_t *container, const double amount) {
@@ -1296,25 +1401,6 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
     }
 
     return size;
-}
-
-static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type, const bool dynamic) {
-    Drawable_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
-        error_abort("Failed to allocate drawable");
-    }
-
-    result->dynamic = dynamic;
-    result->type = type;
-    result->parent = parent;
-    result->enabled = true;
-    result->alpha_mod = 0xFF;
-    result->color_mod = 1.f;
-    result->animations = vec_init();
-    result->active_animations = vec_init();
-    result->events = vec_init();
-
-    return result;
 }
 
 /**

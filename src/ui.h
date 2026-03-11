@@ -94,11 +94,30 @@ typedef enum OverflowKind_t {
     OVERFLOW_SCROLL,
 } OverflowKind_t;
 
+typedef enum ScrollBarKind_t {
+    SCROLL_BAR_NONE = 0,
+    SCROLL_BAR_ALWAYS,
+    SCROLL_BAR_AUTO_HIDE,
+} ScrollBarKind_t;
+
+typedef struct ScrollBar_t {
+    ScrollBarKind_t kind;
+    OWNING Drawable_t *background, *handle;
+    double width_em;
+    Color_t background_color, handle_color;
+} ScrollBar_t;
+
 typedef struct ContainerOverflow_t {
     OverflowKind_t kind;
     double relative_start_padding, relative_end_padding;
     double current_amount;
+    ScrollBar_t scrollbar;
 } ContainerOverflow_t;
+
+typedef struct ContainerScrollableArea_t {
+    double min_content_x, min_content_y;
+    double max_content_x, max_content_y;
+} ContainerScrollableArea_t;
 
 typedef struct Container_t {
     Bounds_t bounds;
@@ -113,6 +132,8 @@ typedef struct Container_t {
     double align_content_offset_y, align_content_offset_x;
     ContainerOverflow_t overflow_y;
     bool draw_debug_overlay;
+    bool content_size_dirty;
+    ContainerScrollableArea_t scrollable_area;
 } Container_t;
 
 typedef struct Drawable_t {
@@ -134,6 +155,9 @@ typedef struct Drawable_t {
     bool pending_recompute;
     bool center_on_scale;
     OWNING Vector_t *events; // of EventDef_t*
+    // TODO: This doesnt' exactly set the drawable as disabled, but it is not drawn during the regular draw phase
+    //  temporary hack until we have z-indexes working
+    bool skip_during_draw;
 } Drawable_t;
 
 typedef enum AnimationType_t {
@@ -350,6 +374,7 @@ void ui_load_font(const unsigned char *data, int data_size, FontType_t type);
 void ui_draw(const Ui_t *ui);
 void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c_ui_event_callback callback, void *custom_data);
 void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
+void ui_container_add_vertical_scrollbar(Container_t *container, ScrollBarKind_t kind);
 void ui_container_scroll_y_by(Container_t *container, double amount);
 void ui_container_scroll_y_to(Container_t *container, double position);
 void ui_container_scroll_y_to_dur(Container_t *container, double position, double duration);
