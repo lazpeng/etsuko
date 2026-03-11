@@ -149,6 +149,7 @@ typedef enum AnimationType_t {
 /**
  * Defines what happens when an animation is fired more than once in the given duration, that is, when the current animation is
  * already running and the event that triggers it happens again.
+ * This only applies to drawable animations as of now
  */
 typedef enum AnimationApplyType_t {
     /**
