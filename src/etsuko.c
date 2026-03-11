@@ -167,7 +167,7 @@ void etsuko_setup_version(Ui_t *ui) {
 EM_JS(void, navigate_to_song, (const char* url, const char *suffix), {
     const urlString = UTF8ToString(url);
     const suffixString = encodeURIComponent(UTF8ToString(suffix));
-    window.history.pushState({}, "", `${urlString}${suffixString}`);
+    window.history.pushState({}, "", urlString + suffixString);
 })
 #endif
 
