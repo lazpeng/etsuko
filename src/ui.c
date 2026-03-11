@@ -285,10 +285,53 @@ static void handle_mouse_input(Ui_t *ui) {
     }
 }
 
+static Container_t *find_deepest_scrollable_container(Container_t *parent, Bounds_t bounds) {
+    bounds.x += parent->bounds.x;
+    bounds.y += parent->bounds.y;
+
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+
+    const bool within_x = mouse_x >= bounds.x && mouse_x <= bounds.x + parent->bounds.w;
+    const bool within_y = mouse_y >= bounds.y && mouse_y <= bounds.y + parent->bounds.h;
+
+    // Let's consider no other child container could be outside of the parent container's bounds
+    if ( !within_x && !within_y )
+        return NULL;
+
+    for ( size_t i = 0; i < parent->child_containers->size; i++ ) {
+        Container_t *child = parent->child_containers->data[i];
+        Container_t *result = find_deepest_scrollable_container(child, bounds);
+        if ( result )
+            return result;
+    }
+
+    // If there's no child container that fits before us, return the current one if it does have scrolling enabled
+    if ( parent->overflow_y.kind == OVERFLOW_SCROLL )
+        return parent;
+
+    return NULL;
+}
+
+static void handle_container_scroll(const Ui_t *ui) {
+    const double amount = events_get_mouse_scrolled();
+    if ( amount == 0 )
+        return;
+    printf("handling scrolling\n");
+    // Find the deepest container under the mouse cursor that has overflow enabled
+    Container_t *scrollable = find_deepest_scrollable_container(ui->root_container, (Bounds_t){0});
+    if ( scrollable == NULL )
+        return;
+    printf("found scrollable\n");
+
+    ui_container_scroll_y_by(scrollable, amount);
+}
+
 static void handle_user_input(Ui_t *ui) {
     handle_global_mouse_input(ui);
     handle_global_keyboard_input(ui);
     handle_mouse_input(ui);
+    handle_container_scroll(ui);
 }
 
 void ui_begin_loop(Ui_t *ui) {
@@ -434,7 +477,7 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         out_bounds->h = h;
 }
 
-static void measure_container_size(Ui_t *ui, const Container_t *container, Bounds_t *out_bounds) {
+static void measure_container_size(const Container_t *container, Bounds_t *out_bounds) {
     double max_x = 0, min_x = 0;
     double max_y = 0, min_y = 0;
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -450,7 +493,7 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         const Container_t *child = container->child_containers->data[i];
         Bounds_t child_bounds = {0};
-        measure_container_size(ui, child, &child_bounds);
+        measure_container_size(child, &child_bounds);
 
         max_x = fmax(max_x, child->bounds.x + child_bounds.x + child_bounds.w);
         min_x = fmin(min_x, child->bounds.x + child_bounds.x);
@@ -463,15 +506,15 @@ static void measure_container_size(Ui_t *ui, const Container_t *container, Bound
     out_bounds->w = fmax(out_bounds->w, max_x - min_x);
 }
 
-static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
+static void recalculate_container_alignment(Container_t *container) {
     if ( container->parent != NULL )
-        recalculate_container_alignment(ui, container->parent);
+        recalculate_container_alignment(container->parent);
 
     if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT || container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
         container->align_content_offset_y = 0;
         container->align_content_offset_x = 0;
         Bounds_t bounds = {0};
-        measure_container_size(ui, container, &bounds);
+        measure_container_size(container, &bounds);
         if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
             container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
         }
@@ -479,13 +522,13 @@ static void recalculate_container_alignment(Ui_t *ui, Container_t *container) {
             container->align_content_offset_x = (container->bounds.w - bounds.w) / 2.f;
             if ( container->align_content_offset_x < 0 ) {
                 bounds = (Bounds_t){0};
-                measure_container_size(ui, container, &bounds);
+                measure_container_size(container, &bounds);
             }
         }
     }
 }
 
-static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
+static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
     const Bounds_t *proportional_bounds_x = &parent->bounds;
     if ( layout->flags & LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE ) {
         if ( layout->relative_to == NULL ) {
@@ -565,7 +608,7 @@ static void position_layout(Ui_t *ui, const Layout_t *layout, Container_t *paren
     out_bounds->x = x;
     out_bounds->y = y;
 
-    recalculate_container_alignment(ui, parent);
+    recalculate_container_alignment(parent);
 }
 
 /* Easing functions */
@@ -802,8 +845,8 @@ static void draw_all_container(const Ui_t *ui, const Container_t *container, Bou
 
     Bounds_t container_bounds = container->bounds;
     apply_container_animations(container, &container_bounds);
-    base_bounds.x += container_bounds.x + container->viewport_x;
-    base_bounds.y += container_bounds.y + container->viewport_y;
+    base_bounds.x += container_bounds.x;
+    base_bounds.y += container_bounds.y - container->overflow_y.current_amount;
 
     if ( container->background->type != BACKGROUND_NONE ) {
         render_draw_background(container->background, &container_bounds);
@@ -891,6 +934,61 @@ void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, co
     vec_add(ui->global_events, event);
 }
 
+typedef struct ContainerScrollableArea_t {
+    double min_content_x, min_content_y;
+    double max_content_x, max_content_y;
+} ContainerScrollableArea_t;
+
+ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *container) {
+    ContainerScrollableArea_t result = {0};
+
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
+        const Drawable_t *drawable = container->child_drawables->data[i];
+        result.min_content_y = MIN(result.min_content_y, drawable->bounds.y);
+        result.max_content_y = MAX(result.max_content_y, drawable->bounds.y + drawable->bounds.h - container->bounds.h);
+
+        result.min_content_x = MIN(result.min_content_x, drawable->bounds.x);
+        result.max_content_x = MAX(result.max_content_x, drawable->bounds.x + drawable->bounds.w - container->bounds.w);
+    }
+
+    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
+        const Container_t *child = container->child_containers->data[i];
+
+        Bounds_t bounds = {0};
+        measure_container_size(child, &bounds);
+
+        result.min_content_x = MIN(result.min_content_x, child->bounds.x);
+        result.max_content_x = MAX(result.max_content_x, child->bounds.x + bounds.w - container->bounds.w);
+
+        result.min_content_y = MIN(result.min_content_y, child->bounds.y);
+        result.max_content_y = MAX(result.max_content_y, child->bounds.y + bounds.h - container->bounds.h);
+    }
+
+    result.min_content_y -= container->bounds.h * container->overflow_y.relative_start_padding;
+    result.max_content_y += container->bounds.h * container->overflow_y.relative_end_padding;
+
+    return result;
+}
+
+void ui_container_scroll_y_by(Container_t *container, const double amount) {
+    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
+        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
+
+    const double current_amount = container->overflow_y.current_amount;
+    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
+
+    printf("amount: %.2f, min: %.2f, max: %.2f, current - amount: %.2f\n", amount, area.min_content_y, area.max_content_y, current_amount - amount);
+    container->overflow_y.current_amount = MAX(area.min_content_y, MIN(area.max_content_y, current_amount - amount));
+}
+
+void ui_container_scroll_y_to(Container_t *container, const double position) {
+    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
+        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
+
+    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
+    container->overflow_y.current_amount = MAX(area.min_content_y, MIN(area.max_content_y, position));
+}
+
 void ui_end_loop(void) { render_present(); }
 
 void ui_set_window_title(const char *title) { render_set_window_title(title); }
@@ -935,8 +1033,7 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
         parent_x += parent->bounds.x + parent->align_content_offset_x;
         parent_y += parent->bounds.y + parent->align_content_offset_y;
         if ( include_viewport_offset ) {
-            parent_y += parent->viewport_y;
-            parent_x += parent->viewport_x;
+            parent_y -= parent->overflow_y.current_amount;
         }
         parent = parent->parent;
     }
@@ -945,30 +1042,6 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
         *x = parent_x;
     if ( y != NULL )
         *y = parent_y;
-}
-
-bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                                 int32_t *out_mouse_y) {
-    double canon_x, canon_y;
-    ui_get_container_canon_pos(container, &canon_x, &canon_y, false);
-
-    int32_t mouse_x, mouse_y;
-    events_get_mouse_position(&mouse_x, &mouse_y);
-
-    if ( out_canon_bounds ) {
-        out_canon_bounds->x = canon_x;
-        out_canon_bounds->y = canon_y;
-        out_canon_bounds->w = container->bounds.w;
-        out_canon_bounds->h = container->bounds.h;
-    }
-
-    if ( out_mouse_x )
-        *out_mouse_x = mouse_x;
-    if ( out_mouse_y )
-        *out_mouse_y = mouse_y;
-
-    return mouse_x >= canon_x && mouse_x <= canon_x + container->bounds.w && mouse_y >= canon_y &&
-           mouse_y <= canon_y + container->bounds.h;
 }
 
 static Drawable_TextData_t *dup_text_data(const Drawable_TextData_t *data) {
@@ -1518,7 +1591,7 @@ Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *la
 
     if ( parent != NULL ) {
         measure_layout(layout, parent, &result->bounds);
-        position_layout(ui, layout, parent, &result->bounds);
+        position_layout(layout, parent, &result->bounds);
         vec_add(parent->child_containers, result);
     }
 
@@ -1611,7 +1684,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
 void ui_recompute_container(Ui_t *ui, Container_t *container) {
     if ( container->parent != NULL ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
-        position_layout(ui, &container->layout, container->parent, &container->bounds);
+        position_layout(&container->layout, container->parent, &container->bounds);
     }
 
     // First measure (recompute does that in all cases)
@@ -1622,7 +1695,7 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     // then position
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
-        position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
+        position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
@@ -1636,7 +1709,7 @@ void ui_reposition_container(Ui_t *ui, Container_t *container) {
     const double old_x = container->bounds.x, old_y = container->bounds.y;
     if ( container->parent != NULL ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
-        position_layout(ui, &container->layout, container->parent, &container->bounds);
+        position_layout(&container->layout, container->parent, &container->bounds);
     }
 
     if ( old_x != container->bounds.x || old_y != container->bounds.y ) {
@@ -1814,12 +1887,10 @@ void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
-    position_layout(ui, &drawable->layout, drawable->parent, &drawable->bounds);
-
-    // printf("old_x old_y %.2f,%.2f new_x new_y %.2f,%.2f\n", old_x, old_y, drawable->bounds.x, drawable->bounds.y);
+    position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
 
     if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
-        Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);
+        const Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);
         if ( base_anim != NULL ) {
             Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
             if ( animation != NULL ) {

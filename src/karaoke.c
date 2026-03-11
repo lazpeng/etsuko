@@ -188,14 +188,14 @@ static bool load_async(Karaoke_t *state) {
     // UI Font
     if ( state->resources.ui_font == NULL ) {
         state->resources.ui_font = repo_load_resource(&(LoadRequest_t){.relative_path = config->ui_font,
-                                                                 .sub_dir = "files/",
-                                                                 .on_resource_loaded = on_ui_font_loaded,
-                                                                 .custom_data = state});
+                                                                       .sub_dir = "files/",
+                                                                       .on_resource_loaded = on_ui_font_loaded,
+                                                                       .custom_data = state});
     }
     // Song
     if ( state->resources.song == NULL ) {
-        state->resources.song = repo_load_resource(
-            &(LoadRequest_t){.relative_path = config->karaoke.song_file, .on_resource_loaded = on_song_loaded, .custom_data = state});
+        state->resources.song = repo_load_resource(&(LoadRequest_t){
+            .relative_path = config->karaoke.song_file, .on_resource_loaded = on_song_loaded, .custom_data = state});
     }
     if ( !state->loading.song_loaded )
         return false;
@@ -222,7 +222,8 @@ static bool load_async(Karaoke_t *state) {
             .relative_path = song_get()->album_art_path, .on_resource_loaded = on_album_art_loaded, .custom_data = state});
     }
 
-    return state->loading.ui_font_loaded && state->loading.lyrics_font_loaded && state->loading.audio_loaded && state->loading.album_art_loaded;
+    return state->loading.ui_font_loaded && state->loading.lyrics_font_loaded && state->loading.audio_loaded &&
+           state->loading.album_art_loaded;
 }
 
 AppStatus_t karaoke_load_loop(Karaoke_t *state) {
@@ -300,7 +301,7 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
 static void toggle_pause(const Karaoke_t *state) {
     if ( audio_is_paused() ) {
         audio_resume();
-        state->drawables.lyrics_view->container->viewport_y = 0;
+        // state->drawables.lyrics_view->container->viewport_y = 0;
     } else
         audio_pause();
 }
@@ -328,7 +329,7 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
 
 static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
-    //state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
+    // state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
 
@@ -395,7 +396,7 @@ static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *
     const double distance = distance_from_x / state->drawables.song_progressbar->bounds.w;
     audio_seek(audio_total_time() * distance);
     // Reset viewport
-    state->drawables.lyrics_view->container->viewport_y = 0;
+    // state->drawables.lyrics_view->container->viewport_y = 0;
 }
 
 static void setup_background(const Karaoke_t *state) {
@@ -450,12 +451,12 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Make the right container
     state->drawables.right_container = ui_make_container(state->ui, ui_root_container(state->ui),
-                                               &(Layout_t){.width = 0.5,
-                                                           .height = 0.7,
-                                                           .offset_x = 0.5,
-                                                           .offset_y = 0.35,
-                                                           .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
-                                               CONTAINER_NONE);
+                                                         &(Layout_t){.width = 0.5,
+                                                                     .height = 0.7,
+                                                                     .offset_x = 0.5,
+                                                                     .offset_y = 0.35,
+                                                                     .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
+                                                         CONTAINER_NONE);
 
     // Version string
     etsuko_setup_version(state->ui);
@@ -473,11 +474,12 @@ void karaoke_setup(Karaoke_t *state) {
             .draw_shadow = config_get()->karaoke.draw_album_art_shadow,
         },
         state->drawables.left_container,
-        &(Layout_t){.height = 0.6,
-                    .width = 0.6,
-                    .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-                    .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
-                    .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
+        &(Layout_t){
+            .height = 0.6,
+            .width = 0.6,
+            .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
+            .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
+            .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
     // Set up the background shaders using the song's album art
     setup_background(state);
     repo_resource_buffer_destroy(state->resources.album_art_buffer);
@@ -511,20 +513,21 @@ void karaoke_setup(Karaoke_t *state) {
     ui_drawable_set_alpha_immediate(state->drawables.remaining_time_text, 200);
 
     // Progress bar
-    state->drawables.song_progressbar = ui_make_progressbar(state->ui,
-                                                  &(Drawable_ProgressBarData_t){
-                                                      .progress = 0,
-                                                      .border_radius_em = BORDER_RADIUS_AUTO,
-                                                      .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
-                                                      .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 50},
-                                                  },
-                                                  state->drawables.song_info_container,
-                                                  &(Layout_t){.offset_y = 0.02,
-                                                              .width = 1.0,
-                                                              .height = 0.025,
-                                                              .relative_to = state->drawables.elapsed_time_text,
-                                                              .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
-                                                                       LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
+    state->drawables.song_progressbar =
+        ui_make_progressbar(state->ui,
+                            &(Drawable_ProgressBarData_t){
+                                .progress = 0,
+                                .border_radius_em = BORDER_RADIUS_AUTO,
+                                .fg_color = (Color_t){.r = 255, .g = 255, .b = 255, .a = 255},
+                                .bg_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 50},
+                            },
+                            state->drawables.song_info_container,
+                            &(Layout_t){.offset_y = 0.02,
+                                        .width = 1.0,
+                                        .height = 0.025,
+                                        .relative_to = state->drawables.elapsed_time_text,
+                                        .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
+                                                 LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
 
     // Song name
     state->drawables.song_name_text = ui_make_text(
@@ -575,12 +578,12 @@ void karaoke_setup(Karaoke_t *state) {
 
     const unsigned char *pause_bytes = incbin_pause_img;
     const int pause_bytes_len = sizeof incbin_pause_img;
-    state->drawables.pause_button =
-        ui_make_image(state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
-                      &(Layout_t){.offset_x = 0,
-                                  .offset_y = 0,
-                                  .width = 0.05,
-                                  .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
+    state->drawables.pause_button = ui_make_image(
+        state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
+        &(Layout_t){.offset_x = 0,
+                    .offset_y = 0,
+                    .width = 0.05,
+                    .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
     state->drawables.pause_button->enabled = false;
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
@@ -695,20 +698,11 @@ static void update_play_pause_state(const Karaoke_t *state) {
     state->drawables.pause_button->enabled = !paused;
 }
 
-static void handle_user_input(const Karaoke_t *state) {
-    if ( ui_mouse_hovering_container(state->drawables.lyrics_view->container, NULL, NULL, NULL) ) {
-        ui_ex_lyrics_view_on_scroll(state->drawables.lyrics_view, events_get_mouse_scrolled());
-    }
-}
-
 AppStatus_t karaoke_loop(const Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
         return APP_STATUS_FAILURE;
     audio_loop();
-
-    // Check for user inputs
-    handle_user_input(state);
 
     ui_begin_loop(state->ui);
     // Recalculate dynamic elements

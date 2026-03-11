@@ -198,8 +198,7 @@ static void on_line_event(const UiEventOpts_t *opts, const Drawable_t *drawable,
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         const Song_Line_t *line = view->song->lyrics_lines->data[index];
         audio_seek(line->base_start_time);
-        // TODO: use the correct api in the future
-        view->container->viewport_y = 0;
+        ui_container_scroll_y_to(view->container, 0);
     }
 }
 
@@ -232,6 +231,12 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
     view->current_hovered_index = -1;
+
+    // Setup container for scrolling
+    view->container->overflow_y = (ContainerOverflow_t){
+        .kind = OVERFLOW_SCROLL,
+        .relative_end_padding = -0.2
+    };
 
     ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
 
@@ -700,7 +705,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 
     const double threshold = config_get()->karaoke.hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
-    if ( view->container->viewport_y < threshold ) {
+    if ( view->container->overflow_y.current_amount < threshold ) {
         if ( view->current_hovered_index != index ) {
             ui_drawable_set_alpha(drawable, 0);
         }
@@ -825,63 +830,9 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
         if ( view->credits_content )
             ui_reposition_drawable(ui, view->credits_content);
     }
-
-    view->prev_viewport_y = view->container->viewport_y;
 }
 
 void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
-
-static double get_hidden_height(const LyricsView_t *view) {
-    if ( view->line_states[0] != LINE_HIDDEN )
-        return 0;
-
-    const Drawable_t *first_non_hidden = NULL;
-    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
-        if ( view->line_states[i] != LINE_HIDDEN ) {
-            first_non_hidden = view->line_drawables->data[i];
-            break;
-        }
-    }
-    const Drawable_t *first_line = view->line_drawables->data[0];
-    if ( first_non_hidden == first_line )
-        return 0;
-
-    double anchor_y;
-    if ( first_non_hidden != NULL ) {
-        anchor_y = first_non_hidden->bounds.y;
-    } else {
-        anchor_y = view->container->bounds.y;
-    }
-
-    return anchor_y - first_line->bounds.y;
-}
-
-static double get_visible_height(const LyricsView_t *view) {
-    const Drawable_t *first_visible = NULL;
-    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
-        if ( view->line_states[i] == LINE_HIDDEN ) {
-            continue;
-        }
-        first_visible = view->line_drawables->data[i];
-        break;
-    }
-
-    const Drawable_t *last_visible = view->line_drawables->data[view->line_drawables->size - 1];
-    if ( first_visible == NULL || last_visible == first_visible )
-        return 0;
-    return -(last_visible->bounds.y - first_visible->bounds.y);
-}
-
-void ui_ex_lyrics_view_on_scroll(const LyricsView_t *view, const double delta_y) {
-    if ( fabs(delta_y) < SCROLL_THRESHOLD )
-        return;
-
-    double new_viewport_y = view->container->viewport_y + delta_y;
-    new_viewport_y = MIN(new_viewport_y, get_hidden_height(view));
-    new_viewport_y = MAX(new_viewport_y, get_visible_height(view));
-
-    view->container->viewport_y = new_viewport_y;
-}
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {

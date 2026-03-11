@@ -89,6 +89,17 @@ typedef enum ContainerFlags_t {
     CONTAINER_HORIZONTAL_ALIGN_CONTENT = 2,
 } ContainerFlags_t;
 
+typedef enum OverflowKind_t {
+    OVERFLOW_NONE = 0,
+    OVERFLOW_SCROLL,
+} OverflowKind_t;
+
+typedef struct ContainerOverflow_t {
+    OverflowKind_t kind;
+    double relative_start_padding, relative_end_padding;
+    double current_amount;
+} ContainerOverflow_t;
+
 typedef struct Container_t {
     Bounds_t bounds;
     WEAK struct Container_t *parent;
@@ -100,7 +111,7 @@ typedef struct Container_t {
     bool enabled;
     ContainerFlags_t flags;
     double align_content_offset_y, align_content_offset_x;
-    double viewport_y, viewport_x;
+    ContainerOverflow_t overflow_y;
     bool draw_debug_overlay;
 } Container_t;
 
@@ -331,15 +342,14 @@ void ui_load_font(const unsigned char *data, int data_size, FontType_t type);
 void ui_draw(const Ui_t *ui);
 void ui_add_event_callback(Ui_t *ui, UiEvent_t event_type, Drawable_t *target, c_ui_event_callback callback, void *custom_data);
 void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_event_callback callback, void *custom_data);
+void ui_container_scroll_y_by(Container_t *container, double amount);
+void ui_container_scroll_y_to(Container_t *container, double position);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_on_window_changed(Ui_t *ui);
 Container_t *ui_root_container(const Ui_t *ui);
 void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y);
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset);
-[[deprecated("Use events instead")]]
-bool ui_mouse_hovering_container(const Container_t *container, Bounds_t *out_canon_bounds, int32_t *out_mouse_x,
-                                 int32_t *out_mouse_y);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, const Drawable_ImageData_t *data,

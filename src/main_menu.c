@@ -472,6 +472,10 @@ void menu_setup(MainMenu_t *menu) {
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
     menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
+    menu->container->overflow_y = (ContainerOverflow_t){
+        .kind = OVERFLOW_SCROLL,
+        .relative_end_padding = 0.15
+    };
 
     map_iterate_const(menu->menu_artists, setup_artist, menu);
 
@@ -492,23 +496,10 @@ static void iterate_pending_art(const char *key, void *data, void *userdata) {
     }
 }
 
-static void handle_user_input(MainMenu_t *menu) {
-    if ( events_get_mouse_scrolled() != 0 ) {
-#define PADDING 100
-        // TODO: Fix this shit by scrolling inside the ui itself and computing the max/min sizes there
-        double final_scroll = menu->container->viewport_y + events_get_mouse_scrolled();
-        final_scroll = MIN(0, final_scroll);
-        final_scroll = MAX(-menu->grid_layout_info.max_y + menu->container->bounds.h * 0.9, final_scroll);
-        menu->container->viewport_y = final_scroll;
-    }
-}
-
 AppStatus_t menu_loop(MainMenu_t *menu) {
     events_loop();
     if ( events_has_quit() )
         return APP_STATUS_FAILURE;
-
-    handle_user_input(menu);
 
     map_iterate(menu->album_arts, iterate_pending_art, menu);
     if ( menu->album_data_dirty ) {
