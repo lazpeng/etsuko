@@ -13,12 +13,11 @@
 #include <string.h>
 
 // This is very messy, could be refactored into something at least consistent with the naming
-#define LINE_VERTICAL_PADDING (0.035)
-#define LINE_VERTICAL_PADDING_WITH_READINGS (0.05)
+#define LINE_VERTICAL_PADDING (0.015)
+#define LINE_VERTICAL_PADDING_WITH_READINGS (0.025)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
 #define LINE_FADE_MAX_DISTANCE (5)
-#define SCROLL_THRESHOLD (0.05)
 #define LINE_SCALE_FACTOR_ACTIVE (1.0f)
 #define LINE_SCALE_FACTOR_INACTIVE (0.75f)
 #define ALPHA_DISTANCE_BASE_CALC (100)
@@ -216,6 +215,15 @@ static void on_key_pressed(const UiEventOpts_t *opt, const Drawable_t *, void *c
     }
 }
 
+static Drawable_t *make_anchor(Ui_t *ui, const LyricsView_t *view) {
+    const Layout_t layout = {
+        .flags = LAYOUT_PROPORTIONAL_Y,
+        .offset_y = 0.3,
+    };
+    Drawable_t *drawable = ui_make_custom(ui, view->container, &layout);
+    return drawable;
+}
+
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is NULL");
@@ -231,11 +239,12 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
     view->current_hovered_index = -1;
+    view->anchor = make_anchor(ui, view);
 
     // Setup container for scrolling
     view->container->overflow_y = (ContainerOverflow_t){
         .kind = OVERFLOW_SCROLL,
-        .relative_end_padding = -0.2
+        .relative_end_padding = 0.2
     };
     ui_container_add_vertical_scrollbar(ui, view->container, SCROLL_BAR_AUTO_HIDE);
     ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
@@ -262,7 +271,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         base_offset_x = LINE_RIGHT_ALIGN_PADDING;
     }
 
-    Drawable_t *prev = NULL;
+    Drawable_t *prev = view->anchor;
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         const Song_Line_t *line = song->lyrics_lines->data[i];
 
@@ -312,14 +321,12 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .draw_shadow = config_get()->karaoke.draw_lyric_shadow,
                                     .compute_offsets = song->has_sub_timings || song->has_reading_info};
         const double vertical_padding = get_line_vertical_padding(view);
-        Layout_t layout = {
+        const Layout_t layout = {
             .offset_y = vertical_padding,
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
+            .relative_to = prev,
         };
-        if ( prev != NULL ) {
-            layout.relative_to = prev;
-        }
         prev = ui_make_text(ui, &data, parent, &layout);
         vec_add(view->line_drawables, prev);
 
@@ -571,7 +578,7 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
 
-    const Drawable_t *prev_relative = NULL;
+    const Drawable_t *prev_relative = view->anchor;
     if ( prev_active >= 0 ) {
         prev_relative = view->line_drawables->data[prev_active];
     }
@@ -623,6 +630,8 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
     if ( index > 0 ) {
         const Drawable_t *prev = view->line_drawables->data[index - 1];
         drawable->layout.relative_to = prev;
+    } else {
+        drawable->layout.relative_to = view->anchor;
     }
 
     int32_t alpha = 200;
@@ -689,7 +698,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
             }
         }
         view->line_states[index] = new_state;
-        drawable->layout.relative_to = NULL;
+        drawable->layout.relative_to = view->anchor;
         drawable->layout.offset_y = -padding;
         drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
 
@@ -705,9 +714,8 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         view->layout_dirty = true;
     }
 
-    const double threshold = config_get()->karaoke.hide_past_lyrics ? SCROLL_THRESHOLD : -SCROLL_THRESHOLD;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
-    if ( view->container->overflow_y.current_amount < threshold ) {
+    if ( view->container->overflow_y.current_amount >= 0 ) {
         if ( view->current_hovered_index != index ) {
             ui_drawable_set_alpha(drawable, 0);
         }
@@ -739,7 +747,7 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
             fade_hint_for_line(view, index);
         } else {
             // Position the same as the drawable
-            drawable->layout.relative_to = NULL;
+            drawable->layout.relative_to = view->anchor;
             drawable->layout.offset_y = 0;
             if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
                 drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
@@ -766,7 +774,7 @@ static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *vie
             break;
         }
         if ( next_hidden < 0 )
-            return NULL;
+            return view->anchor;
         idx = next_hidden;
     }
 

@@ -41,6 +41,8 @@ typedef struct etsuko_LyricsView_t {
     int32_t current_active_index, current_hovered_index;
     LineState_t line_states[MAX_SONG_LINES];
     bool layout_dirty;
+    // HACK
+    OWNING Drawable_t *anchor;
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
     uint32_t active_line_segment_visited[MAX_TIMINGS_PER_LINE];
 } LyricsView_t;

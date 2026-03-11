@@ -452,9 +452,8 @@ void karaoke_setup(Karaoke_t *state) {
     // Make the right container
     state->drawables.right_container = ui_make_container(state->ui, ui_root_container(state->ui),
                                                          &(Layout_t){.width = 0.5,
-                                                                     .height = 0.7,
+                                                                     .height = 1.0,
                                                                      .offset_x = 0.5,
-                                                                     .offset_y = 0.35,
                                                                      .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
                                                          CONTAINER_NONE);
 
