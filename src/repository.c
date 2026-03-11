@@ -68,6 +68,12 @@ static void on_fetch_ready(emscripten_fetch_t *fetch) {
     resource->buffer->total_bytes = fetch->totalBytes;
 }
 
+static void on_fetch_progress(emscripten_fetch_t *fetch) {
+    const Resource_t *resource = fetch->userData;
+    resource->buffer->total_bytes = fetch->totalBytes;
+    resource->buffer->downloaded_bytes = fetch->dataOffset + fetch->numBytes;
+}
+
 #else
 
 #include <sys/stat.h>
@@ -131,6 +137,7 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     attr.onsuccess = on_fetch_success;
     attr.onerror = on_fetch_failure;
     attr.onreadystatechange = on_fetch_ready;
+    attr.onprogress = on_fetch_progress;
     attr.userData = resource;
 
     emscripten_fetch(&attr, path_buf->data);
