@@ -143,7 +143,11 @@ static void on_song_loaded(const Resource_t *res) {
     Background_t *bg = ui_root_container(state->ui)->background;
     bg->type = BACKGROUND_GRADIENT;
     bg->colors[0] = render_color_parse(song_get()->bg_color);
+    if ( bg->colors[0].a == 0 )
+        bg->colors[0].a = 255;
     bg->colors[1] = render_color_parse(song_get()->bg_color_secondary);
+    if ( bg->colors[1].a == 0 )
+        bg->colors[1].a = 255;
 
     state->loading.song_loaded = true;
 }
@@ -479,12 +483,10 @@ void karaoke_setup(Karaoke_t *state) {
                           CONTAINER_VERTICAL_ALIGN_CONTENT);
 
     // Make the right container
-    state->drawables.right_container = ui_make_container(state->ui, ui_root_container(state->ui),
-                                                         &(Layout_t){.width = 0.5,
-                                                                     .height = 1.0,
-                                                                     .offset_x = 0.5,
-                                                                     .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
-                                                         CONTAINER_NONE);
+    state->drawables.right_container = ui_make_container(
+        state->ui, ui_root_container(state->ui),
+        &(Layout_t){.width = 0.5, .height = 1.0, .offset_x = 0.5, .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS},
+        CONTAINER_NONE);
 
     // Version string
     etsuko_setup_version(state->ui);
@@ -558,17 +560,16 @@ void karaoke_setup(Karaoke_t *state) {
                                                  LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y});
 
     // Progress bar circle handle
-    state->drawables.progressbar_handle = ui_make_rectangle(
-        state->ui,
-        &(Drawable_RectangleData_t){
-            .border_radius_em = BORDER_RADIUS_AUTO,
-            .color = {.r = 255, .g = 255, .b = 255, .a = 255},
-        },
-        state->drawables.song_info_container,
-        &(Layout_t){
-            .absolute = true,
-            .z_index = 1,
-        });
+    state->drawables.progressbar_handle = ui_make_rectangle(state->ui,
+                                                            &(Drawable_RectangleData_t){
+                                                                .border_radius_em = BORDER_RADIUS_AUTO,
+                                                                .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+                                                            },
+                                                            state->drawables.song_info_container,
+                                                            &(Layout_t){
+                                                                .absolute = true,
+                                                                .z_index = 1,
+                                                            });
     state->drawables.progressbar_handle->enabled = false;
 
     // Song name
@@ -701,8 +702,7 @@ void karaoke_setup(Karaoke_t *state) {
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.progressbar_handle,
                           on_progressbar_area_hover_exited, state);
     // Circle drag event for seeking
-    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_DRAG, state->drawables.progressbar_handle,
-                          on_drag_progressbar_handle, state);
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_DRAG, state->drawables.progressbar_handle, on_drag_progressbar_handle, state);
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
@@ -750,10 +750,8 @@ static void update_song_progressbar(const Karaoke_t *state) {
             const double circle_size = pb->bounds.h * 2.5;
             state->drawables.progressbar_handle->bounds.w = circle_size;
             state->drawables.progressbar_handle->bounds.h = circle_size;
-            state->drawables.progressbar_handle->bounds.x =
-                pb->bounds.x + progress * pb->bounds.w - circle_size / 2.0;
-            state->drawables.progressbar_handle->bounds.y =
-                pb->bounds.y + pb->bounds.h / 2.0 - circle_size / 2.0;
+            state->drawables.progressbar_handle->bounds.x = pb->bounds.x + progress * pb->bounds.w - circle_size / 2.0;
+            state->drawables.progressbar_handle->bounds.y = pb->bounds.y + pb->bounds.h / 2.0 - circle_size / 2.0;
         }
     }
 }
