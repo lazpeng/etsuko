@@ -1847,7 +1847,7 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     }
     // Find the drawable in the z layers
     if ( has_events ) {
-        const int layer_index = 0; // TODO: Find correct layer
+        const int layer_index = drawable->layout.z_index;
         // guaranteed (maybe?) to not allocate since it should have been already allocated when the drawable
         //  was added to the z layers when an event was attached to it
         const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_index);
