@@ -350,7 +350,7 @@ static Container_t *find_deepest_scrollable_container(Container_t *parent, Bound
     const bool within_y = mouse_y >= bounds.y && mouse_y <= bounds.y + parent->bounds.h;
 
     // Let's consider no other child container could be outside of the parent container's bounds
-    if ( !within_x && !within_y )
+    if ( !within_x || !within_y )
         return NULL;
 
     for ( size_t i = 0; i < parent->child_containers->size; i++ ) {
