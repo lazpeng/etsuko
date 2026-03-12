@@ -264,6 +264,10 @@ static void handle_mouse_input(Ui_t *ui) {
             const Drawable_t *drawable = cur->nodes->data[i];
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
+            if ( !drawable->enabled || drawable->skip_during_draw ) {
+                continue;
+            }
+
             const bool not_visible = d_pos_x + drawable->bounds.w < 0 || d_pos_y + drawable->bounds.h < 0 ||
                                      d_pos_x > ui->root_container->bounds.w || d_pos_y > ui->root_container->bounds.h;
             const bool outside = mouse_x < d_pos_x || mouse_x > d_pos_x + drawable->bounds.w || mouse_y < d_pos_y ||
