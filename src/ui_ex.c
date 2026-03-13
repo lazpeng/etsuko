@@ -526,7 +526,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                     .to_scale = SCALE_REGION_TARGET_SCALE,
                 };
                 ui_drawable_add_scale_region_dur(drawable, &region, SCALE_REGION_UP_DURATION, ANIM_APPLY_DEFAULT);
-                // Then do another scale anim for scaling back down for the duration of the segment
+                // Then do another scale anim for scaling back down for the duration of the segment (minus the up duration)
                 region.from_scale = SCALE_REGION_TARGET_SCALE;
                 region.to_scale = 0.f;
                 // That runs after the current one finishes
@@ -534,7 +534,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                 // guaranteed to be the one above because it's set to run simultaneously (so it is added to the queue no matter
                 // what) and the application is single threaded, so no other code could be pushing animations to the queue between
                 // the call to ui_drawable_add_scale_region_dur and the line below
-                const double down_duration = MAX(duration, SCALE_REGION_DOWN_MIN_DURATION);
+                const double down_duration = MAX(duration - SCALE_REGION_UP_DURATION, SCALE_REGION_DOWN_MIN_DURATION);
                 ui_drawable_add_scale_region_dur(drawable, &region, down_duration, ANIM_APPLY_SEQUENTIAL);
                 view->active_line_segment_visited[s] |= (1 << i);
             }
