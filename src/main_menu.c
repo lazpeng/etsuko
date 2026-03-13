@@ -205,12 +205,12 @@ static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *draw
         // this is unfortunately necessary because the ui design is shit
         // change the title only because it's the one right below. the rest should reposition accordingly
         entry->title->layout.offset_y = SONG_TITLE_SCALED_OFFSET_Y;
-        ui_reposition_drawable(menu->ui, entry->title);
+        ui_reposition_drawable(entry->title);
         // also change the album to keep a uniform spacing when scaled
         entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
-        ui_reposition_drawable(menu->ui, entry->album);
+        ui_reposition_drawable(entry->album);
         entry->pills_container->layout.offset_y = PILL_SCALED_OFFSET_Y;
-        ui_reposition_container(menu->ui, entry->pills_container);
+        ui_reposition_container(entry->pills_container);
 
         // Update background
         menu->album_data_dirty = true;
@@ -220,11 +220,11 @@ static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *draw
         ui_drawable_set_scale_factor_dur(entry->album, 1.f, ALBUM_SCALE_DOWN_DURATION);
 
         entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
-        ui_reposition_drawable(menu->ui, entry->title);
+        ui_reposition_drawable(entry->title);
         entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
-        ui_reposition_drawable(menu->ui, entry->album);
+        ui_reposition_drawable(entry->album);
         entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
-        ui_reposition_container(menu->ui, entry->pills_container);
+        ui_reposition_container(entry->pills_container);
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         config_set_karaoke_song_file(config_get(), entry->key);
         etsuko_navigate("/?song=", entry->key);
@@ -255,7 +255,7 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
     return text;
 }
 
-static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Drawable_t *prev_pill, Container_t *container) {
+static Drawable_t *setup_single_tag_pill(const MainMenu_t *menu, char *tag, const Drawable_t *prev_pill, Container_t *container) {
     const Drawable_TextData_t text_data = {
         .em = 0.5,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
@@ -284,12 +284,12 @@ static Drawable_t *setup_single_tag_pill(MainMenu_t *menu, char *tag, const Draw
     text->layout.flags |= LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_RELATIVE_TO_POS |
                           LAYOUT_ANCHOR_CENTER_X | LAYOUT_ANCHOR_CENTER_Y;
     text->layout.offset_x = text->layout.offset_y = 0.5;
-    ui_reposition_drawable(menu->ui, text);
+    ui_reposition_drawable(text);
 
     return rect;
 }
 
-static Container_t *setup_tag_pills(MainMenu_t *menu, const MenuSong_t *song, const SongEntryDrawables_t *entry) {
+static Container_t *setup_tag_pills(const MainMenu_t *menu, const MenuSong_t *song, const SongEntryDrawables_t *entry) {
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_RELATIVE_TO_SIZE,
         .offset_y = PILL_REGULAR_OFFSET_Y,
@@ -493,7 +493,7 @@ static void iterate_pending_art(const char *key, void *data, void *userdata) {
         if ( entry == NULL )
             error_abort("Failed to find drawable for album art");
         Drawable_t *image = entry->image;
-        ui_drawable_set_image(menu->ui, image, art->image_data, (int)art->image_data_size);
+        ui_drawable_set_image(image, art->image_data, (int)art->image_data_size);
         art->state = ART_OK;
     }
 }
@@ -533,7 +533,7 @@ static void cleanup_drawables_map(const char *key, void *value, void *_) {
     free(entry);
 }
 
-void menu_finish(MainMenu_t *menu) {
+void menu_finish(const MainMenu_t *menu) {
     ui_finish(menu->ui);
 
     if ( menu->menu_artists )

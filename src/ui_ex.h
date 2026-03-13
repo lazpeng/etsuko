@@ -48,7 +48,7 @@ typedef struct etsuko_LyricsView_t {
 // Initializes the lyric view
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);
 // Updates the lyric line state machine, computing timing and effects like the dynamic fill and pulse
-void ui_ex_lyrics_view_loop(const Ui_t *ui, LyricsView_t *view);
+void ui_ex_lyrics_view_loop(LyricsView_t *view);
 // Called when the screen's dimensions change
 void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view);
 // Frees data related to the lyrics view

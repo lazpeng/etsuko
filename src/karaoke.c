@@ -329,7 +329,7 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
         layout->offset_x = 0.5;
     }
 
-    ui_reposition_container(state->ui, state->drawables.left_container);
+    ui_reposition_container(state->drawables.left_container);
 }
 
 static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
@@ -777,7 +777,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     // Update the lyrics view
     if ( events_window_changed() )
         ui_ex_lyrics_view_on_screen_change(state->ui, state->drawables.lyrics_view);
-    ui_ex_lyrics_view_loop(state->ui, state->drawables.lyrics_view);
+    ui_ex_lyrics_view_loop(state->drawables.lyrics_view);
 
     // Clear events after all checking has been done because under emscripten the events aren't polled inside glfw
     // so we would clear all the events before we could see them

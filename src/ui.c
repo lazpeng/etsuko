@@ -1605,9 +1605,7 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
     for ( int32_t i = 0; i < (int32_t)text_size; ) {
         const int32_t prev_i = i;
 
-        int32_t c;
-        // U8_NEXT(line, i, text_size, c);
-        c = str_u8_next(line, text_size, &i);
+        const int32_t c = str_u8_next(line, text_size, &i);
         if ( c < 0 )
             break;
 
@@ -1741,7 +1739,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
-    ui_reposition_drawable(ui, result);
+    ui_reposition_drawable(result);
 
     if ( data->draw_shadow ) {
         const int32_t text_pixels = render_measure_pixels_from_em(data->em);
@@ -1781,7 +1779,7 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     result->texture = texture;
     result->layout = *layout;
 
-    ui_reposition_drawable(ui, result);
+    ui_reposition_drawable(result);
 
     if ( data->draw_shadow ) {
         apply_shadow_to_image(result);
@@ -1798,7 +1796,7 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
     result->custom_data = dup_progressbar_data(data);
     result->layout = *layout;
 
-    ui_reposition_drawable(ui, result);
+    ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
@@ -1810,7 +1808,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     result->custom_data = dup_rectangle_data(data);
     result->layout = *layout;
 
-    ui_reposition_drawable(ui, result);
+    ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
@@ -1823,7 +1821,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
     result->layout = *layout;
     result->pending_recompute = true;
 
-    ui_reposition_drawable(ui, result);
+    ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
@@ -1893,9 +1891,9 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     free(drawable);
 }
 
-double ui_compute_relative_horizontal(Ui_t *ui, double value, const Container_t *parent) { return parent->bounds.w * value; }
+double ui_compute_relative_horizontal(double value, const Container_t *parent) { return parent->bounds.w * value; }
 
-Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
+Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
         error_abort("Failed to allocate container");
@@ -1993,12 +1991,12 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
         const Drawable_ImageData_t *data = drawable->custom_data;
-        ui_reposition_drawable(ui, drawable);
+        ui_reposition_drawable(drawable);
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);
         }
     } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR || drawable->type == DRAW_TYPE_RECTANGLE ) {
-        ui_reposition_drawable(ui, drawable);
+        ui_reposition_drawable(drawable);
     } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
         // It should recompute itself inside some loop() function somewhere
         drawable->pending_recompute = true;
@@ -2031,7 +2029,7 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     }
 }
 
-void ui_reposition_container(Ui_t *ui, Container_t *container) {
+void ui_reposition_container(Container_t *container) {
     const double old_x = container->bounds.x, old_y = container->bounds.y;
     if ( container->parent != NULL ) {
         measure_layout(&container->layout, container->parent, &container->bounds);
@@ -2061,13 +2059,13 @@ void ui_reposition_container(Ui_t *ui, Container_t *container) {
     }
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        ui_reposition_drawable(ui, container->child_drawables->data[i]);
+        ui_reposition_drawable(container->child_drawables->data[i]);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         Container_t *child_container = container->child_containers->data[i];
         if ( child_container != NULL ) {
-            ui_reposition_container(ui, child_container);
+            ui_reposition_container(child_container);
         }
     }
 }
@@ -2210,7 +2208,7 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     return animation;
 }
 
-void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable) {
+void ui_reposition_drawable(Drawable_t *drawable) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
@@ -2354,7 +2352,7 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
     }
 }
 
-void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length) {
+void ui_drawable_set_image(Drawable_t *drawable, const unsigned char *bytes, const int length) {
     if ( drawable == NULL )
         error_abort("ui_drawable_set_image: Drawable is null");
     if ( drawable->type != DRAW_TYPE_IMAGE )
@@ -2368,7 +2366,7 @@ void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *
     drawable->bounds.w = drawable->texture->width;
     drawable->bounds.h = drawable->texture->height;
 
-    ui_reposition_drawable(ui, drawable);
+    ui_reposition_drawable(drawable);
 }
 
 void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {

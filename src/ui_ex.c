@@ -42,7 +42,7 @@ static bool is_line_intermission(const LyricsView_t *view, const int32_t index) 
 static void reposition_hint_for_line(Ui_t *ui, const LyricsView_t *view, int32_t index) {
     if ( index < (int32_t)view->line_read_hints->size ) {
         Drawable_t *hint = view->line_read_hints->data[index];
-        ui_reposition_drawable(ui, hint);
+        ui_reposition_drawable(hint);
     }
 }
 
@@ -107,7 +107,7 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
 
                     // Place this hint below the segment it's supposed to hint at, but if the previous hint already
                     // overshoots the length of its segment, place it a few pixels to the right of wherever the last hint ended
-                    x = MAX(x + 5, character_x + ui_compute_relative_horizontal(ui, 0.01, view->container));
+                    x = MAX(x + 5, character_x + ui_compute_relative_horizontal(0.01, view->container));
 
                     ReadingEntry_t *entry = calloc(1, sizeof(*entry));
                     entry->texture = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
@@ -690,7 +690,7 @@ static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
     }
 }
 
-void ui_ex_lyrics_view_loop(const Ui_t *ui, LyricsView_t *view) {
+void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
     }

@@ -397,10 +397,10 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
-void ui_reposition_drawable(Ui_t *ui, Drawable_t *drawable);
+void ui_reposition_drawable(Drawable_t *drawable);
 void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable);
-double ui_compute_relative_horizontal(Ui_t *ui, double value, const Container_t *parent);
-void ui_drawable_set_image(Ui_t *ui, Drawable_t *drawable, const unsigned char *bytes, int length);
+double ui_compute_relative_horizontal(double value, const Container_t *parent);
+void ui_drawable_set_image(Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
@@ -416,9 +416,9 @@ void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alph
 void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
                                       AnimationApplyType_t apply_type);
 // Containers
-Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
+Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);
-void ui_reposition_container(Ui_t *ui, Container_t *container);
+void ui_reposition_container(Container_t *container);
 void ui_destroy_container(Ui_t *ui, Container_t *container);
 // Animations
 void ui_animate_translation(Drawable_t *target, const Animation_EaseTranslationData_t *data);
