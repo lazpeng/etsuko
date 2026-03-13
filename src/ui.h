@@ -160,9 +160,6 @@ typedef struct Drawable_t {
     bool pending_recompute;
     bool center_on_scale;
     OWNING Vector_t *events; // of EventDef_t*
-    // TODO: This doesnt' exactly set the drawable as disabled, but it is not drawn during the regular draw phase
-    //  temporary hack until we have z-indexes working
-    bool skip_during_draw;
 } Drawable_t;
 
 typedef enum AnimationType_t {

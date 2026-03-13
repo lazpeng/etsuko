@@ -264,7 +264,7 @@ static void handle_mouse_input(Ui_t *ui) {
             const Drawable_t *drawable = cur->nodes->data[i];
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
-            if ( !drawable->enabled || drawable->skip_during_draw ) {
+            if ( !drawable->enabled ) {
                 continue;
             }
 
@@ -330,8 +330,7 @@ static void handle_mouse_input(Ui_t *ui) {
             for ( size_t e = 0; e < hovered_drawable->events->size; e++ ) {
                 const EventDef_t *def = hovered_drawable->events->data[e];
                 if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-                    const UiEventOpts_t opts = {.event = def->type,
-                                                .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, hovered_drawable, def->custom_data);
                 }
             }
@@ -579,6 +578,8 @@ static void recalculate_container_alignment(Container_t *container) {
                 measure_container_size(container, &bounds);
             }
         }
+
+        container->content_size_dirty = true;
     }
 }
 
@@ -831,7 +832,7 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
 }
 
 static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds) {
-    if ( !drawable->enabled || drawable->pending_recompute || drawable->skip_during_draw ) {
+    if ( !drawable->enabled || drawable->pending_recompute ) {
         return;
     }
 
@@ -848,7 +849,7 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
 
     if ( drawable->layout.absolute ) {
         rect.x -= drawable->parent->align_content_offset_x;
-        rect.y -= drawable->parent->align_content_offset_y + drawable->parent->overflow_y.current_amount;
+        rect.y -= drawable->parent->align_content_offset_y - drawable->parent->overflow_y.current_amount;
     }
 
     if ( drawable->dynamic ) {
@@ -964,67 +965,48 @@ ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *co
 }
 
 static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
-    if ( container->content_size_dirty ) {
-        container->scrollable_area = gather_container_scrollable_area(container);
-        container->content_size_dirty = false;
-    }
-
-    Drawable_t *background = container->overflow_y.scrollbar.background;
-    background->bounds.h = container->bounds.h;
-    background->bounds.w = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
-
-    const double total_height = container->scrollable_area.total_height;
-
-    Drawable_t *handle = container->overflow_y.scrollbar.handle;
-    handle->bounds.h = container->bounds.h / (total_height + container->bounds.h) * 0.9;
-    handle->bounds.w = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
-}
-
-static void draw_container_vertical_scroll_bar(const Bounds_t *acc_bounds, Container_t *container) {
     if ( container->overflow_y.scrollbar.kind == SCROLL_BAR_NONE ) {
         return;
     }
     if ( container->overflow_y.scrollbar.handle == NULL || container->overflow_y.scrollbar.background == NULL ) {
         error_abort("draw_container_vertical_scroll_bar: Manually set scrollbar type without initialization");
     }
-    recompute_vertical_scroll_bar_bounds(container);
+
+    if ( container->content_size_dirty ) {
+        container->scrollable_area = gather_container_scrollable_area(container);
+        container->content_size_dirty = false;
+    }
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
-    if ( handle->bounds.h >= 1.0 )
-        return;
-
-    Layout_t layout = {
-        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_H | LAYOUT_WRAP_AROUND_X,
-        .offset_x = -0.005,
-        .offset_y = 0.05,
-        .width = background->bounds.w,
-        .height = 0.9,
-    };
-    measure_layout(&layout, container, &background->bounds);
-    position_layout(&layout, container, &background->bounds);
-
-    Bounds_t bounds = background->bounds;
-    bounds.x += acc_bounds->x;
-    bounds.y += acc_bounds->y;
-    const Color_t *bg_color = &container->overflow_y.scrollbar.background_color;
-    render_draw_rounded_rect(background->texture, &bounds, bg_color, BORDER_RADIUS_AUTO);
 
     const double total_height = container->scrollable_area.total_height;
     const double min_y = container->scrollable_area.min_content_y;
     const double scroll_ratio = (container->overflow_y.current_amount - min_y) / total_height;
-    layout.height = handle->bounds.h;
-    layout.offset_y = 0.05 + scroll_ratio * (0.9 - handle->bounds.h);
+    const double computed_handle_height = container->bounds.h / (total_height + container->bounds.h) * 0.9;
+
+    if ( computed_handle_height >= 1.0 ) {
+        background->enabled = handle->enabled = false;
+        return;
+    }
+    background->enabled = handle->enabled = true;
+
+    background->layout.width = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
+    measure_layout(&background->layout, container, &background->bounds);
+    position_layout(&background->layout, container, &background->bounds);
+
+    const Layout_t layout = {.flags =
+                                 LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_H | LAYOUT_WRAP_AROUND_X,
+                             .offset_x = -0.005,
+                             .offset_y = 0.05 + scroll_ratio * (0.9 - computed_handle_height),
+                             .width = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em),
+                             .height = computed_handle_height,
+                             .absolute = true,
+                             .z_index = 999 + 1};
 
     measure_layout(&layout, container, &handle->bounds);
     position_layout(&layout, container, &handle->bounds);
-
-    bounds = handle->bounds;
-
-    bounds.x += acc_bounds->x;
-    bounds.y += acc_bounds->y;
-    const Color_t *handle_color = &container->overflow_y.scrollbar.handle_color;
-    render_draw_rounded_rect(handle->texture, &bounds, handle_color, BORDER_RADIUS_AUTO);
+    handle->layout = layout;
 }
 
 static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t base_bounds) {
@@ -1034,6 +1016,10 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
     if ( container->content_size_dirty ) {
         container->scrollable_area = gather_container_scrollable_area(container);
         container->content_size_dirty = false;
+    }
+
+    if ( container->overflow_y.kind == OVERFLOW_SCROLL ) {
+        recompute_vertical_scroll_bar_bounds(container);
     }
 
     Bounds_t container_bounds = container->bounds;
@@ -1061,10 +1047,6 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         draw_all_container(ui, container->child_containers->data[i], base_bounds);
-    }
-
-    if ( container->overflow_y.kind == OVERFLOW_SCROLL ) {
-        draw_container_vertical_scroll_bar(&container_bounds, container);
     }
 }
 
@@ -1201,22 +1183,26 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
     }
 
     container->overflow_y.scrollbar.kind = kind;
-    container->overflow_y.scrollbar.background = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
-    container->overflow_y.scrollbar.background->texture = render_make_null();
-    container->overflow_y.scrollbar.background->layout.z_index = 999;
 
-    container->overflow_y.scrollbar.handle = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
-    container->overflow_y.scrollbar.handle->texture = render_make_null();
-    container->overflow_y.scrollbar.handle->layout.z_index = 999 + 1;
+    const Color_t bg_color = {.r = 100, .g = 100, .b = 100, .a = 150};
+    const Color_t handle_color = {.r = 150, .g = 150, .b = 150, .a = 255};
 
-    container->overflow_y.scrollbar.background->skip_during_draw = true;
-    container->overflow_y.scrollbar.background->layout.absolute = true;
-    container->overflow_y.scrollbar.handle->skip_during_draw = true;
-    container->overflow_y.scrollbar.handle->layout.absolute = true;
+    const Layout_t layout = {.flags =
+                                 LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_PROPORTIONAL_H | LAYOUT_WRAP_AROUND_X,
+                             .offset_x = -0.005,
+                             .offset_y = 0.05,
+                             .width = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em),
+                             .height = 0.9,
+                             .absolute = true,
+                             .z_index = 999};
+    Drawable_RectangleData_t data = {.border_radius_em = BORDER_RADIUS_AUTO, .color = bg_color};
+    container->overflow_y.scrollbar.background = ui_make_rectangle(ui, &data, container, &layout);
+    data.color = handle_color;
+    container->overflow_y.scrollbar.handle = ui_make_rectangle(ui, &data, container, &(Layout_t){.z_index = 999 + 1});
 
     container->overflow_y.scrollbar.width_em = 0.5;
-    container->overflow_y.scrollbar.background_color = (Color_t){.r = 100, .g = 100, .b = 100, .a = 150};
-    container->overflow_y.scrollbar.handle_color = (Color_t){.r = 150, .g = 150, .b = 150, .a = 255};
+    container->overflow_y.scrollbar.background_color = bg_color;
+    container->overflow_y.scrollbar.handle_color = handle_color;
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
     ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, background, on_click_scrollbar_background, container);
@@ -1224,6 +1210,7 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
     ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, handle, on_drag_scrollbar_handle, container);
 
+    container->content_size_dirty = true;
     recompute_vertical_scroll_bar_bounds(container);
 }
 
@@ -2006,6 +1993,7 @@ void ui_reposition_container(Ui_t *ui, Container_t *container) {
         position_layout(&container->layout, container->parent, &container->bounds);
     }
 
+    container->content_size_dirty = true;
     if ( old_x != container->bounds.x || old_y != container->bounds.y ) {
         ContainerAnimation_t *animation = NULL;
         for ( size_t i = 0; i < container->animations->size; i++ ) {
