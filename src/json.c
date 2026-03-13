@@ -551,3 +551,75 @@ const Vector_t *json_get_list(const JsonField_t *field) {
 }
 
 bool json_is_null(const JsonField_t *field) { return field == NULL || field->type == JSON_NULL; }
+
+void json_buf_begin_object(StrBuffer_t *buf, bool *first) {
+    if ( buf == NULL || first == NULL )
+        return;
+    *first = true;
+    str_buf_append_ch(buf, '{');
+}
+
+void json_buf_end_object(StrBuffer_t *buf) {
+    if ( buf == NULL )
+        return;
+    str_buf_append_ch(buf, '}');
+}
+
+void json_buf_append_escaped_string(StrBuffer_t *buf, const char *str) {
+    if ( buf == NULL || str == NULL )
+        return;
+    for ( const char *p = str; *p != '\0'; p++ ) {
+        switch ( *p ) {
+        case '\\': str_buf_append(buf, "\\\\", NULL); break;
+        case '"':  str_buf_append(buf, "\\\"", NULL); break;
+        case '\n': str_buf_append(buf, "\\n", NULL); break;
+        case '\r': str_buf_append(buf, "\\r", NULL); break;
+        case '\t': str_buf_append(buf, "\\t", NULL); break;
+        case '\b': str_buf_append(buf, "\\b", NULL); break;
+        case '\f': str_buf_append(buf, "\\f", NULL); break;
+        default:
+            str_buf_append_ch(buf, *p);
+            break;
+        }
+    }
+}
+
+static void json_buf_add_field_prefix(StrBuffer_t *buf, bool *first, const char *name) {
+    if ( !*first ) {
+        str_buf_append_ch(buf, ',');
+    } else {
+        *first = false;
+    }
+    str_buf_append_ch(buf, '"');
+    json_buf_append_escaped_string(buf, name);
+    str_buf_append(buf, "\":", NULL);
+}
+
+void json_buf_add_string(StrBuffer_t *buf, bool *first, const char *name, const char *value) {
+    if ( buf == NULL || first == NULL || name == NULL )
+        return;
+    json_buf_add_field_prefix(buf, first, name);
+    if ( value == NULL ) {
+        str_buf_append(buf, "null", NULL);
+        return;
+    }
+    str_buf_append_ch(buf, '"');
+    json_buf_append_escaped_string(buf, value);
+    str_buf_append_ch(buf, '"');
+}
+
+void json_buf_add_number(StrBuffer_t *buf, bool *first, const char *name, double value) {
+    if ( buf == NULL || first == NULL || name == NULL )
+        return;
+    char num_buf[64];
+    const int len = snprintf(num_buf, sizeof(num_buf), "%.17g", value);
+    json_buf_add_field_prefix(buf, first, name);
+    str_buf_append_len(buf, num_buf, (size_t)len);
+}
+
+void json_buf_add_bool(StrBuffer_t *buf, bool *first, const char *name, bool value) {
+    if ( buf == NULL || first == NULL || name == NULL )
+        return;
+    json_buf_add_field_prefix(buf, first, name);
+    str_buf_append(buf, value ? "true" : "false", NULL);
+}

@@ -3,6 +3,7 @@
 
 #include "constants.h"
 #include "container_utils.h"
+#include "str_utils.h"
 #include <stdbool.h>
 
 // Type of a json field value
@@ -90,5 +91,13 @@ bool json_get_bool(const JsonField_t *field);
 const Vector_t *json_get_list(const JsonField_t *field);
 // helper function for whether the value is null
 bool json_is_null(const JsonField_t *field);
+
+// JSON writer helpers (StrBuffer-based)
+void json_buf_begin_object(StrBuffer_t *buf, bool *first);
+void json_buf_end_object(StrBuffer_t *buf);
+void json_buf_append_escaped_string(StrBuffer_t *buf, const char *str);
+void json_buf_add_string(StrBuffer_t *buf, bool *first, const char *name, const char *value);
+void json_buf_add_number(StrBuffer_t *buf, bool *first, const char *name, double value);
+void json_buf_add_bool(StrBuffer_t *buf, bool *first, const char *name, bool value);
 
 #endif // ETSUKO_JSON_H

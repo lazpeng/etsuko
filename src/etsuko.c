@@ -11,6 +11,7 @@
 #include "main_menu.h"
 #include "renderer.h"
 #include "ui.h"
+#include "user_settings.h"
 
 struct AppState {
     OWNING void *state;
@@ -65,18 +66,21 @@ AppStatus_t global_load() {
         printf("global_load: Current loaded mode has already finished loading before this call, fix your shit up\n");
         return APP_STATUS_OK;
     }
+    if ( settings_ensure_loaded() == false )
+        return APP_STATUS_LOADING;
 
     if ( g_state->current_mode == APP_MODE_KARAOKE ) {
         Karaoke_t *karaoke = g_state->state;
-        AppStatus_t initialized = karaoke_load_loop(karaoke);
+        const AppStatus_t initialized = karaoke_load_loop(karaoke);
         if ( initialized == APP_STATUS_OK ) {
             karaoke_setup(karaoke);
             g_state->finished_loading = true;
         }
         return initialized;
-    } else if ( g_state->current_mode == APP_MODE_MENU ) {
+    }
+    if ( g_state->current_mode == APP_MODE_MENU ) {
         MainMenu_t *menu = g_state->state;
-        AppStatus_t status = menu_load_loop(menu);
+        const AppStatus_t status = menu_load_loop(menu);
         if ( status == APP_STATUS_OK ) {
             menu_setup(menu);
             g_state->finished_loading = true;
@@ -95,7 +99,7 @@ AppStatus_t global_loop() {
     }
     AppStatus_t status = APP_STATUS_OK;
     if ( g_state->current_mode == APP_MODE_KARAOKE ) {
-        Karaoke_t *karaoke = g_state->state;
+        const Karaoke_t *karaoke = g_state->state;
         status = karaoke_loop(karaoke);
     } else if ( g_state->current_mode == APP_MODE_MENU ) {
         MainMenu_t *menu = g_state->state;

@@ -37,7 +37,9 @@ add_executable(etsuko src/main.c
         src/contrib/stb_image.c
         src/contrib/stb_truetype.c
         src/contrib/minimp3.c
-        src/resource_includes.h)
+        src/resource_includes.h
+        src/user_settings.h
+        src/user_settings.c)
 
 set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")
@@ -68,7 +70,7 @@ if (EMSCRIPTEN)
             "SHELL:-Oz"
             "SHELL:-g0"
             "SHELL:-flto"
-            "SHELL:-sFILESYSTEM=0"
+            "SHELL:-sFILESYSTEM=1"
             "SHELL:--closure=1"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
