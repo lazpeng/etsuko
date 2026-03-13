@@ -654,6 +654,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     const double prev_scroll_pos = get_lyric_line_scroll_position(view, view->current_first_active_index - 1);
     const double current_scroll_pos = view->container->overflow_y.current_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
+    // TODO: Sometimes when skipping over a intermission line fast enough, the past lines are shown for a split second
     if ( should_hide_past && current_scroll_pos >= prev_scroll_pos ) {
         if ( view->current_hovered_index != index ) {
             ui_drawable_set_alpha(drawable, 0);
