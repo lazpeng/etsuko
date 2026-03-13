@@ -1009,6 +1009,38 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
     handle->layout = layout;
 }
 
+static void vec_add_sorted_drawable(Vector_t *vec, Drawable_t *drawable) {
+    const int32_t z = drawable->layout.z_index;
+    size_t insert_at = vec->size;
+    for ( size_t i = 0; i < vec->size; i++ ) {
+        const Drawable_t *current = vec->data[i];
+        if ( current->layout.z_index > z ) {
+            insert_at = i;
+            break;
+        }
+    }
+    vec_add(vec, NULL);
+    for ( size_t i = vec->size - 1; i > insert_at; i-- )
+        vec->data[i] = vec->data[i - 1];
+    vec->data[insert_at] = drawable;
+}
+
+static void vec_add_sorted_container(Vector_t *vec, Container_t *container) {
+    const int32_t z = container->layout.z_index;
+    size_t insert_at = vec->size;
+    for ( size_t i = 0; i < vec->size; i++ ) {
+        const Container_t *current = vec->data[i];
+        if ( current->layout.z_index > z ) {
+            insert_at = i;
+            break;
+        }
+    }
+    vec_add(vec, NULL);
+    for ( size_t i = vec->size - 1; i > insert_at; i-- )
+        vec->data[i] = vec->data[i - 1];
+    vec->data[insert_at] = container;
+}
+
 static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t base_bounds) {
     if ( !container->enabled )
         return;
@@ -1041,12 +1073,25 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y;
 
-    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        perform_draw(container->child_drawables->data[i], &base_bounds);
-    }
-
-    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        draw_all_container(ui, container->child_containers->data[i], base_bounds);
+    // Draw descendants of the current container at the same time, following the order of the z indices
+    // vectors are already sorted at insertion time
+    // note that changing the z index after initial creation/dynamically is not supported and will give incorrect results
+    size_t d_idx = 0, c_idx = 0;
+    while ( d_idx < container->child_drawables->size || c_idx < container->child_containers->size ) {
+        const int32_t dz = d_idx < container->child_drawables->size
+                               ? ((Drawable_t *)container->child_drawables->data[d_idx])->layout.z_index
+                               : INT32_MAX;
+        const int32_t cz = c_idx < container->child_containers->size
+                               ? ((Container_t *)container->child_containers->data[c_idx])->layout.z_index
+                               : INT32_MAX;
+        // In case they're equal, favor drawables
+        if ( dz <= cz ) {
+            perform_draw(container->child_drawables->data[d_idx], &base_bounds);
+            d_idx += 1;
+        } else {
+            draw_all_container(ui, container->child_containers->data[c_idx], base_bounds);
+            c_idx += 1;
+        }
     }
 }
 
@@ -1711,7 +1756,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
 Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
     internal_make_text(ui, result, data, container, layout);
-    vec_add(container->child_drawables, result);
+    vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
 
@@ -1741,7 +1786,7 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     if ( data->draw_shadow ) {
         apply_shadow_to_image(result);
     }
-    vec_add(container->child_drawables, result);
+    vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
 
@@ -1754,7 +1799,7 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
     result->layout = *layout;
 
     ui_reposition_drawable(ui, result);
-    vec_add(container->child_drawables, result);
+    vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
 
@@ -1766,7 +1811,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     result->layout = *layout;
 
     ui_reposition_drawable(ui, result);
-    vec_add(container->child_drawables, result);
+    vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
 
@@ -1779,7 +1824,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
     result->pending_recompute = true;
 
     ui_reposition_drawable(ui, result);
-    vec_add(container->child_drawables, result);
+    vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
 
@@ -1873,7 +1918,7 @@ Container_t *ui_make_container(Ui_t *ui, Container_t *parent, const Layout_t *la
     if ( parent != NULL ) {
         measure_layout(layout, parent, &result->bounds);
         position_layout(layout, parent, &result->bounds);
-        vec_add(parent->child_containers, result);
+        vec_add_sorted_container(parent->child_containers, result);
     }
 
     return result;
