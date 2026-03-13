@@ -15,6 +15,7 @@
 // This is very messy, could be refactored into something at least consistent with the naming
 #define LINE_VERTICAL_PADDING (0.015)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.025)
+#define LINE_FIRST_VERTICAL_OFFSET (0.3)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
 #define LINE_FADE_MAX_DISTANCE (5)
@@ -27,8 +28,7 @@
 #define SCALE_ANIMATION_DURATION (0.1)
 #define FADE_ANIMATION_DURATION (1.0)
 #define SCALE_ANIMATION_OUT_DURATION (0.3)
-#define TRANSLATION_ANIMATION_DURATION (0.3)
-#define TRANSLATION_ANIMATION_OUT_DURATION (0.3)
+#define SCROLL_ANIMATION_DURATION (0.3)
 #define SCALE_REGION_UP_DURATION (0.15)
 #define SCALE_REGION_DOWN_MIN_DURATION (0.2)
 #define SCALE_REGION_TARGET_SCALE (0.1)
@@ -199,7 +199,6 @@ static void on_line_event(const UiEventOpts_t *opts, const Drawable_t *drawable,
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         const Song_Line_t *line = view->song->lyrics_lines->data[index];
         audio_seek(line->base_start_time);
-        ui_container_scroll_y_to(view->container, 0);
     }
 }
 
@@ -217,15 +216,6 @@ static void on_key_pressed(const UiEventOpts_t *opt, const Drawable_t *, void *c
     }
 }
 
-static Drawable_t *make_anchor(Ui_t *ui, const LyricsView_t *view) {
-    const Layout_t layout = {
-        .flags = LAYOUT_PROPORTIONAL_Y,
-        .offset_y = 0.3,
-    };
-    Drawable_t *drawable = ui_make_custom(ui, view->container, &layout);
-    return drawable;
-}
-
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is NULL");
@@ -241,7 +231,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->line_drawables = vec_init();
     view->line_read_hints = vec_init();
     view->current_hovered_index = -1;
-    view->anchor = make_anchor(ui, view);
+    view->current_first_active_index = -1;
 
     // Setup container for scrolling
     view->container->overflow_y = (ContainerOverflow_t){
@@ -273,7 +263,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         base_offset_x = LINE_RIGHT_ALIGN_PADDING;
     }
 
-    Drawable_t *prev = view->anchor;
+    Drawable_t *prev = NULL;
     for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
         const Song_Line_t *line = song->lyrics_lines->data[i];
 
@@ -324,7 +314,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .compute_offsets = song->has_sub_timings || song->has_reading_info};
         const double vertical_padding = get_line_vertical_padding(view);
         const Layout_t layout = {
-            .offset_y = vertical_padding,
+            .offset_y = prev == NULL ? LINE_FIRST_VERTICAL_OFFSET : vertical_padding,
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
             .relative_to = prev,
@@ -338,8 +328,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
 
         view->line_states[i] = LINE_NONE;
-        ui_animate_translation(prev, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
-                                                                        .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_fade(prev,
                         &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
@@ -354,8 +342,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                 ui, parent,
                 &(Layout_t){
                     .offset_x = 0, .offset_y = 0, .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y, .relative_to = prev});
-            ui_animate_translation(hint, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
-                                                                            .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_fade(hint,
                             &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_scale(hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
@@ -571,7 +557,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
 }
 
-static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
+static void set_line_active(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
     drawable->enabled = true;
@@ -580,11 +566,6 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
-
-    const Drawable_t *prev_relative = view->anchor;
-    if ( prev_active >= 0 ) {
-        prev_relative = view->line_drawables->data[prev_active];
-    }
 
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
 
@@ -597,30 +578,9 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
             view->active_line_segment_visited[i] = 0;
         }
 
-        if ( prev_relative != NULL ) {
-            drawable->layout.offset_y = get_line_vertical_padding(view);
-        } else {
-            drawable->layout.offset_y = 0;
-        }
-        if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-            drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
-        }
-        drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-        drawable->layout.relative_to = prev_relative;
-        ui_reposition_drawable(ui, drawable);
-        reposition_hint_for_line(ui, view, index);
-
         if ( view->song->has_sub_timings && line->num_timings > 0 ) {
             ui_drawable_set_draw_underlay(drawable, true, calculate_alpha(0));
         }
-
-        view->layout_dirty = true;
-    } else if ( prev_relative != drawable->layout.relative_to ) {
-        drawable->layout.relative_to = prev_relative;
-        ui_reposition_drawable(ui, drawable);
-        reposition_hint_for_line(ui, view, index);
-
-        view->layout_dirty = true;
     }
 
     if ( view->song->has_sub_timings && line->num_timings > 0 ) {
@@ -628,14 +588,8 @@ static void set_line_active(Ui_t *ui, LyricsView_t *view, const int32_t index, c
     }
 }
 
-static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index, const int32_t prev_active) {
+static void set_line_inactive(LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     Drawable_t *drawable = view->line_drawables->data[index];
-    if ( index > 0 ) {
-        const Drawable_t *prev = view->line_drawables->data[index - 1];
-        drawable->layout.relative_to = prev;
-    } else {
-        drawable->layout.relative_to = view->anchor;
-    }
 
     int32_t alpha = 200;
     if ( prev_active >= 0 && prev_active != (int32_t)index ) {
@@ -659,12 +613,6 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         const LineState_t prev_state = view->line_states[index];
         view->line_states[index] = new_state;
 
-        drawable->layout.offset_y = get_line_vertical_padding(view);
-        if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-            drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
-        }
-        drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
         if ( prev_state == LINE_NONE ) {
@@ -677,14 +625,16 @@ static void set_line_inactive(Ui_t *ui, LyricsView_t *view, const int32_t index,
         }
         scale_hint_for_line(view, index);
         fade_hint_for_line(view, index);
-        ui_reposition_drawable(ui, drawable);
-        reposition_hint_for_line(ui, view, index);
-
-        view->layout_dirty = true;
-    } else if ( view->layout_dirty ) {
-        ui_reposition_drawable(ui, drawable);
-        reposition_hint_for_line(ui, view, index);
     }
+}
+
+static double get_lyric_line_scroll_position(const LyricsView_t *view, const int32_t index) {
+    double position = LINE_FIRST_VERTICAL_OFFSET * view->container->bounds.h;
+    if ( index >= 0 ) {
+        const Drawable_t *target = view->line_drawables->data[index];
+        position = target->bounds.y - position;
+    }
+    return position;
 }
 
 static void set_line_hidden(LyricsView_t *view, const int32_t index) {
@@ -692,33 +642,19 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 
     const LineState_t new_state = LINE_HIDDEN;
     if ( view->line_states[index] != new_state ) {
-        double padding = 0;
-        if ( !config_get()->karaoke.enlarge_active_line ) {
-            if ( view->song->has_reading_info && config_get()->karaoke.enable_reading_hints ) {
-                padding = LINE_VERTICAL_PADDING_WITH_READINGS;
-            } else {
-                padding = LINE_VERTICAL_PADDING;
-            }
-        }
         view->line_states[index] = new_state;
-        drawable->layout.relative_to = view->anchor;
-        drawable->layout.offset_y = -padding;
-        drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
-
-        if ( drawable->layout.flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
-            drawable->layout.flags ^= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-        }
 
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
         ui_drawable_set_scale_factor(drawable, get_inactive_line_scale());
         scale_hint_for_line(view, index);
-
-        view->layout_dirty = true;
     }
 
+    const bool should_hide_past = config_get()->karaoke.hide_past_lyrics;
+    const double prev_scroll_pos = get_lyric_line_scroll_position(view, view->current_first_active_index - 1);
+    const double current_scroll_pos = view->container->overflow_y.current_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
-    if ( view->container->overflow_y.current_amount >= 0 ) {
+    if ( should_hide_past && current_scroll_pos >= prev_scroll_pos ) {
         if ( view->current_hovered_index != index ) {
             ui_drawable_set_alpha(drawable, 0);
         }
@@ -737,7 +673,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t index) {
+static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
@@ -748,59 +684,20 @@ static void set_line_almost_hidden(Ui_t *ui, LyricsView_t *view, const int32_t i
             ui_drawable_set_draw_underlay(drawable, false, 0);
             ui_drawable_set_alpha(drawable, alpha);
             fade_hint_for_line(view, index);
-        } else {
-            // Position the same as the drawable
-            drawable->layout.relative_to = view->anchor;
-            drawable->layout.offset_y = 0;
-            if ( drawable->layout.flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-                drawable->layout.flags ^= LAYOUT_ANCHOR_BOTTOM_Y;
-            }
-            ui_reposition_drawable(ui, drawable);
-            reposition_hint_for_line(ui, view, index);
-
-            view->layout_dirty = true;
         }
         view->line_states[index] = new_state;
     }
 }
 
-static Drawable_t *stack_hidden_line_recursive(Ui_t *ui, const LyricsView_t *view, int32_t idx) {
-    if ( idx >= (int32_t)view->line_drawables->size )
-        return NULL;
-
-    if ( view->line_states[idx] != LINE_HIDDEN ) {
-        int32_t next_hidden = -1;
-        for ( int32_t i = idx + 1; i < (int32_t)view->line_drawables->size; i++ ) {
-            if ( view->line_states[i] != LINE_HIDDEN )
-                continue;
-            next_hidden = i;
-            break;
-        }
-        if ( next_hidden < 0 )
-            return view->anchor;
-        idx = next_hidden;
-    }
-
-    Drawable_t *drawable = view->line_drawables->data[idx];
-    drawable->layout.relative_to = stack_hidden_line_recursive(ui, view, idx + 1);
-    ui_drawable_disable_draw_region(drawable);
-    ui_drawable_set_draw_underlay(drawable, false, 0);
-    ui_reposition_drawable(ui, drawable);
-    reposition_hint_for_line(ui, view, idx);
-
-    return drawable;
-}
-
-void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
+void ui_ex_lyrics_view_loop(const Ui_t *ui, LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
     }
     if ( view->container->enabled == false )
         return;
 
-    view->layout_dirty = false;
-
     int32_t prev_active = -1;
+    int32_t first_active = -1;
     const double offset = view->song->time_offset;
     const double elapsed_time = audio_elapsed_time() + offset;
 
@@ -808,20 +705,22 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
         const Song_Line_t *line = view->song->lyrics_lines->data[i];
         if ( elapsed_time < line->base_start_time + line->base_duration ) {
             if ( elapsed_time >= line->base_start_time ) {
-                set_line_active(ui, view, i, prev_active);
+                set_line_active(view, i);
+                if ( first_active < 0 )
+                    first_active = i;
                 prev_active = i;
             } else {
                 if ( prev_active < 0 ) {
                     prev_active = view->current_active_index;
                 }
-                set_line_inactive(ui, view, i, prev_active);
+                set_line_inactive(view, i, prev_active);
             }
         } else {
             // If the next line still hasn't reached its start time, don't completely vanish the line just yet
             if ( i + 1 < (int32_t)view->song->lyrics_lines->size ) {
                 const Song_Line_t *next_line = view->song->lyrics_lines->data[i + 1];
                 if ( elapsed_time < next_line->base_start_time ) {
-                    set_line_almost_hidden(ui, view, i);
+                    set_line_almost_hidden(view, i);
                     continue;
                 }
             }
@@ -830,22 +729,15 @@ void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view) {
         }
     }
 
-    view->current_active_index = prev_active;
-
-    // Now do a reverse loop setting all the hidden lines to stack on top of each other
-    stack_hidden_line_recursive(ui, view, 0);
-
-    if ( view->layout_dirty ) {
-        if ( view->credit_separator )
-            ui_reposition_drawable(ui, view->credit_separator);
-        if ( view->credits_prefix )
-            ui_reposition_drawable(ui, view->credits_prefix);
-        if ( view->credits_content )
-            ui_reposition_drawable(ui, view->credits_content);
+    if ( first_active >= 0 && first_active != view->current_first_active_index ) {
+        view->current_first_active_index = first_active;
+        ui_ex_lyrics_view_scroll_to_active(view);
     }
+
+    view->current_active_index = prev_active;
 }
 
-void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
+void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {
@@ -855,4 +747,9 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     vec_destroy(view->line_drawables);
     vec_destroy(view->line_read_hints);
     free(view);
+}
+
+void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
+    const double position = get_lyric_line_scroll_position(view, view->current_first_active_index);
+    ui_container_scroll_y_to_dur(view->container, position, SCROLL_ANIMATION_DURATION);
 }

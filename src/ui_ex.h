@@ -39,10 +39,8 @@ typedef struct etsuko_LyricsView_t {
     OWNING Vector_t *line_drawables;  // of Drawable_t
     OWNING Vector_t *line_read_hints; // of Drawable_t
     int32_t current_active_index, current_hovered_index;
+    int32_t current_first_active_index;
     LineState_t line_states[MAX_SONG_LINES];
-    bool layout_dirty;
-    // HACK
-    OWNING Drawable_t *anchor;
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
     uint32_t active_line_segment_visited[MAX_TIMINGS_PER_LINE];
 } LyricsView_t;
@@ -50,11 +48,13 @@ typedef struct etsuko_LyricsView_t {
 // Initializes the lyric view
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);
 // Updates the lyric line state machine, computing timing and effects like the dynamic fill and pulse
-void ui_ex_lyrics_view_loop(Ui_t *ui, LyricsView_t *view);
+void ui_ex_lyrics_view_loop(const Ui_t *ui, LyricsView_t *view);
 // Called when the screen's dimensions change
-void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, LyricsView_t *view);
+void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view);
 // Frees data related to the lyrics view
 void ui_ex_destroy_lyrics_view(LyricsView_t *view);
+// Reset container scroll to the active line
+void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view);
 
 #undef MAX_SONG_LINES
 
