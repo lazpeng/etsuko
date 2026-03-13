@@ -71,12 +71,11 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
     for ( int32_t i = 0; i < (int32_t)view->line_read_hints->size; i++ ) {
         Drawable_t *hint = view->line_read_hints->data[i];
 
-        if ( is_line_intermission(view, i) )
-            continue;
-
         if ( hint->pending_recompute ) {
-            if ( hint->texture != NULL )
+            if ( hint->texture != NULL ) {
                 render_destroy_texture(hint->texture);
+                hint->texture = NULL;
+            }
 
             const Drawable_t *drawable = view->line_drawables->data[i];
             const Drawable_TextData_t *lyric_data = drawable->custom_data;
@@ -138,8 +137,11 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
                 hint->texture = render_restore_texture_target();
                 render_set_blend_mode(blend_mode);
             } else {
-                hint->texture = NULL;
-                hint->enabled = false;
+                // Make an empty texture because otherwise it'll be invalid and cause errors
+                // as of now, the hint vector is fixed size and 1:1 with the lyric drawables, so there's not
+                // much room to mark a hint as "non-existent" or empty
+                render_make_texture_target((int32_t)drawable->bounds.w, (int32_t)drawable->bounds.h);
+                hint->texture = render_restore_texture_target();
             }
 
             for ( size_t li = 0; li < entries->size; li++ ) {
