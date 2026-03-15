@@ -236,7 +236,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     // Setup container for scrolling
     view->container->overflow_y = (ContainerOverflow_t){
         .kind = OVERFLOW_SCROLL,
-        .relative_end_padding = 0.2
+        .relative_end_padding = 0.6
     };
     ui_container_add_vertical_scrollbar(ui, view->container, SCROLL_BAR_AUTO_HIDE);
     ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
