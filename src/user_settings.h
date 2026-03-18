@@ -8,6 +8,8 @@
 #ifndef ETSUKO_USER_SETTINGS_H
 #define ETSUKO_USER_SETTINGS_H
 
+#include "ui.h"
+
 typedef enum ReadHintSetting_t {
     SET_READ_HINTS_SHOWN = 0,
     SET_READ_HINTS_HIDDEN
@@ -39,5 +41,7 @@ typedef struct UserSettings_t {
 UserSettings_t *settings_get(void);
 void save_current_settings(void);
 bool settings_ensure_loaded(void);
+void settings_show(Ui_t *ui);
+void settings_on_frame_end(Ui_t *ui);
 
 #endif // ETSUKO_USER_SETTINGS_H

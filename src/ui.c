@@ -33,9 +33,10 @@ typedef struct EventDef_t {
 
 struct Ui_t {
     OWNING Container_t *root_container;
-    Texture_t *null_texture;
-    ZLayer_t *z_layers_head;
-    Vector_t *global_events;
+    OWNING Texture_t *null_texture;
+    OWNING ZLayer_t *z_layers_head;
+    OWNING Vector_t *global_events;
+    OWNING Vector_t *opaque_containers; // containers with z_index > 0 that block events below them
     WEAK const Drawable_t *current_hovered_drawable;
     WEAK const Drawable_t *current_dragged_drawable;
     int32_t current_drag_grab_offset_x, current_drag_grab_offset_y;
@@ -100,6 +101,7 @@ Ui_t *ui_init(void) {
     ui->null_texture = render_make_null();
     ui->z_layers_head = append_z_layer(&ui->z_layers_head, 0);
     ui->global_events = vec_init();
+    ui->opaque_containers = vec_init();
 
     ui_on_window_changed(ui);
 
@@ -303,8 +305,26 @@ static void handle_mouse_input(Ui_t *ui) {
         if ( hovered_drawable != NULL )
             break;
 
+        // Before descending to a lower z-layer, check if any opaque container
+        // at a higher z-index covers the mouse, and if so, stop event propagation
+        if ( cur->prev != NULL ) {
+            const int next_index = cur->prev->index;
+            for ( size_t oi = 0; oi < ui->opaque_containers->size; oi++ ) {
+                const Container_t *oc = ui->opaque_containers->data[oi];
+                if ( oc->layout.z_index <= next_index )
+                    continue;
+                double cx, cy;
+                ui_get_container_canon_pos(oc, &cx, &cy, false);
+                if ( mouse_x >= cx && mouse_x <= cx + oc->bounds.w &&
+                     mouse_y >= cy && mouse_y <= cy + oc->bounds.h ) {
+                    goto done_hit_test;
+                }
+            }
+        }
+
         cur = cur->prev;
     }
+    done_hit_test:;
 
     if ( ui->current_hovered_drawable != hovered_drawable ) {
         if ( ui->current_hovered_drawable != NULL ) {
@@ -1739,6 +1759,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
+    result->layout.z_index += container->layout.z_index;
     ui_reposition_drawable(result);
 
     if ( data->draw_shadow ) {
@@ -1778,6 +1799,7 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     result->custom_data = data;
     result->texture = texture;
     result->layout = *layout;
+    result->layout.z_index += container->layout.z_index;
 
     ui_reposition_drawable(result);
 
@@ -1795,6 +1817,7 @@ Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data
     result->texture = render_make_null();
     result->custom_data = dup_progressbar_data(data);
     result->layout = *layout;
+    result->layout.z_index += container->layout.z_index;
 
     ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
@@ -1807,6 +1830,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     result->texture = render_make_null();
     result->custom_data = dup_rectangle_data(data);
     result->layout = *layout;
+    result->layout.z_index += container->layout.z_index;
 
     ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
@@ -1819,6 +1843,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
     result->texture = render_make_null();
     result->custom_data = NULL;
     result->layout = *layout;
+    result->layout.z_index += container->layout.z_index;
     result->pending_recompute = true;
 
     ui_reposition_drawable(result);
@@ -1888,6 +1913,10 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
         }
     }
 
+    if (ui->current_hovered_drawable == drawable)
+        ui->current_hovered_drawable = NULL;
+    if (ui->current_dragged_drawable == drawable)
+        ui->current_dragged_drawable = NULL;
     free(drawable);
 }
 
@@ -1906,6 +1935,8 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
     result->parent = parent;
     // Make a copy of the layout
     result->layout = *layout;
+    if (parent != NULL)
+        result->layout.z_index += parent->layout.z_index;
     result->child_drawables = vec_init();
     result->child_containers = vec_init();
     result->animations = vec_init();
@@ -1917,21 +1948,37 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
         measure_layout(layout, parent, &result->bounds);
         position_layout(layout, parent, &result->bounds);
         vec_add_sorted_container(parent->child_containers, result);
+        if ( result->layout.z_index > 0 )
+            vec_add(ui->opaque_containers, result);
     }
 
     return result;
 }
 
 void ui_destroy_container(Ui_t *ui, Container_t *container) {
-    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
-        ui_destroy_drawable(ui, container->child_drawables->data[i]);
-    }
+    while (container->child_drawables->size > 0)
+        ui_destroy_drawable(ui, container->child_drawables->data[0]);
     vec_destroy(container->child_drawables);
 
-    for ( size_t i = 0; i < container->child_containers->size; i++ ) {
-        ui_destroy_container(ui, container->child_containers->data[i]);
-    }
+    while (container->child_containers->size > 0)
+        ui_destroy_container(ui, container->child_containers->data[0]);
     vec_destroy(container->child_containers);
+
+    if (container->parent != NULL) {
+        for (size_t i = 0; i < container->parent->child_containers->size; i++) {
+            if (container->parent->child_containers->data[i] == container) {
+                vec_remove(container->parent->child_containers, i);
+                break;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < ui->opaque_containers->size; i++) {
+        if (ui->opaque_containers->data[i] == container) {
+            vec_remove(ui->opaque_containers, i);
+            break;
+        }
+    }
 
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *animation = container->animations->data[i];

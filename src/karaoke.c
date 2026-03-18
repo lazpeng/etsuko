@@ -7,6 +7,7 @@
 #include "song.h"
 #include "ui.h"
 #include "ui_ex.h"
+#include "user_settings.h"
 
 #define RESOURCE_INCLUDE_IMAGES
 #include "resource_includes.h"
@@ -34,7 +35,7 @@ struct Karaoke_t {
         Container_t *song_info_container;
         Container_t *song_controls_container;
         LyricsView_t *lyrics_view;
-        Drawable_t *hint_show_hints, *hint_show_lyrics, *hint_seek, *hint_play_pause;
+        Drawable_t *settings_btn;
     } drawables;
     bool hovering_controls;
     struct {
@@ -338,10 +339,8 @@ static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *cust
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
 
-    state->drawables.hint_play_pause->enabled = true;
-    state->drawables.hint_seek->enabled = true;
-    state->drawables.hint_show_hints->enabled = true;
-    state->drawables.hint_show_lyrics->enabled = true;
+    if ( state->drawables.settings_btn != NULL )
+        state->drawables.settings_btn->enabled = true;
 }
 
 static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void *custom_data) {
@@ -354,11 +353,13 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void 
             state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = true;
             state->drawables.song_controls_container->enabled = false;
         }
-        state->drawables.hint_play_pause->enabled = false;
-        state->drawables.hint_seek->enabled = false;
-        state->drawables.hint_show_hints->enabled = false;
-        state->drawables.hint_show_lyrics->enabled = false;
+        if ( state->drawables.settings_btn != NULL )
+            state->drawables.settings_btn->enabled = false;
     }
+}
+
+static void on_settings_click(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
+    settings_show(custom_data);
 }
 
 static void on_key_pressed(const UiEventOpts_t *opts, const Drawable_t *, void *custom_data) {
@@ -631,49 +632,21 @@ void karaoke_setup(Karaoke_t *state) {
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
 
-    // Help text on the bottom left
-    // About how to show reading hints
-    state->drawables.hint_show_hints =
-        ui_make_text(state->ui,
-                     &(Drawable_TextData_t){
-                         .text = "R: Show/hide reading hints", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
-                     ui_root_container(state->ui),
-                     &(Layout_t){.offset_y = -0.005,
-                                 .offset_x = 0.005,
-                                 .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y});
-    ui_drawable_set_alpha_immediate(state->drawables.hint_show_hints, 150);
-    state->drawables.hint_show_hints->enabled = false;
-    // About hiding lyrics
-    state->drawables.hint_show_lyrics = ui_make_text(
-        state->ui,
-        &(Drawable_TextData_t){.text = "L: Show/Hide lyrics", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
-        ui_root_container(state->ui),
-        &(Layout_t){.offset_y = -0.001,
-                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = state->drawables.hint_show_hints});
-    ui_drawable_set_alpha_immediate(state->drawables.hint_show_lyrics, 150);
-    state->drawables.hint_show_lyrics->enabled = false;
-    // About seeking with arrow keys
-    state->drawables.hint_seek = ui_make_text(
-        state->ui,
-        &(Drawable_TextData_t){
-            .text = "Arrow keys: Seek backward/forward", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
-        ui_root_container(state->ui),
-        &(Layout_t){.offset_y = -0.001,
-                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = state->drawables.hint_show_lyrics});
-    ui_drawable_set_alpha_immediate(state->drawables.hint_seek, 150);
-    state->drawables.hint_seek->enabled = false;
-    // About using space to play/pause
-    state->drawables.hint_play_pause = ui_make_text(
-        state->ui,
-        &(Drawable_TextData_t){.text = "Space: Play/pause", .em = 0.5, .draw_shadow = true, .color = {255, 255, 255, 255}},
-        ui_root_container(state->ui),
-        &(Layout_t){.offset_y = -0.001,
-                    .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_RELATIVE_TO_POS,
-                    .relative_to = state->drawables.hint_seek});
-    ui_drawable_set_alpha_immediate(state->drawables.hint_play_pause, 150);
-    state->drawables.hint_play_pause->enabled = false;
+    if ( config_get()->settings.show_settings ) {
+        state->drawables.settings_btn = ui_make_text(
+            state->ui,
+            &(Drawable_TextData_t){
+                .text = "Settings", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 255}},
+            ui_root_container(state->ui),
+            &(Layout_t){
+                .offset_x = 0.02,
+                .offset_y = -1,
+                .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_X,
+            });
+        ui_drawable_set_alpha_immediate(state->drawables.settings_btn, 180);
+        state->drawables.settings_btn->enabled = false;
+        ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.settings_btn, on_settings_click, state->ui);
+    }
 
     // Default state until mouse moves
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
@@ -785,6 +758,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
 
     ui_draw(state->ui);
     ui_end_loop();
+    settings_on_frame_end(state->ui);
 
     global_update();
     return APP_STATUS_OK;

@@ -696,7 +696,56 @@ void render_destroy_background(Background_t *background) {
         free(background);
 }
 
+static Texture_t *capture_screen_region(const Bounds_t *bounds) {
+    const int32_t width = (int32_t)bounds->w;
+    const int32_t height = (int32_t)bounds->h;
+    const int32_t x = (int32_t)bounds->x;
+    // flip y
+    const int32_t y = (int32_t)(g_renderer->viewport.h - bounds->y - height);
+
+    unsigned char *pixels = malloc(width * height * 4);
+    glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+    // flip y
+    unsigned char *flipped = malloc(width * height * 4);
+    const size_t row_size = width * 4;
+    for ( int32_t row = 0; row < height; row++ ) {
+        memcpy(flipped + row * row_size, pixels + (height - 1 - row) * row_size, row_size);
+    }
+    free(pixels);
+
+    Texture_t *texture = render_make_null();
+    texture->width = width;
+    texture->height = height;
+
+    GLuint texture_id;
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, flipped);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    texture->id = texture_id;
+
+    free(flipped);
+    return texture;
+}
+
 void render_draw_background(Background_t *background, const Bounds_t *bounds) {
+    if ( background->blur ) {
+        const float blur_radius = (float)(MIN(bounds->w, bounds->h) * 0.0025);
+        Texture_t *captured = capture_screen_region(bounds);
+        Texture_t *blurred = render_blur_texture_replace(captured, blur_radius);
+        const BlendMode_t saved_blend = render_get_blend_mode();
+        render_set_blend_mode(BLEND_MODE_NONE);
+        static DrawTextureOpts_t blur_opts = {.alpha_mod = 255, .color_mod = 1.f};
+        render_draw_texture(blurred, bounds, &blur_opts);
+        render_set_blend_mode(saved_blend);
+        render_destroy_texture(blurred);
+    }
+
     if ( background->type == BACKGROUND_GRADIENT ) {
         const bool is_null = background->null_tex == NULL || background->null_tex->id == 0;
         const bool needs_configure = !is_null && texture_needs_reconfigure(background->null_tex, bounds);
@@ -706,12 +755,40 @@ void render_draw_background(Background_t *background, const Bounds_t *bounds) {
             background->null_tex = internal_create_gradient_background_texture(background, bounds);
         }
         static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
-        background->null_tex->border_radius = background->border_radius_em > 0 ? resolve_background_border_radius(background, bounds)
-                                                                               : (float)background->border_radius_em;
+        background->null_tex->border_radius = background->border_radius_em > 0
+                                                  ? resolve_background_border_radius(background, bounds)
+                                                  : (float)background->border_radius_em;
         const BlendMode_t blend_mode = render_get_blend_mode();
         render_set_blend_mode(BLEND_MODE_BLEND);
         render_draw_texture(background->null_tex, bounds, &opts);
         render_set_blend_mode(blend_mode);
+        return;
+    }
+
+    if ( background->blur ) {
+        // Render the dynamic background to a texture first so it can be alpha-blended over the blur
+        const Bounds_t tex_bounds = {.x = 0, .y = 0, .w = bounds->w, .h = bounds->h};
+        render_make_texture_target((int32_t)bounds->w, (int32_t)bounds->h);
+        switch ( background->type ) {
+        case BACKGROUND_SANDS_GRADIENT:
+            draw_dynamic_gradient_bg(background, &tex_bounds);
+            break;
+        case BACKGROUND_RANDOM_GRADIENT:
+            draw_random_gradient_bg(background, &tex_bounds);
+            break;
+        case BACKGROUND_AM_LIKE_GRADIENT:
+            draw_am_like_bg(background, &tex_bounds);
+            break;
+        default:
+            break;
+        }
+        Texture_t *bg_tex = render_restore_texture_target();
+        const BlendMode_t saved = render_get_blend_mode();
+        render_set_blend_mode(BLEND_MODE_BLEND);
+        const DrawTextureOpts_t opts = {.alpha_mod = background->colors[0].a, .color_mod = 1.f};
+        render_draw_texture(bg_tex, bounds, &opts);
+        render_set_blend_mode(saved);
+        render_destroy_texture(bg_tex);
         return;
     }
 
@@ -731,9 +808,7 @@ void render_draw_background(Background_t *background, const Bounds_t *bounds) {
     }
 }
 
-void render_present(void) {
-    glfwSwapBuffers(g_renderer->window);
-}
+void render_present(void) { glfwSwapBuffers(g_renderer->window); }
 
 const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 

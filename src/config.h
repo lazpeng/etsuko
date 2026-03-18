@@ -10,7 +10,7 @@
 #include "etsuko.h"
 #include "constants.h"
 
-struct KaraokeOpts_t {
+typedef struct KaraokeOpts_t {
     // Main song file name
     OWNING char *song_file;
     // Makes past lyrics fade away in karaoke mode
@@ -31,7 +31,11 @@ struct KaraokeOpts_t {
     bool enable_pulse_effect;
     // Time in seconds to hide optional ui elements after elapsed
     double hide_ui_elements_delay_sec;
-};
+} KaraokeOpts_t;
+
+typedef struct SettingsOpts_t {
+    bool show_settings;
+} SettingsOpts_t;
 
 /**
  * The config should be a static and permanent way to tell the application how to behave and what to do
@@ -47,8 +51,8 @@ typedef struct {
     Config_OpMode_t op_mode;
     // Global time scale, generally to debug animations (it applies to audio, and it's weird. use only for debugging)
     double time_scale;
-    // Karaoke opts
-    struct KaraokeOpts_t karaoke;
+    KaraokeOpts_t karaoke;
+    SettingsOpts_t settings;
 } Config_t;
 
 // Returns the current configuration for the application

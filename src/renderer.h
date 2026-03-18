@@ -7,6 +7,7 @@
 
 #include "constants.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // The max number of sub regions that can be specified when drawing portions of a texture
@@ -227,6 +228,7 @@ typedef struct Background_t {
     Color_t colors[5];
     OWNING Texture_t *null_tex;
     double border_radius_em;
+    bool blur;
 } Background_t;
 
 /**

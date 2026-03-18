@@ -9,6 +9,7 @@
 #include "song.h"
 #include "str_utils.h"
 #include "ui.h"
+#include "user_settings.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -463,11 +464,35 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
     destroy_resource_load(&menu->load_no_album_art);
 }
 
+static void on_settings_click(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
+    settings_show(custom_data);
+}
+
 void menu_setup(MainMenu_t *menu) {
     ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_NONE);
     // Set the initial background to the first album art loaded
     update_background(menu);
     etsuko_setup_version(menu->ui);
+
+    if ( config_get()->settings.show_settings ) {
+        Drawable_t *settings_btn = ui_make_text(
+            menu->ui,
+            &(Drawable_TextData_t){
+                .text = "Settings",
+                .font_type = FONT_UI,
+                .em = 0.8,
+                .color = {255, 255, 255, 255},
+            },
+            ui_root_container(menu->ui),
+            &(Layout_t){
+                .offset_x = 0.02,
+                .offset_y = -1,
+                .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_X,
+            }
+        );
+        ui_drawable_set_alpha_immediate(settings_btn, 180);
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, settings_btn, on_settings_click, menu->ui);
+    }
 
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
@@ -513,6 +538,7 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
     events_frame_end();
     ui_draw(menu->ui);
     ui_end_loop();
+    settings_on_frame_end(menu->ui);
 
     global_update();
     return APP_STATUS_OK;

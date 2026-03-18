@@ -1,6 +1,7 @@
 #include "user_settings.h"
 
 #include "error.h"
+#include "ui.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,7 +11,10 @@
 #include "json.h"
 #include "str_utils.h"
 
+struct SettingsModal_t;
+
 static UserSettings_t *g_settings = NULL;
+static struct SettingsModal_t *g_modal = NULL;
 
 static const char *read_hints_to_string(const ReadHintSetting_t value) {
     return value == SET_READ_HINTS_HIDDEN ? "hidden" : "shown";
@@ -255,4 +259,78 @@ bool settings_ensure_loaded(void) {
     }
     return true;
 #endif
+}
+
+typedef struct SettingsModal_t {
+    Ui_t *ui;
+    Container_t *container;
+    bool should_close;
+} SettingsModal_t;
+
+static void on_close_settings(const UiEventOpts_t *, const Drawable_t *, void *) {
+    g_modal->should_close = true;
+}
+
+void settings_show(Ui_t *ui) {
+    if ( g_modal != NULL )
+        error_abort("Settings modal opened more than once");
+    g_modal = calloc(1, sizeof(*g_modal));
+    g_modal->ui = ui;
+
+    const Layout_t layout = {
+        .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
+        .width = 0.6,
+        .height = 0.6,
+        .z_index = 100,
+        .absolute = true,
+    };
+    g_modal->container = ui_make_container(ui, ui_root_container(ui), &layout, CONTAINER_NONE);
+
+    const Color_t bg_color = {.r = 30, .g = 30, .b = 30, .a = 240};
+    const Color_t bg_color_secondary = {.r = 30, .g = 30, .b = 30, .a = 150};
+    static Color_t colors[2] = {0};
+    colors[0] = bg_color;
+    colors[1] = bg_color_secondary;
+    ui_container_update_background_colors_immediate(g_modal->container, colors, 2);
+    g_modal->container->background->type = BACKGROUND_GRADIENT;
+    g_modal->container->background->border_radius_em = 2.0;
+    g_modal->container->background->blur = true;
+
+    const Layout_t close_layout = {
+        .flags = LAYOUT_PROPORTIONAL_X | LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X,
+        .offset_x = -0.02,
+        .offset_y = 0.02,
+        .absolute = true,
+    };
+    const Drawable_TextData_t close_data = {
+        .text = "X",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *close_btn = ui_make_text(ui, &close_data, g_modal->container, &close_layout);
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, close_btn, on_close_settings, NULL);
+
+    const Layout_t text_layout = {
+        .flags = LAYOUT_CENTER,
+        .absolute = true,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "this is the settings screen",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+}
+
+void settings_on_frame_end(Ui_t *ui) {
+    if ( g_modal == NULL )
+        return;
+
+    if ( g_modal->should_close ) {
+        ui_destroy_container(ui, g_modal->container);
+        free(g_modal);
+        g_modal = NULL;
+    }
 }

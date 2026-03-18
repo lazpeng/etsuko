@@ -52,6 +52,9 @@ static Config_t *get_default_config(void) {
         .show_loading_screen = true,
         .enlarge_active_line = false,
     };
+    config->settings = (SettingsOpts_t) {
+        .show_settings = true
+    };
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);
