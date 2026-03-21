@@ -651,9 +651,12 @@ static int get_past_hidden_line_index(const LyricsView_t *view) {
         // Return the first line that is not empty
         // (is_intermission is not suitable because it also checks the total duration of the line. the main issue here is when
         // the lines are _not_ intermissions, but they should be skipped either way, probably)
-        const Song_Line_t *line = view->song->lyrics_lines->data[comp_idx--];
-        if ( str_is_empty(line->full_text) )
+        const Song_Line_t *line = view->song->lyrics_lines->data[comp_idx];
+        // Even if the line is empty, in case it's the first one and the song starts with an intermission, use that
+        if ( str_is_empty(line->full_text) && comp_idx != 0 ) {
+            comp_idx -= 1;
             continue;
+        }
         return comp_idx;
     }
 
