@@ -40,7 +40,7 @@ static Config_t *get_default_config(void) {
     config->ui_font = strdup("NotoSans-Regular.ttf");
     config->op_mode = APP_MODE_MENU;
     config->time_scale = 1.0;
-    config->karaoke = (struct KaraokeOpts_t) {
+    config->karaoke = (KaraokeOpts_t) {
         .song_file = strdup("tiny stars.txt"),
         .hide_ui_elements_delay_sec = 2.0,
         .enable_dynamic_fill = true,

@@ -297,7 +297,7 @@ void settings_show(Ui_t *ui) {
     g_modal->container->background->blur = true;
 
     const Layout_t close_layout = {
-        .flags = LAYOUT_PROPORTIONAL_X | LAYOUT_PROPORTIONAL_Y | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X,
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X,
         .offset_x = -0.02,
         .offset_y = 0.02,
         .absolute = true,
@@ -322,6 +322,22 @@ void settings_show(Ui_t *ui) {
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
+        .offset_y = 0.1,
+    };
+    const char *opts[] = {"test 1", "test 2", "test 3"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof (opts) / sizeof (const char *),
+        .text_em = 1.0,
+        .text_color = {.r=255,.g=255,.b=255,.a=255},
+        .background_color = {.r=100,.g=100,.b=100,.a=70},
+        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .active_index = 1,
+    };
+    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
 }
 
 void settings_on_frame_end(Ui_t *ui) {
