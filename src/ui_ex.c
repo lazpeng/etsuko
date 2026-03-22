@@ -629,12 +629,12 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
 }
 
 static double get_lyric_line_scroll_position(const LyricsView_t *view, const int32_t index) {
-    double position = LINE_FIRST_VERTICAL_OFFSET * view->container->bounds.h;
     if ( index >= 0 ) {
+        const double base_position = LINE_FIRST_VERTICAL_OFFSET * view->container->bounds.h;
         const Drawable_t *target = view->line_drawables->data[index];
-        position = target->bounds.y - position;
+        return target->bounds.y - base_position;
     }
-    return position;
+    return 0;
 }
 
 /**
