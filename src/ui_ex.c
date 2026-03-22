@@ -15,7 +15,7 @@
 // This is very messy, could be refactored into something at least consistent with the naming
 #define LINE_VERTICAL_PADDING (0.015)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.025)
-#define LINE_FIRST_VERTICAL_OFFSET (0.3)
+#define LINE_FIRST_VERTICAL_OFFSET (0.35)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
 #define LINE_FADE_MAX_DISTANCE (5)
