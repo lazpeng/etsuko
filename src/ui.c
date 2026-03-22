@@ -2741,6 +2741,8 @@ static void toggle_widget_reconfigure(void *widget_data) {
     result->d_background->layout = bg_layout;
     ui_reposition_drawable(result->d_background);
 
+    if ( result->active_index >= (int32_t)result->text_drawables->size )
+        error_abort("toggle_widget_reconfigure: active index is out of bounds");
     const Drawable_t *active_opt = result->text_drawables->data[result->active_index];
     const Layout_t fg_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE,
@@ -2756,7 +2758,7 @@ static void toggle_widget_reconfigure(void *widget_data) {
     ui_reposition_drawable(result->d_foreground);
 }
 
-static void toggle_widget_on_click(const UiEventOpts_t *opts, const Drawable_t *target, void *custom_data) {
+static void toggle_widget_on_click(const UiEventOpts_t *, const Drawable_t *target, void *custom_data) {
     ToggleWidget_t *widget = custom_data;
     int index = -1;
     for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
@@ -2776,8 +2778,9 @@ static void toggle_widget_on_click(const UiEventOpts_t *opts, const Drawable_t *
 
 int ui_register_widget_reconfigure_callback(const Container_t *parent, const c_reconfigure_widget reconfigure_widget, void *widget_data) {
     int id = 0;
-    if ( parent->widget_configure_callbacks->size > 0 ) {
-        const WidgetReconfigureCallback_t *last = parent->widget_configure_callbacks->data[id];
+    const size_t size = parent->widget_configure_callbacks->size;
+    if ( size > 0 ) {
+        const WidgetReconfigureCallback_t *last = parent->widget_configure_callbacks->data[size - 1];
         id = last->id + 1;
     }
 
@@ -2831,7 +2834,7 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
     };
     result->d_background = ui_make_rectangle(ui, &bg_data, parent, &(Layout_t){});
 
-    if ( opts->active_index > (int32_t)result->text_drawables->size - 1 )
+    if ( opts->active_index > (int32_t)result->text_drawables->size - 1 || opts->active_index < 0 )
         error_abort("ui_build_toggle_widget: active_index is off bounds");
 
     const Drawable_RectangleData_t fg_data = {
