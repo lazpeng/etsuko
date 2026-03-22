@@ -14,7 +14,7 @@ int32_t str_skip_whitespace(const char *src, int32_t start, int32_t max_len) {
     while ( idx < max_len ) {
         int32_t tmp_idx = idx;
         int32_t c = str_u8_next(src, (size_t)max_len, &tmp_idx);
-        if ( c == ' ' || c == '\n' || c == '\n' )
+        if ( c == ' ' || c == '\r' || c == '\n' )
             idx = tmp_idx;
         else break;
     }
