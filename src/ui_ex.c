@@ -441,7 +441,8 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     draw_regions.num_regions = (int32_t)text_data->line_offsets->size;
 
     double last_segment_remaining = 0.0;
-    const double audio_elapsed = audio_elapsed_time() + song->time_offset;
+    const double settings_time_offset = settings_get()->global_audio_offset_ms / 1000.0;
+    const double audio_elapsed = audio_elapsed_time() + song->time_offset + settings_time_offset;
     int32_t timing_offset_start = 0;
 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
