@@ -353,12 +353,16 @@ typedef struct WidgetEntry_t {
     void *widget_data;
 } WidgetEntry_t;
 
+struct ToggleWidget_t;
+typedef void (*c_widget_toggle_on_change)(struct ToggleWidget_t *widget, int selected_opt);
+
 typedef struct ToggleWidget_t {
     int active_index;
     OWNING Vector_t *text_drawables;
     OWNING Drawable_t *d_anchor, *d_background, *d_foreground;
     int entry_id;
     WEAK Container_t *parent;
+    WEAK c_widget_toggle_on_change on_change_callback;
 } ToggleWidget_t;
 
 typedef struct ToggleWidgetOpts_t {

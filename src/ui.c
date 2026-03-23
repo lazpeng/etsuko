@@ -2799,6 +2799,9 @@ static void toggle_widget_on_click(const UiEventOpts_t *, const Drawable_t *targ
     if ( index < 0 )
         return;
 
+    if ( widget->on_change_callback != NULL ) {
+        widget->on_change_callback(widget, index);
+    }
     widget->active_index = index;
     toggle_widget_reconfigure(widget);
 }

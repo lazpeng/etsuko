@@ -333,6 +333,20 @@ static void create_settings_title(Ui_t *ui) {
     ui_make_text(ui, &text_data, g_modal->container, &text_layout);
 }
 
+static void on_hints_changed(ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch (selected) {
+    case 0:
+        settings->read_hints_visibility = SET_READ_HINTS_SHOWN;
+        break;
+    case 1:
+        settings->read_hints_visibility = SET_READ_HINTS_HIDDEN;
+        break;
+    default:
+        break;
+    }
+}
+
 static Drawable_t *create_hints_setting(Ui_t *ui) {
     const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
@@ -363,9 +377,27 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
         .active_color = {.r=210,.g=210,.b=210,.a=90},
         .active_index = (int)settings->read_hints_visibility,
     };
-    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    ToggleWidget_t *toggle = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    toggle->on_change_callback = on_hints_changed;
 
     return text;
+}
+
+static void on_fill_changed(ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch (selected) {
+    case 0:
+        settings->lyric_fill = SET_LYRIC_FILL_WITH_PULSE;
+        break;
+    case 1:
+        settings->lyric_fill = SET_LYRIC_FILL_ONLY;
+        break;
+    case 2:
+        settings->lyric_fill = SET_LYRIC_FILL_DISABLED;
+        break;
+    default:
+        break;
+    }
 }
 
 static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
@@ -400,9 +432,24 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
         .active_color = {.r=210,.g=210,.b=210,.a=90},
         .active_index = (int)settings->lyric_fill,
     };
-    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_fill_changed;
 
     return text;
+}
+
+static void on_language_changed(ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch (selected) {
+    case 0:
+        settings->lyric_language = SET_LYRIC_LANGUAGE_PREFER_ORIGINAL;
+        break;
+    case 1:
+        settings->lyric_language = SET_LYRIC_LANGUAGE_PREFER_TRANSLATED;
+        break;
+    default:
+        break;
+    }
 }
 
 static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
@@ -437,9 +484,24 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
         .active_color = {.r=210,.g=210,.b=210,.a=90},
         .active_index = (int)settings->lyric_language,
     };
-    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_language_changed;
 
     return text;
+}
+
+static void on_auto_play_changed(ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch (selected) {
+    case 0:
+        settings->auto_play = SET_AUTO_PLAY_ENABLED;
+        break;
+    case 1:
+        settings->auto_play = SET_AUTO_PLAY_DISABLED;
+        break;
+    default:
+        break;
+    }
 }
 
 static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
@@ -474,7 +536,8 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
         .active_color = {.r=210,.g=210,.b=210,.a=90},
         .active_index = settings->auto_play == SET_AUTO_PLAY_ENABLED ? 0 : 1,
     };
-    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_auto_play_changed;
 
     return text;
 }
