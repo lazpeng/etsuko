@@ -200,15 +200,13 @@ static bool parse_number(const char *src, int32_t *idx, size_t size, double *res
                 fprintf(stderr, "Json: parse_number: Unexpected - at %d\n", tmp_idx);
                 return false;
             }
-        }
-        if ( c == '.' ) {
+        } else if ( c == '.' ) {
             if ( fract_divisor > 0.0 ) {
                 fprintf(stderr, "Json: parse_number: Unexpected . at %d, probably occurred more than once\n", tmp_idx);
                 return false;
             }
             fract_divisor = 1.0;
-        }
-        if ( c >= '0' && c <= '9' ) {
+        } else if ( c >= '0' && c <= '9' ) {
             if ( fract_divisor == 0.0 ) {
                 // whole part
                 num *= 10;

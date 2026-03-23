@@ -269,10 +269,52 @@ bool settings_ensure_loaded(void) {
 }
 
 typedef struct SettingsModal_t {
-    Ui_t *ui;
-    Container_t *container;
+    WEAK Ui_t *ui;
+    WEAK Container_t *container;
     bool should_close;
+    WEAK Drawable_t *audio_delay_label;
+    WEAK Drawable_t *audio_delay_bar;
+    WEAK Drawable_t *volume_label;
+    WEAK Drawable_t *volume_bar;
 } SettingsModal_t;
+
+static void on_audio_delay_changed(const UiEventOpts_t *opts, const Drawable_t *bar, void *) {
+    double pb_x;
+    ui_get_drawable_canon_pos(bar, &pb_x, NULL);
+    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
+    const int ms = (int)(progress * 1000.0 - 500.0);
+    if ( ms == settings_get()->global_audio_offset_ms )
+        return;
+
+    settings_get()->global_audio_offset_ms = ms;
+
+    Drawable_ProgressBarData_t *data = g_modal->audio_delay_bar->custom_data;
+    data->progress = (float)progress;
+
+    Drawable_TextData_t *td = g_modal->audio_delay_label->custom_data;
+    free(td->text);
+    asprintf(&td->text, "Global audio delay: %dms", ms);
+    ui_recompute_drawable(g_modal->ui, g_modal->audio_delay_label);
+}
+
+static void on_volume_changed(const UiEventOpts_t *opts, const Drawable_t *bar, void *) {
+    double pb_x;
+    ui_get_drawable_canon_pos(bar, &pb_x, NULL);
+    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
+    const int volume = (int)(progress * 100.0);
+    if ( volume == settings_get()->volume )
+        return;
+
+    settings_get()->volume = volume;
+
+    Drawable_ProgressBarData_t *data = g_modal->volume_bar->custom_data;
+    data->progress = (float)progress;
+
+    Drawable_TextData_t *td = g_modal->volume_label->custom_data;
+    free(td->text);
+    asprintf(&td->text, "Volume: %d", volume);
+    ui_recompute_drawable(g_modal->ui, g_modal->volume_label);
+}
 
 static void on_close_settings(const UiEventOpts_t *, const Drawable_t *, void *) {
     g_modal->should_close = true;
@@ -573,6 +615,10 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
     };
     Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
+    g_modal->audio_delay_label = text;
+    g_modal->audio_delay_bar = bar;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, bar, on_audio_delay_changed, NULL);
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG,  bar, on_audio_delay_changed, NULL);
 
     const Layout_t left_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
@@ -634,6 +680,10 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
     };
     Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
+    g_modal->volume_label = text;
+    g_modal->volume_bar = bar;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, bar, on_volume_changed, NULL);
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG,  bar, on_volume_changed, NULL);
 
     const Layout_t left_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
