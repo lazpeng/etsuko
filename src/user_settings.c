@@ -105,7 +105,7 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     if ( volume_field != NULL )
         settings->volume = (int)json_get_number(volume_field);
     if ( audio_offset_field != NULL )
-        settings->global_audio_offset = json_get_number(audio_offset_field);
+        settings->global_audio_offset_ms = json_get_number(audio_offset_field);
 
     json_obj_destroy(root_obj);
     json_ctx_destroy(ctx);
@@ -123,7 +123,7 @@ static StrBuffer_t *settings_to_json_string(const UserSettings_t *settings) {
     json_buf_add_string(buf, &first, "lyric_language", lyric_language_to_string(settings->lyric_language));
     json_buf_add_string(buf, &first, "auto_play", auto_play_to_string(settings->auto_play));
     json_buf_add_number(buf, &first, "volume", settings->volume);
-    json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset);
+    json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset_ms);
     json_buf_end_object(buf);
     return buf;
 }
@@ -545,7 +545,7 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
 static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     const UserSettings_t *settings = settings_get();
     char audio_delay_label[64];
-    snprintf(audio_delay_label, sizeof(audio_delay_label), "Global audio delay: %dms", (int)settings->global_audio_offset);
+    snprintf(audio_delay_label, sizeof(audio_delay_label), "Global audio delay: %dms", (int)settings->global_audio_offset_ms);
     const Layout_t text_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = prev,
@@ -568,7 +568,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     };
     const Drawable_ProgressBarData_t bar_data = {
         .border_radius_em = BORDER_RADIUS_AUTO,
-        .progress = (float)((settings->global_audio_offset + 500.0) / 1000.0),
+        .progress = (float)((settings->global_audio_offset_ms + 500.0) / 1000.0),
         .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
     };
