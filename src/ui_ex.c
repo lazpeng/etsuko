@@ -235,10 +235,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->current_first_active_index = -1;
 
     // Setup container for scrolling
-    view->container->overflow_y = (ContainerOverflow_t){
-        .kind = OVERFLOW_SCROLL,
-        .relative_end_padding = 0.6
-    };
+    view->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.6};
     ui_container_add_vertical_scrollbar(ui, view->container, SCROLL_BAR_AUTO_HIDE);
     ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
 
@@ -517,7 +514,10 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 
             const bool segment_visited = view->active_line_segment_visited[s] & (1 << i);
 
-            if ( !segment_visited && config_get()->karaoke.enable_pulse_effect ) {
+            const bool pulse_enabled_in_settings = config_get()->karaoke.enable_pulse_effect;
+            const bool pulse_enabled_in_config = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_PULSE;
+            const bool should_show_pulse = pulse_enabled_in_settings && pulse_enabled_in_config;
+            if ( !segment_visited && should_show_pulse ) {
                 ScaleRegionOpt_t region = {
                     .x0_perc = x1,
                     .x1_perc = x1 + (float)segment_fill_contribution,
@@ -584,7 +584,8 @@ static void set_line_active(LyricsView_t *view, const int32_t index) {
         }
     }
 
-    if ( view->song->has_sub_timings && line->num_timings > 0 ) {
+    const bool fill_enabled_in_settings = settings_get()->lyric_fill != SET_LYRIC_FILL_DISABLED;
+    if ( view->song->has_sub_timings && line->num_timings > 0 && fill_enabled_in_settings ) {
         calculate_sub_region_for_active_line(view, drawable, view->song, line);
     }
 }
