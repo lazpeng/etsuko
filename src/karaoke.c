@@ -676,6 +676,9 @@ void karaoke_setup(Karaoke_t *state) {
                           on_progressbar_area_hover_exited, state);
     // Circle drag event for seeking
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_DRAG, state->drawables.progressbar_handle, on_drag_progressbar_handle, state);
+
+    if ( settings_get()->auto_play == SET_AUTO_PLAY_ENABLED )
+        audio_resume();
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
