@@ -1963,17 +1963,17 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
 }
 
 void ui_destroy_container(Ui_t *ui, Container_t *container) {
-    for ( size_t i = 0; i < container->widgets->size; i++ ) {
-        WidgetEntry_t *entry = container->widgets->data[i];
+    while ( container->widgets->size > 0 ) {
+        const WidgetEntry_t *entry = container->widgets->data[0];
+        const int entry_id = entry->id;
         if ( entry->destroy_callback != NULL ) {
             entry->destroy_callback(ui, entry->widget_data);
         } else {
             // The destroy callback will unregister and free the actual widget
             // so when there's no such callback, do it manually
             // Assume the widget is trivial and the drawables it created will be automatically cleaned up by the loop below
-            ui_unregister_widget(container, entry->id);
+            ui_unregister_widget(container, entry_id);
             free(entry->widget_data);
-            free(entry);
         }
     }
     vec_destroy(container->widgets);
@@ -2864,7 +2864,7 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
         const Drawable_TextData_t data = {
             .color = opts->text_color,
             .em = opts->text_em,
-            .text = strdup(text),
+            .text = (char *)text,
         };
         const int add_flag = prev == result->d_anchor ? 0 : LAYOUT_RELATION_X_INCLUDE_WIDTH;
         const Layout_t text_layout = {.flags =
@@ -2938,7 +2938,7 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
     result->background_alpha = opts->bg_color.a;
 
     const Drawable_TextData_t text_data = {
-        .text = strdup(opts->text),
+        .text = (char *)opts->text,
         .em = opts->text_em,
         .color = opts->text_color,
     };
@@ -2966,7 +2966,6 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
     result->entry_id = ui_register_widget(parent, NULL, button_widget_destroy, result);
 
     if ( opts->bg_show_type != BUTTON_BG_SHOW_ALWAYS ) {
-        printf("setting bg to 0\n");
         ui_drawable_set_alpha_immediate(result->d_background, 0);
         const Animation_FadeInOutData_t data = {
             .duration = 0.3,
