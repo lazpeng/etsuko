@@ -60,10 +60,10 @@ typedef enum {
     JSON_TOKEN_ERROR
 } JsonTokenType_t;
 
-static JsonTokenType_t peek(const char *src, int32_t idx, size_t size, int32_t *skip) {
+static JsonTokenType_t peek(const char *src, const int32_t idx, const size_t size, int32_t *skip) {
     int32_t new_idx = idx;
 
-    *skip = str_skip_whitespace(src, new_idx, size);
+    *skip = str_skip_whitespace(src, new_idx, (int32_t)size);
     new_idx += *skip;
     const int32_t c = str_u8_next(src, size, &new_idx);
 
@@ -82,6 +82,8 @@ static JsonTokenType_t peek(const char *src, int32_t idx, size_t size, int32_t *
         return JSON_TOKEN_BRACKET_OPEN;
     case ']':
         return JSON_TOKEN_BRACKET_CLOSE;
+    default:
+        break;
     }
 
     if ( (c >= '0' && c <= '9') || c == '-' || c == '.' )
@@ -97,7 +99,7 @@ static JsonTokenType_t peek(const char *src, int32_t idx, size_t size, int32_t *
     return JSON_TOKEN_ERROR;
 }
 
-static const char *parse_string(const char *src, int32_t *idx, size_t size) {
+static const char *parse_string(const char *src, int32_t *idx, const size_t size) {
     StrBuffer_t *buffer = str_buf_init();
 
     int32_t skip = 0;
@@ -180,7 +182,7 @@ static const char *parse_string(const char *src, int32_t *idx, size_t size) {
     return dup;
 }
 
-static bool parse_number(const char *src, int32_t *idx, size_t size, double *result) {
+static bool parse_number(const char *src, int32_t *idx, const size_t size, double *result) {
     double num = 0;
     bool negative = false;
     double fract_divisor = 0.0;
@@ -273,7 +275,7 @@ static bool parse_number(const char *src, int32_t *idx, size_t size, double *res
     return true;
 }
 
-static JsonField_t *parse_field(const char *src, int32_t *idx, size_t size, JsonContext_t *ctx, bool skip_name) {
+static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size, JsonContext_t *ctx, const bool skip_name) {
     JsonField_t *field = calloc(1, sizeof(*field));
 
     if ( skip_name ) {
@@ -370,7 +372,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, size_t size, Json
     return field;
 }
 
-static Vector_t *parse_list(const char *src, int32_t *idx, size_t size, JsonContext_t *ctx) {
+static Vector_t *parse_list(const char *src, int32_t *idx, const size_t size, JsonContext_t *ctx) {
     int32_t skip = 0;
     JsonTokenType_t token = peek(src, *idx, size, &skip);
     *idx += skip;
@@ -401,7 +403,7 @@ static Vector_t *parse_list(const char *src, int32_t *idx, size_t size, JsonCont
                 return NULL;
             }
             *idx += 1; // For the , character
-            token = peek(src, *idx, size, &skip);
+            peek(src, *idx, size, &skip);
             *idx += skip;
         }
 
@@ -428,7 +430,7 @@ static Vector_t *parse_list(const char *src, int32_t *idx, size_t size, JsonCont
     return list;
 }
 
-JsonObject_t *parse_object(const char *src, int32_t *idx, size_t size, JsonContext_t *ctx) {
+JsonObject_t *parse_object(const char *src, int32_t *idx, const size_t size, JsonContext_t *ctx) {
     int32_t skip = 0;
     JsonTokenType_t token = peek(src, *idx, size, &skip);
     if ( token == JSON_TOKEN_ERROR ) {
@@ -516,7 +518,7 @@ const JsonField_t *json_obj_get(JsonObject_t *obj, const char *field) {
 
 double json_get_number(const JsonField_t *field) {
     if ( field == NULL || field->type != JSON_NUMBER ) {
-        if ( field->type != JSON_NULL )
+        if ( field != NULL && field->type != JSON_NULL )
             fprintf(stderr, "Json: json_get_number: Warning: field is not a number. returning zero.\n");
         return 0.0;
     }
@@ -606,7 +608,7 @@ void json_buf_add_string(StrBuffer_t *buf, bool *first, const char *name, const 
     str_buf_append_ch(buf, '"');
 }
 
-void json_buf_add_number(StrBuffer_t *buf, bool *first, const char *name, double value) {
+void json_buf_add_number(StrBuffer_t *buf, bool *first, const char *name, const double value) {
     if ( buf == NULL || first == NULL || name == NULL )
         return;
     char num_buf[64];
@@ -615,7 +617,7 @@ void json_buf_add_number(StrBuffer_t *buf, bool *first, const char *name, double
     str_buf_append_len(buf, num_buf, (size_t)len);
 }
 
-void json_buf_add_bool(StrBuffer_t *buf, bool *first, const char *name, bool value) {
+void json_buf_add_bool(StrBuffer_t *buf, bool *first, const char *name, const bool value) {
     if ( buf == NULL || first == NULL || name == NULL )
         return;
     json_buf_add_field_prefix(buf, first, name);
