@@ -717,12 +717,28 @@ static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
     }
 }
 
+static void ensure_read_hints_visibility_setting(LyricsView_t *view) {
+    if ( view->line_read_hints->size <= 0 )
+        return;
+
+    const Drawable_t *drawable = view->line_read_hints->data[0];
+    const bool currently_visible = drawable->enabled;
+    const bool enabled_in_config = config_get()->karaoke.enable_reading_hints;
+    const bool enabled_in_settings = settings_get()->read_hints_visibility == SET_READ_HINTS_SHOWN;
+    const bool should_be_visible = enabled_in_config && enabled_in_settings;
+
+    if ( currently_visible != should_be_visible ) {
+        toggle_hints_visibility(view);
+    }
+}
+
 void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
     }
     if ( view->container->enabled == false )
         return;
+    ensure_read_hints_visibility_setting(view);
 
     int32_t prev_active = -1;
     int32_t first_active = -1;
