@@ -125,14 +125,15 @@ typedef struct ContainerScrollableArea_t {
 } ContainerScrollableArea_t;
 
 typedef void (*c_reconfigure_widget)(void *widget);
+typedef void (*c_destroy_widget)(Ui_t *ui, void *widget);
 
 typedef struct Container_t {
     Bounds_t bounds;
     WEAK struct Container_t *parent;
     OWNING Vector_t *child_drawables;  // of Drawable_t*
     OWNING Vector_t *child_containers; // of Container_t*
-    OWNING Vector_t *animations; // of ContainerAnimation_t*
-    OWNING Vector_t *widget_configure_callbacks; // of WidgetReconfigureCallback_t*
+    OWNING Vector_t *animations;       // of ContainerAnimation_t*
+    OWNING Vector_t *widgets;          // of WidgetEntry_t*
     OWNING Background_t *background;
     Layout_t layout;
     bool enabled;
@@ -345,21 +346,23 @@ typedef struct Animation_ScrollYData_t {
     AnimationEaseType_t ease_func;
 } Animation_ScrollYData_t;
 
-typedef struct WidgetReconfigureCallback_t {
-    c_reconfigure_widget callback;
+typedef struct WidgetEntry_t {
+    c_reconfigure_widget configure_callback;
+    c_destroy_widget destroy_callback;
     int id;
     void *widget_data;
-} WidgetReconfigureCallback_t;
+} WidgetEntry_t;
 
 typedef struct ToggleWidget_t {
     int active_index;
     OWNING Vector_t *text_drawables;
     OWNING Drawable_t *d_anchor, *d_background, *d_foreground;
-    int configure_callback_id;
+    int entry_id;
+    WEAK Container_t *parent;
 } ToggleWidget_t;
 
 typedef struct ToggleWidgetOpts_t {
-    WEAK const char ** const opts;
+    WEAK const char **const opts;
     int num_opts;
     double text_em;
     int active_index;
@@ -455,9 +458,11 @@ void ui_container_animate_color_lerp(Container_t *container, double duration, An
 void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
 void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);
-//Widgets
-int ui_register_widget_reconfigure_callback(const Container_t *parent, c_reconfigure_widget reconfigure_widget, void *widget_data);
+// Widgets
+int ui_register_widget(const Container_t *parent, c_reconfigure_widget reconfigure_widget, c_destroy_widget destroy_callback,
+                       void *widget_data);
+void ui_unregister_widget(const Container_t *parent, int id);
 ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ToggleWidgetOpts_t *opts);
-// TODO: Destroy toggle widget
+void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget);
 
 #endif // ETSUKO_UI_H

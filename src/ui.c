@@ -1939,7 +1939,7 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
     result->child_drawables = vec_init();
     result->child_containers = vec_init();
     result->animations = vec_init();
-    result->widget_configure_callbacks = vec_init();
+    result->widgets = vec_init();
     result->background = render_make_background(BACKGROUND_NONE);
     result->enabled = true;
     result->flags = flags;
@@ -1956,6 +1956,25 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
 }
 
 void ui_destroy_container(Ui_t *ui, Container_t *container) {
+    for ( size_t i = 0; i < container->widgets->size; i++ ) {
+        WidgetEntry_t *entry = container->widgets->data[i];
+        if ( entry->destroy_callback != NULL ) {
+            entry->destroy_callback(ui, entry->widget_data);
+        } else {
+            // The destroy callback will unregister and free the actual widget
+            // so when there's no such callback, do it manually
+            // Assume the widget is trivial and the drawables it created will be automatically cleaned up by the loop below
+            ui_unregister_widget(container, entry->id);
+            free(entry->widget_data);
+            free(entry);
+        }
+    }
+    vec_destroy(container->widgets);
+
+    // Destroy the actual drawables after because widgets will have already destroyed the widgets they spawned, and doing this
+    // first would lead to a double free
+    // The destroy callback needs to destroy the drawables otherwise they'll be stuck on the screen until the container is
+    // destroyed
     while ( container->child_drawables->size > 0 )
         ui_destroy_drawable(ui, container->child_drawables->data[0]);
     vec_destroy(container->child_drawables);
@@ -1986,7 +2005,6 @@ void ui_destroy_container(Ui_t *ui, Container_t *container) {
         free(animation);
     }
     vec_destroy(container->animations);
-    vec_destroy(container->widget_configure_callbacks);
 
     render_destroy_background(container->background);
 
@@ -2076,9 +2094,10 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
         }
     }
 
-    for ( size_t i = 0; i < container->widget_configure_callbacks->size; i++ ) {
-        const WidgetReconfigureCallback_t *cb = container->widget_configure_callbacks->data[i];
-        cb->callback(cb->widget_data);
+    for ( size_t i = 0; i < container->widgets->size; i++ ) {
+        const WidgetEntry_t *cb = container->widgets->data[i];
+        if ( cb->configure_callback != NULL )
+            cb->configure_callback(cb->widget_data);
     }
 }
 
@@ -2122,9 +2141,10 @@ void ui_reposition_container(Container_t *container) {
         }
     }
 
-    for ( size_t i = 0; i < container->widget_configure_callbacks->size; i++ ) {
-        const WidgetReconfigureCallback_t *cb = container->widget_configure_callbacks->data[i];
-        cb->callback(cb->widget_data);
+    for ( size_t i = 0; i < container->widgets->size; i++ ) {
+        const WidgetEntry_t *cb = container->widgets->data[i];
+        if ( cb->configure_callback != NULL )
+            cb->configure_callback(cb->widget_data);
     }
 }
 
@@ -2732,7 +2752,7 @@ static void toggle_widget_reconfigure(void *widget_data) {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_HEIGHT | LAYOUT_PROPORTIONAL_H,
         .height = 1.5,
         .width = final_text_width,
-        .offset_x = -padding/2.0,
+        .offset_x = -padding / 2.0,
         .offset_y = -extra_height / 2.0,
         .padding_w = padding,
         .relative_to = result->d_anchor,
@@ -2748,14 +2768,19 @@ static void toggle_widget_reconfigure(void *widget_data) {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE,
         .width = 1.0,
         .height = 1.5,
-        .offset_x = -padding/2.0,
-        .offset_y = -extra_height/2.0,
+        .offset_x = -padding / 2.0,
+        .offset_y = -extra_height / 2.0,
         .padding_w = padding,
         .relative_to = active_opt,
         .relative_to_size = active_opt,
     };
     result->d_foreground->layout = fg_layout;
     ui_reposition_drawable(result->d_foreground);
+}
+
+static void toggle_widget_destroy(Ui_t *ui, void *widget_data) {
+    ToggleWidget_t *widget = widget_data;
+    ui_destroy_toggle_widget(ui, widget);
 }
 
 static void toggle_widget_on_click(const UiEventOpts_t *, const Drawable_t *target, void *custom_data) {
@@ -2776,22 +2801,37 @@ static void toggle_widget_on_click(const UiEventOpts_t *, const Drawable_t *targ
     toggle_widget_reconfigure(widget);
 }
 
-int ui_register_widget_reconfigure_callback(const Container_t *parent, const c_reconfigure_widget reconfigure_widget, void *widget_data) {
+int ui_register_widget(const Container_t *parent, const c_reconfigure_widget reconfigure_callback,
+                       const c_destroy_widget destroy_callback, void *widget_data) {
     int id = 0;
-    const size_t size = parent->widget_configure_callbacks->size;
+    const size_t size = parent->widgets->size;
     if ( size > 0 ) {
-        const WidgetReconfigureCallback_t *last = parent->widget_configure_callbacks->data[size - 1];
+        const WidgetEntry_t *last = parent->widgets->data[size - 1];
         id = last->id + 1;
     }
 
-    WidgetReconfigureCallback_t *cb = calloc(1, sizeof (*cb));
-    cb->callback = reconfigure_widget;
+    WidgetEntry_t *cb = calloc(1, sizeof(*cb));
+    cb->configure_callback = reconfigure_callback;
+    cb->destroy_callback = destroy_callback;
     cb->widget_data = widget_data;
     cb->id = id;
 
-    vec_add(parent->widget_configure_callbacks, cb);
+    vec_add(parent->widgets, cb);
 
     return id;
+}
+
+void ui_unregister_widget(const Container_t *parent, int id) {
+    for ( size_t i = 0; i < parent->widgets->size; i++ ) {
+        WidgetEntry_t *widget = parent->widgets->data[i];
+        if ( widget->id == id ) {
+            vec_remove(parent->widgets, i);
+            free(widget);
+            return;
+        }
+    }
+
+    printf("Warning: ui_unregister_widget: Id not found\n");
 }
 
 ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ToggleWidgetOpts_t *opts) {
@@ -2800,6 +2840,7 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
 
     ToggleWidget_t *result = calloc(1, sizeof(*result));
 
+    result->parent = parent;
     result->d_anchor = ui_make_custom(ui, parent, layout);
     result->d_anchor->enabled = false;
     result->active_index = opts->active_index;
@@ -2815,12 +2856,11 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
             .text = strdup(text),
         };
         const int add_flag = prev == result->d_anchor ? 0 : LAYOUT_RELATION_X_INCLUDE_WIDTH;
-        const Layout_t text_layout = {
-            .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_X | add_flag,
-            .relative_to = prev,
-            .offset_x = i == 0 ? 0 : 0.015,
-            .z_index = 1
-        };
+        const Layout_t text_layout = {.flags =
+                                          LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_X | add_flag,
+                                      .relative_to = prev,
+                                      .offset_x = i == 0 ? 0 : 0.015,
+                                      .z_index = 1};
 
         prev = ui_make_text(ui, &data, parent, &text_layout);
         vec_add(result->text_drawables, prev);
@@ -2828,23 +2868,32 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
         ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, toggle_widget_on_click, result);
     }
 
-    const Drawable_RectangleData_t bg_data = {
-        .color = opts->background_color,
-        .border_radius_em = BORDER_RADIUS_AUTO
-    };
+    const Drawable_RectangleData_t bg_data = {.color = opts->background_color, .border_radius_em = BORDER_RADIUS_AUTO};
     result->d_background = ui_make_rectangle(ui, &bg_data, parent, &(Layout_t){});
 
     if ( opts->active_index > (int32_t)result->text_drawables->size - 1 || opts->active_index < 0 )
         error_abort("ui_build_toggle_widget: active_index is off bounds");
 
-    const Drawable_RectangleData_t fg_data = {
-        .color = opts->active_color,
-        .border_radius_em = BORDER_RADIUS_AUTO
-    };
+    const Drawable_RectangleData_t fg_data = {.color = opts->active_color, .border_radius_em = BORDER_RADIUS_AUTO};
     result->d_foreground = ui_make_rectangle(ui, &fg_data, parent, &(Layout_t){});
 
     toggle_widget_reconfigure(result);
-    result->configure_callback_id = ui_register_widget_reconfigure_callback(parent, toggle_widget_reconfigure, result);
+    result->entry_id = ui_register_widget(parent, toggle_widget_reconfigure, toggle_widget_destroy, result);
 
     return result;
+}
+
+void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget) {
+    ui_destroy_drawable(ui, widget->d_anchor);
+    ui_destroy_drawable(ui, widget->d_background);
+    ui_destroy_drawable(ui, widget->d_foreground);
+
+    for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
+        Drawable_t *drawable = widget->text_drawables->data[i];
+        ui_destroy_drawable(ui, drawable);
+    }
+    vec_destroy(widget->text_drawables);
+
+    ui_unregister_widget(widget->parent, widget->entry_id);
+    free(widget);
 }
