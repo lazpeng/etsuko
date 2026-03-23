@@ -29,13 +29,13 @@ struct Karaoke_t {
         Drawable_t *progressbar_handle;
         Drawable_t *play_button;
         Drawable_t *pause_button;
-        Drawable_t *back_button;
         Container_t *left_container;
         Container_t *right_container;
         Container_t *song_info_container;
         Container_t *song_controls_container;
         LyricsView_t *lyrics_view;
         ButtonWidget_t *settings_button;
+        ButtonWidget_t *back_button;
     } drawables;
     bool hovering_controls;
     struct {
@@ -341,6 +341,9 @@ static void on_mouse_moved(const UiEventOpts_t *, Drawable_t *, void *custom_dat
 
     if ( state->drawables.settings_button != NULL )
         ui_widget_button_enabled(state->drawables.settings_button, true);
+
+    if ( state->drawables.back_button != NULL )
+        ui_widget_button_enabled(state->drawables.back_button, true);
 }
 
 static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custom_data) {
@@ -355,12 +358,13 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custo
         }
         if ( state->drawables.settings_button != NULL )
             ui_widget_button_enabled(state->drawables.settings_button, false);
+
+        if ( state->drawables.back_button != NULL )
+            ui_widget_button_enabled(state->drawables.back_button, false);
     }
 }
 
-static void on_settings_click(Ui_t *ui) {
-    settings_show(ui);
-}
+static void on_settings_click(Ui_t *ui) { settings_show(ui); }
 
 static void on_key_pressed(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
@@ -388,7 +392,7 @@ static void on_mouse_play_button(const UiEventOpts_t *opts, Drawable_t *, void *
     }
 }
 
-static void on_back_clicked(const UiEventOpts_t *, Drawable_t *, void *) {
+static void on_back_clicked(Ui_t *) {
     etsuko_navigate("/", "");
     global_mode_switch(APP_MODE_MENU);
 }
@@ -492,10 +496,15 @@ void karaoke_setup(Karaoke_t *state) {
     // Version string
     etsuko_setup_version(state->ui);
     // Make the back (to menu) "button"
-    state->drawables.back_button = ui_make_text(
-        state->ui, &(Drawable_TextData_t){.text = "< Back", .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .em = 0.8},
-        ui_root_container(state->ui), &(Layout_t){.offset_x = 0.01, .offset_y = 0.01, .flags = LAYOUT_PROPORTIONAL_POS});
-    ui_drawable_set_alpha_immediate(state->drawables.back_button, 128);
+    state->drawables.back_button =
+        ui_build_button_widget(state->ui, ui_root_container(state->ui),
+                               &(Layout_t){.offset_x = 0.01, .offset_y = 0.01, .flags = LAYOUT_PROPORTIONAL_POS},
+                               &(ButtonWidgetOpts_t){.text = "Back",
+                                                     .text_color = {.r = 255, .g = 255, .b = 255, .a = 128},
+                                                     .text_em = 0.8,
+                                                     .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+                                                     .bg_show_type = BUTTON_BG_SHOW_ON_HOVER});
+    state->drawables.back_button->on_click_callback = on_back_clicked;
 
     // Album art
     state->drawables.album_image = ui_make_image(
@@ -638,13 +647,11 @@ void karaoke_setup(Karaoke_t *state) {
             .offset_x = 0.02,
             .offset_y = -0.02,
         };
-        const ButtonWidgetOpts_t opts = {
-            .text = "Settings",
-            .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
-            .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
-            .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
-            .text_em = 0.8
-        };
+        const ButtonWidgetOpts_t opts = {.text = "Settings",
+                                         .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
+                                         .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+                                         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+                                         .text_em = 0.8};
         state->drawables.settings_button = ui_build_button_widget(state->ui, ui_root_container(state->ui), &layout, &opts);
         state->drawables.settings_button->on_click_callback = on_settings_click;
     }
@@ -661,8 +668,6 @@ void karaoke_setup(Karaoke_t *state) {
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_ENTERED, state->drawables.play_button, on_mouse_play_button, state);
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.play_button, on_mouse_play_button, state);
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.play_button, on_mouse_play_button, state);
-    // Back button events
-    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.back_button, on_back_clicked, NULL);
     // Progress bar events
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.song_progressbar, on_progress_bar_clicked, state);
     // Progress bar hover events (show/hide handle)

@@ -2947,6 +2947,7 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
         .z_index = 1,
     };
     result->d_text = ui_make_text(ui, &text_data, parent, &text_layout);
+    ui_drawable_set_alpha_immediate(result->d_text, opts->text_color.a);
 
     const Drawable_RectangleData_t rect_data = {
         .border_radius_em = BORDER_RADIUS_AUTO,
