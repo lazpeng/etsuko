@@ -2735,8 +2735,8 @@ static void toggle_widget_reconfigure(void *widget_data) {
         end_w = prev->bounds.w;
     }
 
+    const double padding = prev->bounds.h;
     const double final_text_width = end_x + end_w - start_x;
-    const double padding = final_text_width * 0.1;
     const double final_width = final_text_width + padding * 2;
     const double extra_height = prev->bounds.h * 0.5;
     result->d_anchor->bounds.w = final_width;
@@ -2745,6 +2745,8 @@ static void toggle_widget_reconfigure(void *widget_data) {
 
     for ( size_t i = 0; i < result->text_drawables->size; i++ ) {
         Drawable_t *text = result->text_drawables->data[i];
+        if ( i > 0 )
+            text->layout.offset_x = text->bounds.h * 1.5;
         ui_reposition_drawable(text);
     }
 
@@ -2857,9 +2859,9 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
         };
         const int add_flag = prev == result->d_anchor ? 0 : LAYOUT_RELATION_X_INCLUDE_WIDTH;
         const Layout_t text_layout = {.flags =
-                                          LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_X | add_flag,
+                                          LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | add_flag,
                                       .relative_to = prev,
-                                      .offset_x = i == 0 ? 0 : 0.015,
+                                      .offset_x = i > 0 ? prev->bounds.h * 1.5 : 0,
                                       .z_index = 1};
 
         prev = ui_make_text(ui, &data, parent, &text_layout);
