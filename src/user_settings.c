@@ -3,10 +3,8 @@
 #include "error.h"
 #include "ui.h"
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "json.h"
 #include "str_utils.h"
@@ -93,6 +91,8 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
     const char *lyric_language = json_get_string(json_obj_get(root_obj, "lyric_language"));
     const char *auto_play = json_get_string(json_obj_get(root_obj, "auto_play"));
+    const JsonField_t *volume_field = json_obj_get(root_obj, "volume");
+    const JsonField_t *audio_offset_field = json_obj_get(root_obj, "global_audio_offset");
 
     if ( !str_is_empty(read_hints) )
         read_hints_from_string(settings, read_hints);
@@ -102,6 +102,10 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         lyric_language_from_string(settings, lyric_language);
     if ( !str_is_empty(auto_play) )
         auto_play_from_string(settings, auto_play);
+    if ( volume_field != NULL )
+        settings->volume = (int)json_get_number(volume_field);
+    if ( audio_offset_field != NULL )
+        settings->global_audio_offset = json_get_number(audio_offset_field);
 
     json_obj_destroy(root_obj);
     json_ctx_destroy(ctx);
@@ -118,6 +122,8 @@ static StrBuffer_t *settings_to_json_string(const UserSettings_t *settings) {
     json_buf_add_string(buf, &first, "lyric_fill", lyric_fill_to_string(settings->lyric_fill));
     json_buf_add_string(buf, &first, "lyric_language", lyric_language_to_string(settings->lyric_language));
     json_buf_add_string(buf, &first, "auto_play", auto_play_to_string(settings->auto_play));
+    json_buf_add_number(buf, &first, "volume", settings->volume);
+    json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset);
     json_buf_end_object(buf);
     return buf;
 }
@@ -270,9 +276,10 @@ typedef struct SettingsModal_t {
 
 static void on_close_settings(const UiEventOpts_t *, const Drawable_t *, void *) {
     g_modal->should_close = true;
+    save_current_settings();
 }
 
-static Container_t *create_container(Ui_t *ui) {
+static Container_t *create_container(const Ui_t *ui) {
     const Layout_t layout = {
         .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
         .width = 0.6,
@@ -327,6 +334,7 @@ static void create_settings_title(Ui_t *ui) {
 }
 
 static Drawable_t *create_hints_setting(Ui_t *ui) {
+    const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS,
         .offset_x = 0.5,
@@ -353,7 +361,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
         .text_color = {.r=255,.g=255,.b=255,.a=255},
         .background_color = {.r=100,.g=100,.b=100,.a=70},
         .active_color = {.r=210,.g=210,.b=210,.a=90},
-        .active_index = 0, // TODO: Get actual settings
+        .active_index = (int)settings->read_hints_visibility,
     };
     ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
 
@@ -361,6 +369,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
 }
 
 static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
@@ -389,7 +398,7 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
         .text_color = {.r=255,.g=255,.b=255,.a=255},
         .background_color = {.r=100,.g=100,.b=100,.a=70},
         .active_color = {.r=210,.g=210,.b=210,.a=90},
-        .active_index = 0, // TODO: Get actual settings
+        .active_index = (int)settings->lyric_fill,
     };
     ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
 
@@ -397,6 +406,7 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
 }
 
 static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
@@ -425,7 +435,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
         .text_color = {.r=255,.g=255,.b=255,.a=255},
         .background_color = {.r=100,.g=100,.b=100,.a=70},
         .active_color = {.r=210,.g=210,.b=210,.a=90},
-        .active_index = 0, // TODO: Get actual settings
+        .active_index = (int)settings->lyric_language,
     };
     ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
 
@@ -433,6 +443,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
 }
 
 static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
@@ -461,7 +472,7 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
         .text_color = {.r=255,.g=255,.b=255,.a=255},
         .background_color = {.r=100,.g=100,.b=100,.a=70},
         .active_color = {.r=210,.g=210,.b=210,.a=90},
-        .active_index = 1, // TODO: Get actual settings
+        .active_index = settings->auto_play == SET_AUTO_PLAY_ENABLED ? 0 : 1,
     };
     ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
 
@@ -469,13 +480,16 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
 }
 
 static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    char audio_delay_label[64];
+    snprintf(audio_delay_label, sizeof(audio_delay_label), "Global audio delay: %dms", (int)settings->global_audio_offset);
     const Layout_t text_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = prev,
         .offset_y = 0.1,
     };
     const Drawable_TextData_t text_data = {
-        .text = "Global audio delay: 0ms",
+        .text = audio_delay_label,
         .font_type = FONT_UI,
         .em = 1.0,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
@@ -491,7 +505,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     };
     const Drawable_ProgressBarData_t bar_data = {
         .border_radius_em = BORDER_RADIUS_AUTO,
-        .progress = 0.5,
+        .progress = (float)((settings->global_audio_offset + 500.0) / 1000.0),
         .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
     };
@@ -527,13 +541,16 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
 }
 
 static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    char volume_label[32];
+    snprintf(volume_label, sizeof(volume_label), "Volume: %d", settings->volume);
     const Layout_t text_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = prev,
         .offset_y = 0.1,
     };
     const Drawable_TextData_t text_data = {
-        .text = "Volume: 100",
+        .text = volume_label,
         .font_type = FONT_UI,
         .em = 1.0,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
@@ -549,7 +566,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     };
     const Drawable_ProgressBarData_t bar_data = {
         .border_radius_em = BORDER_RADIUS_AUTO,
-        .progress = 1.0,
+        .progress = (float)(settings->volume / 100.0),
         .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
     };
