@@ -1,6 +1,7 @@
 #include "audio.h"
 
 #include "config.h"
+#include "user_settings.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +45,7 @@ typedef struct {
     uint64_t last_first_decoded_sample;
     AudioPlayState_t state;
     bool decoder_exhausted;
+    int saved_volume;
 } audio_state_t;
 
 static audio_state_t g_audio = {0};
@@ -247,6 +249,12 @@ bool audio_is_paused(void) { return g_audio.state != AUDIO_STATE_PLAYING; }
 void audio_loop(void) {
     if ( g_audio.mp3_data == NULL || g_audio.state != AUDIO_STATE_PLAYING ) {
         return;
+    }
+
+    const int volume = MIN(MAX(0, settings_get()->volume), 100);
+    if ( volume != g_audio.saved_volume ) {
+        alSourcef(g_audio.source, AL_GAIN, (ALfloat)volume / 100.0f);
+        g_audio.saved_volume = volume;
     }
 
     ALint processed = 0;
