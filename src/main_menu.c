@@ -192,7 +192,7 @@ AppStatus_t menu_load_loop(MainMenu_t *menu) {
     return APP_STATUS_LOADING;
 }
 
-static void on_album_art_event(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom_data) {
+static void on_album_art_event(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
     const SongEntryDrawables_t *entry = custom_data;
     MainMenu_t *menu = entry->menu;
 
@@ -464,8 +464,8 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
     destroy_resource_load(&menu->load_no_album_art);
 }
 
-static void on_settings_click(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
-    settings_show(custom_data);
+static void on_settings_click(Ui_t *ui) {
+    settings_show(ui);
 }
 
 void menu_setup(MainMenu_t *menu) {
@@ -475,23 +475,20 @@ void menu_setup(MainMenu_t *menu) {
     etsuko_setup_version(menu->ui);
 
     if ( config_get()->settings.show_settings ) {
-        Drawable_t *settings_btn = ui_make_text(
-            menu->ui,
-            &(Drawable_TextData_t){
-                .text = "Settings",
-                .font_type = FONT_UI,
-                .em = 0.8,
-                .color = {255, 255, 255, 255},
-            },
-            ui_root_container(menu->ui),
-            &(Layout_t){
-                .offset_x = 0.02,
-                .offset_y = -1,
-                .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_X,
-            }
-        );
-        ui_drawable_set_alpha_immediate(settings_btn, 180);
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, settings_btn, on_settings_click, menu->ui);
+        const Layout_t layout = {
+            .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_POS,
+            .offset_x = 0.02,
+            .offset_y = -0.02,
+        };
+        const ButtonWidgetOpts_t opts = {
+            .text = "Settings",
+            .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
+            .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+            .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+            .text_em = 0.8
+        };
+        ButtonWidget_t *button = ui_build_button_widget(menu->ui, ui_root_container(menu->ui), &layout, &opts);
+        button->on_click_callback = on_settings_click;
     }
 
     const Layout_t layout = {

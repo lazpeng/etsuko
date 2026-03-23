@@ -373,6 +373,32 @@ typedef struct ToggleWidgetOpts_t {
     Color_t text_color, active_color, background_color;
 } ToggleWidgetOpts_t;
 
+typedef void (*c_widget_button_on_click)(Ui_t *ui);
+
+typedef enum ButtonWidgetBackgroundShowType_t {
+    BUTTON_BG_DISABLED = 0,
+    BUTTON_BG_SHOW_ALWAYS,
+    BUTTON_BG_SHOW_ON_HOVER,
+} ButtonWidgetBackgroundShowType_t;
+
+typedef struct ButtonWidget_t {
+    bool active;
+    OWNING Drawable_t *d_text;
+    OWNING Drawable_t *d_background;
+    WEAK Container_t *parent;
+    int entry_id;
+    WEAK c_widget_button_on_click on_click_callback;
+    ButtonWidgetBackgroundShowType_t bg_show_type;
+    int background_alpha;
+} ButtonWidget_t;
+
+typedef struct ButtonWidgetOpts_t {
+    WEAK const char *text;
+    double text_em;
+    Color_t bg_color, text_color;
+    ButtonWidgetBackgroundShowType_t bg_show_type;
+} ButtonWidgetOpts_t;
+
 typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
     UI_EVENT_MOUSE_MOVE,
@@ -385,6 +411,7 @@ typedef enum UiEvent_t {
 } UiEvent_t;
 
 typedef struct UiEventOpts_t {
+    Ui_t *ui;
     UiEvent_t event;
     struct {
         double x, y;
@@ -399,7 +426,7 @@ typedef struct UiEventOpts_t {
     } keyboard;
 } UiEventOpts_t;
 
-typedef void (*c_ui_event_callback)(const UiEventOpts_t *opts, MAYBE_NULL const Drawable_t *target, void *custom_data);
+typedef void (*c_ui_event_callback)(const UiEventOpts_t *opts, MAYBE_NULL Drawable_t *target, void *custom_data);
 
 // Init and lifetime functions
 Ui_t *ui_init(void);
@@ -468,5 +495,8 @@ int ui_register_widget(const Container_t *parent, c_reconfigure_widget reconfigu
 void ui_unregister_widget(const Container_t *parent, int id);
 ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ToggleWidgetOpts_t *opts);
 void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget);
+ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts);
+void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget);
+void ui_widget_button_enabled(const ButtonWidget_t *widget, bool enabled);
 
 #endif // ETSUKO_UI_H

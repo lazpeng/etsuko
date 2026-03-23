@@ -37,8 +37,8 @@ struct Ui_t {
     OWNING ZLayer_t *z_layers_head;
     OWNING Vector_t *global_events;
     OWNING Vector_t *opaque_containers; // containers with z_index > 0 that block events below them
-    WEAK const Drawable_t *current_hovered_drawable;
-    WEAK const Drawable_t *current_dragged_drawable;
+    WEAK Drawable_t *current_hovered_drawable;
+    WEAK Drawable_t *current_dragged_drawable;
     int32_t current_drag_grab_offset_x, current_drag_grab_offset_y;
 };
 
@@ -191,18 +191,19 @@ static void update_animations(const Ui_t *ui, const double delta_time) {
     container_update_animations(ui->root_container, delta_time);
 }
 
-static void handle_global_mouse_input(const Ui_t *ui) {
+static void handle_global_mouse_input(Ui_t *ui) {
     int32_t mouse_x, mouse_y;
     events_get_mouse_position(&mouse_x, &mouse_y);
     for ( size_t i = 0; i < ui->global_events->size; i++ ) {
         const EventDef_t *def = ui->global_events->data[i];
 
         if ( def->type == UI_EVENT_MOUSE_MOVE && events_mouse_moved() ) {
-            const UiEventOpts_t opts = {.event = def->type,
+            const UiEventOpts_t opts = {.ui = ui, .event = def->type,
                                         .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = 0}};
             def->callback(&opts, NULL, def->custom_data);
         } else if ( def->type == UI_EVENT_MOUSE_STOPPED && !events_mouse_moved() ) {
             const UiEventOpts_t opts = {
+                .ui = ui,
                 .event = def->type,
                 .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = events_time_since_mouse_stopped()}};
             def->callback(&opts, NULL, def->custom_data);
@@ -210,7 +211,7 @@ static void handle_global_mouse_input(const Ui_t *ui) {
     }
 }
 
-static void handle_global_keyboard_input(const Ui_t *ui) {
+static void handle_global_keyboard_input(Ui_t *ui) {
     if ( !events_any_key_was_pressed() )
         return;
     // fire one event for every key that was pressed
@@ -220,7 +221,7 @@ static void handle_global_keyboard_input(const Ui_t *ui) {
         if ( def->type == UI_EVENT_KEY_PRESSED ) {
             for ( Key_t key = 0; key < KEY_INVALID; key++ ) {
                 if ( events_key_was_pressed(key) ) {
-                    const UiEventOpts_t opts = {.event = def->type, .keyboard = {.key = key}};
+                    const UiEventOpts_t opts = {.ui = ui, .event = def->type, .keyboard = {.key = key}};
                     def->callback(&opts, NULL, def->custom_data);
                 }
             }
@@ -229,7 +230,7 @@ static void handle_global_keyboard_input(const Ui_t *ui) {
 }
 
 static void handle_mouse_input(Ui_t *ui) {
-    const Drawable_t *hovered_drawable = NULL;
+    Drawable_t *hovered_drawable = NULL;
     int32_t mouse_x, mouse_y;
     events_get_mouse_position(&mouse_x, &mouse_y);
     const bool clicked = events_get_mouse_click(NULL, NULL);
@@ -243,7 +244,8 @@ static void handle_mouse_input(Ui_t *ui) {
         for ( size_t e = 0; e < ui->current_dragged_drawable->events->size; e++ ) {
             const EventDef_t *def = ui->current_dragged_drawable->events->data[e];
             if ( def->type == UI_EVENT_MOUSE_DRAG ) {
-                const UiEventOpts_t opts = {.event = UI_EVENT_MOUSE_DRAG,
+                const UiEventOpts_t opts = {.ui = ui,
+                                            .event = UI_EVENT_MOUSE_DRAG,
                                             .mouse = {
                                                 .x = mouse_x,
                                                 .y = mouse_y,
@@ -263,7 +265,7 @@ static void handle_mouse_input(Ui_t *ui) {
     const ZLayer_t *cur = ui->z_layers_head;
     while ( cur != NULL ) {
         for ( size_t i = 0; i < cur->nodes->size; i++ ) {
-            const Drawable_t *drawable = cur->nodes->data[i];
+            Drawable_t *drawable = cur->nodes->data[i];
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
             if ( !drawable->enabled ) {
@@ -280,7 +282,7 @@ static void handle_mouse_input(Ui_t *ui) {
             for ( size_t e = 0; e < drawable->events->size; e++ ) {
                 const EventDef_t *def = drawable->events->data[e];
                 if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
-                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    const UiEventOpts_t opts = {.ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, drawable, def->custom_data);
                 }
             }
@@ -323,7 +325,7 @@ static void handle_mouse_input(Ui_t *ui) {
 
         cur = cur->prev;
     }
-done_hit_test:;
+done_hit_test:
 
     if ( ui->current_hovered_drawable != hovered_drawable ) {
         if ( ui->current_hovered_drawable != NULL ) {
@@ -331,7 +333,8 @@ done_hit_test:;
             for ( size_t i = 0; i < ui->current_hovered_drawable->events->size; i++ ) {
                 const EventDef_t *def = ui->current_hovered_drawable->events->data[i];
                 if ( def->type == UI_EVENT_MOUSE_HOVER_EXITED ) {
-                    const UiEventOpts_t opts = {.event = def->type,
+                    const UiEventOpts_t opts = {.ui = ui,
+                                                .event = def->type,
                                                 .mouse = {
                                                     .x = mouse_x,
                                                     .y = mouse_y,
@@ -349,7 +352,7 @@ done_hit_test:;
             for ( size_t e = 0; e < hovered_drawable->events->size; e++ ) {
                 const EventDef_t *def = hovered_drawable->events->data[e];
                 if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-                    const UiEventOpts_t opts = {.event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    const UiEventOpts_t opts = {.ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, hovered_drawable, def->custom_data);
                 }
             }
@@ -428,10 +431,13 @@ static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t 
 static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
     const Drawable_RectangleData_t *data = drawable->custom_data;
 
-    float border_radius = 1; //(float)data->border_radius_em;
+    float border_radius = (float)data->border_radius_em;
     if ( border_radius > 0 )
         border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
-    render_draw_rounded_rect(drawable->texture, bounds, &data->color, border_radius);
+
+    Color_t color = data->color;
+    color.a = drawable->alpha_mod;
+    render_draw_rounded_rect(drawable->texture, bounds, &color, border_radius);
 }
 
 static void measure_constraints(const SizeConstraint_t *constraint, MAYBE_NULL double *width, MAYBE_NULL double *height) {
@@ -1208,7 +1214,7 @@ static Drawable_t *make_drawable(Container_t *parent, const DrawableType_t type,
     return result;
 }
 
-static void on_drag_scrollbar_handle(const UiEventOpts_t *opts, const Drawable_t *_, void *custom) {
+static void on_drag_scrollbar_handle(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
     Container_t *container = custom;
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
 
@@ -1228,7 +1234,7 @@ static void on_drag_scrollbar_handle(const UiEventOpts_t *opts, const Drawable_t
     ui_container_scroll_y_to(container, pos);
 }
 
-static void on_click_scrollbar_background(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom) {
+static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t *drawable, void *custom) {
     Container_t *container = custom;
     const double total_height = container->scrollable_area.total_height;
 
@@ -1830,6 +1836,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     result->custom_data = dup_rectangle_data(data);
     result->layout = *layout;
     result->layout.z_index += container->layout.z_index;
+    result->alpha_mod = data->color.a;
 
     ui_reposition_drawable(result);
     vec_add_sorted_drawable(container->child_drawables, result);
@@ -2785,7 +2792,7 @@ static void toggle_widget_destroy(Ui_t *ui, void *widget_data) {
     ui_destroy_toggle_widget(ui, widget);
 }
 
-static void toggle_widget_on_click(const UiEventOpts_t *, const Drawable_t *target, void *custom_data) {
+static void toggle_widget_on_click(const UiEventOpts_t *, Drawable_t *target, void *custom_data) {
     ToggleWidget_t *widget = custom_data;
     int index = -1;
     for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
@@ -2856,7 +2863,6 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
         const char *text = opts->opts[i];
         const Drawable_TextData_t data = {
             .color = opts->text_color,
-            .compute_offsets = false,
             .em = opts->text_em,
             .text = strdup(text),
         };
@@ -2901,4 +2907,89 @@ void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget) {
 
     ui_unregister_widget(widget->parent, widget->entry_id);
     free(widget);
+}
+
+static void button_widget_destroy(Ui_t *ui, void *widget_data) {
+    ButtonWidget_t *widget = widget_data;
+    ui_destroy_button_widget(ui, widget);
+}
+
+static void button_widget_mouse_event(const UiEventOpts_t *opts, Drawable_t *bg_drawable, void *widget_data) {
+    const ButtonWidget_t *widget = widget_data;
+
+    if ( widget->bg_show_type == BUTTON_BG_SHOW_ON_HOVER ) {
+        if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+            ui_drawable_set_alpha(bg_drawable, widget->background_alpha);
+        } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+            ui_drawable_set_alpha(bg_drawable, 0);
+        }
+    }
+
+    if ( opts->event == UI_EVENT_MOUSE_CLICK && widget->active )
+        if ( widget->on_click_callback != NULL )
+            widget->on_click_callback(opts->ui);
+}
+
+ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts) {
+    ButtonWidget_t *result = calloc(1, sizeof(*result));
+    result->parent = parent;
+    result->active = true;
+    result->bg_show_type = opts->bg_show_type;
+    result->background_alpha = opts->bg_color.a;
+
+    const Drawable_TextData_t text_data = {
+        .text = strdup(opts->text),
+        .em = opts->text_em,
+        .color = opts->text_color,
+    };
+    const Layout_t text_layout = {
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_CENTER,
+        .z_index = 1,
+    };
+    result->d_text = ui_make_text(ui, &text_data, parent, &text_layout);
+
+    const Drawable_RectangleData_t rect_data = {
+        .border_radius_em = BORDER_RADIUS_AUTO,
+        .color = opts->bg_color
+    };
+    Layout_t rect_layout = *layout;
+    rect_layout.flags |= LAYOUT_RELATIVE_TO_SIZE;
+    rect_layout.relative_to_size = result->d_text;
+    rect_layout.width = 1.5;
+    rect_layout.height = 1.5;
+
+    result->d_background = ui_make_rectangle(ui, &rect_data, parent, &rect_layout);
+    result->d_text->layout.relative_to = result->d_background;
+    result->d_text->layout.flags |= LAYOUT_PROPORTIONAL_POS_TO_RELATIVE;
+    ui_reposition_drawable(result->d_text);
+
+    result->entry_id = ui_register_widget(parent, NULL, button_widget_destroy, result);
+
+    if ( opts->bg_show_type != BUTTON_BG_SHOW_ALWAYS ) {
+        printf("setting bg to 0\n");
+        ui_drawable_set_alpha_immediate(result->d_background, 0);
+        const Animation_FadeInOutData_t data = {
+            .duration = 0.3,
+            .ease_func = ANIM_EASE_NONE
+        };
+        ui_animate_fade(result->d_background, &data);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, result->d_background, button_widget_mouse_event, result);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, result->d_background, button_widget_mouse_event, result);
+    }
+
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, result->d_background, button_widget_mouse_event, result);
+
+    return result;
+}
+
+void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget) {
+    ui_destroy_drawable(ui, widget->d_text);
+    ui_destroy_drawable(ui, widget->d_background);
+    ui_unregister_widget(widget->parent, widget->entry_id);
+    free(widget);
+}
+
+void ui_widget_button_enabled(const ButtonWidget_t *widget, const bool enabled) {
+    widget->d_background->enabled = enabled;
+    widget->d_text->enabled = enabled;
 }

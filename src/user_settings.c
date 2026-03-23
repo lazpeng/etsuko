@@ -272,13 +272,14 @@ typedef struct SettingsModal_t {
     WEAK Ui_t *ui;
     WEAK Container_t *container;
     bool should_close;
+    bool should_rebuild;
     WEAK Drawable_t *audio_delay_label;
     WEAK Drawable_t *audio_delay_bar;
     WEAK Drawable_t *volume_label;
     WEAK Drawable_t *volume_bar;
 } SettingsModal_t;
 
-static void on_audio_delay_changed(const UiEventOpts_t *opts, const Drawable_t *bar, void *) {
+static void on_audio_delay_changed(const UiEventOpts_t *opts, Drawable_t *bar, void *) {
     double pb_x;
     ui_get_drawable_canon_pos(bar, &pb_x, NULL);
     const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
@@ -297,7 +298,7 @@ static void on_audio_delay_changed(const UiEventOpts_t *opts, const Drawable_t *
     ui_recompute_drawable(g_modal->ui, g_modal->audio_delay_label);
 }
 
-static void on_volume_changed(const UiEventOpts_t *opts, const Drawable_t *bar, void *) {
+static void on_volume_changed(const UiEventOpts_t *opts, Drawable_t *bar, void *) {
     double pb_x;
     ui_get_drawable_canon_pos(bar, &pb_x, NULL);
     const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
@@ -316,7 +317,7 @@ static void on_volume_changed(const UiEventOpts_t *opts, const Drawable_t *bar, 
     ui_recompute_drawable(g_modal->ui, g_modal->volume_label);
 }
 
-static void on_close_settings(const UiEventOpts_t *, const Drawable_t *, void *) {
+static void on_close_settings(const UiEventOpts_t *, Drawable_t *, void *) {
     g_modal->should_close = true;
     save_current_settings();
 }
@@ -712,6 +713,30 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     ui_drawable_set_alpha_immediate(right, 100);
 }
 
+static void on_reset_clicked(Ui_t *) {
+    UserSettings_t *settings = settings_get();
+    *settings = (UserSettings_t){0};
+    settings->volume = 100;
+    g_modal->should_rebuild = true;
+}
+
+static void create_reset_button(Ui_t *ui) {
+    const Layout_t layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y,
+        .offset_x = 0.05,
+        .offset_y = -0.05,
+    };
+    const ButtonWidgetOpts_t opts = {
+        .bg_color = {.r = 150, .g = 150, .b = 150, .a = 150},
+        .text = "Reset",
+        .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .text_em = 0.8,
+    };
+    ButtonWidget_t *button = ui_build_button_widget(ui, g_modal->container, &layout, &opts);
+    button->on_click_callback = on_reset_clicked;
+}
+
 void settings_show(Ui_t *ui) {
     if ( g_modal != NULL )
         error_abort("Settings modal opened more than once");
@@ -728,11 +753,20 @@ void settings_show(Ui_t *ui) {
     prev = create_auto_play_setting(ui, prev);
     prev = create_audio_delay_setting(ui, prev);
     create_volume_setting(ui, prev);
+    create_reset_button(ui);
 }
 
 void settings_on_frame_end(Ui_t *ui) {
     if ( g_modal == NULL )
         return;
+
+    if ( g_modal->should_rebuild ) {
+        ui_destroy_container(ui, g_modal->container);
+        free(g_modal);
+        g_modal = NULL;
+        settings_show(ui);
+        return;
+    }
 
     if ( g_modal->should_close ) {
         ui_destroy_container(ui, g_modal->container);

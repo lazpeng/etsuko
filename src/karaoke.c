@@ -35,7 +35,7 @@ struct Karaoke_t {
         Container_t *song_info_container;
         Container_t *song_controls_container;
         LyricsView_t *lyrics_view;
-        Drawable_t *settings_btn;
+        ButtonWidget_t *settings_button;
     } drawables;
     bool hovering_controls;
     struct {
@@ -333,17 +333,17 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
     ui_reposition_container(state->drawables.left_container);
 }
 
-static void on_mouse_moved(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
+static void on_mouse_moved(const UiEventOpts_t *, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
     // state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
 
-    if ( state->drawables.settings_btn != NULL )
-        state->drawables.settings_btn->enabled = true;
+    if ( state->drawables.settings_button != NULL )
+        ui_widget_button_enabled(state->drawables.settings_button, true);
 }
 
-static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void *custom_data) {
+static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
     const bool show_controls = state->hovering_controls || audio_elapsed_time() <= 0.1;
 
@@ -353,16 +353,16 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, const Drawable_t *, void 
             state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = true;
             state->drawables.song_controls_container->enabled = false;
         }
-        if ( state->drawables.settings_btn != NULL )
-            state->drawables.settings_btn->enabled = false;
+        if ( state->drawables.settings_button != NULL )
+            ui_widget_button_enabled(state->drawables.settings_button, false);
     }
 }
 
-static void on_settings_click(const UiEventOpts_t *, const Drawable_t *, void *custom_data) {
-    settings_show(custom_data);
+static void on_settings_click(Ui_t *ui) {
+    settings_show(ui);
 }
 
-static void on_key_pressed(const UiEventOpts_t *opts, const Drawable_t *, void *custom_data) {
+static void on_key_pressed(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
 
     if ( opts->keyboard.key == KEY_SPACE ) {
@@ -376,7 +376,7 @@ static void on_key_pressed(const UiEventOpts_t *opts, const Drawable_t *, void *
     }
 }
 
-static void on_mouse_play_button(const UiEventOpts_t *opts, const Drawable_t *, void *custom_data) {
+static void on_mouse_play_button(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
     Karaoke_t *state = custom_data;
 
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
@@ -388,12 +388,12 @@ static void on_mouse_play_button(const UiEventOpts_t *opts, const Drawable_t *, 
     }
 }
 
-static void on_back_clicked(const UiEventOpts_t *, const Drawable_t *, void *) {
+static void on_back_clicked(const UiEventOpts_t *, Drawable_t *, void *) {
     etsuko_navigate("/", "");
     global_mode_switch(APP_MODE_MENU);
 }
 
-static void on_drag_progressbar_handle(const UiEventOpts_t *opts, const Drawable_t *_, void *custom) {
+static void on_drag_progressbar_handle(const UiEventOpts_t *opts, Drawable_t *_, void *custom) {
     const Karaoke_t *state = custom;
     const Drawable_t *pb = state->drawables.song_progressbar;
 
@@ -406,14 +406,14 @@ static void on_drag_progressbar_handle(const UiEventOpts_t *opts, const Drawable
     state->drawables.progressbar_handle->enabled = true;
 }
 
-static void on_progressbar_area_hover_entered(const UiEventOpts_t *opts, const Drawable_t *d, void *custom) {
+static void on_progressbar_area_hover_entered(const UiEventOpts_t *opts, Drawable_t *d, void *custom) {
     (void)opts;
     (void)d;
     Karaoke_t *state = custom;
     state->drawables.progressbar_handle->enabled = true;
 }
 
-static void on_progressbar_area_hover_exited(const UiEventOpts_t *opts, const Drawable_t *d, void *custom) {
+static void on_progressbar_area_hover_exited(const UiEventOpts_t *opts, Drawable_t *d, void *custom) {
     (void)opts;
     (void)d;
     Karaoke_t *state = custom;
@@ -421,7 +421,7 @@ static void on_progressbar_area_hover_exited(const UiEventOpts_t *opts, const Dr
         state->drawables.progressbar_handle->enabled = false;
 }
 
-static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *progress_bar, void *custom_data) {
+static void on_progress_bar_clicked(const UiEventOpts_t *opt, Drawable_t *progress_bar, void *custom_data) {
     const Karaoke_t *state = custom_data;
 
     double progress_bar_x;
@@ -430,7 +430,7 @@ static void on_progress_bar_clicked(const UiEventOpts_t *opt, const Drawable_t *
     const double distance = distance_from_x / state->drawables.song_progressbar->bounds.w;
     audio_seek(audio_total_time() * distance);
     // Reset viewport
-    // state->drawables.lyrics_view->container->viewport_y = 0;
+    ui_ex_lyrics_view_scroll_to_active(state->drawables.lyrics_view);
 }
 
 static void setup_background(const Karaoke_t *state) {
@@ -633,19 +633,20 @@ void karaoke_setup(Karaoke_t *state) {
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
 
     if ( config_get()->settings.show_settings ) {
-        state->drawables.settings_btn = ui_make_text(
-            state->ui,
-            &(Drawable_TextData_t){
-                .text = "Settings", .font_type = FONT_UI, .em = 0.8, .color = {255, 255, 255, 255}},
-            ui_root_container(state->ui),
-            &(Layout_t){
-                .offset_x = 0.02,
-                .offset_y = -1,
-                .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_X,
-            });
-        ui_drawable_set_alpha_immediate(state->drawables.settings_btn, 180);
-        state->drawables.settings_btn->enabled = false;
-        ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.settings_btn, on_settings_click, state->ui);
+        const Layout_t layout = {
+            .flags = LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_WRAP_AROUND_Y | LAYOUT_PROPORTIONAL_POS,
+            .offset_x = 0.02,
+            .offset_y = -0.02,
+        };
+        const ButtonWidgetOpts_t opts = {
+            .text = "Settings",
+            .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
+            .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+            .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+            .text_em = 0.8
+        };
+        state->drawables.settings_button = ui_build_button_widget(state->ui, ui_root_container(state->ui), &layout, &opts);
+        state->drawables.settings_button->on_click_callback = on_settings_click;
     }
 
     // Default state until mouse moves

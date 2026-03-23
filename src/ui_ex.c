@@ -175,7 +175,7 @@ static int32_t calculate_alpha(const int32_t distance) {
 }
 
 // this function name sounds like a concert that is broadcasted over the internet
-static void on_line_event(const UiEventOpts_t *opts, const Drawable_t *drawable, void *custom_data) {
+static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void *custom_data) {
     LyricsView_t *view = custom_data;
 
     int32_t index = -1;
@@ -210,7 +210,7 @@ static void toggle_hints_visibility(const LyricsView_t *view) {
     }
 }
 
-static void on_key_pressed(const UiEventOpts_t *opt, const Drawable_t *, void *custom_data) {
+static void on_key_pressed(const UiEventOpts_t *opt, Drawable_t *, void *custom_data) {
     const LyricsView_t *view = custom_data;
     if ( opt->keyboard.key == KEY_R ) {
         toggle_hints_visibility(view);
