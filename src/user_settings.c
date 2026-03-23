@@ -256,6 +256,7 @@ bool settings_ensure_loaded(void) {
     g_settings = read_settings_from_user_json();
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
+        g_settings->volume = 100;
     }
     return true;
 #endif
@@ -271,12 +272,7 @@ static void on_close_settings(const UiEventOpts_t *, const Drawable_t *, void *)
     g_modal->should_close = true;
 }
 
-void settings_show(Ui_t *ui) {
-    if ( g_modal != NULL )
-        error_abort("Settings modal opened more than once");
-    g_modal = calloc(1, sizeof(*g_modal));
-    g_modal->ui = ui;
-
+static Container_t *create_container(Ui_t *ui) {
     const Layout_t layout = {
         .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
         .width = 0.6,
@@ -284,18 +280,22 @@ void settings_show(Ui_t *ui) {
         .z_index = 100,
         .absolute = true,
     };
-    g_modal->container = ui_make_container(ui, ui_root_container(ui), &layout, CONTAINER_NONE);
+    Container_t *container = ui_make_container(ui, ui_root_container(ui), &layout, CONTAINER_NONE);
 
     const Color_t bg_color = {.r = 30, .g = 30, .b = 30, .a = 240};
     const Color_t bg_color_secondary = {.r = 30, .g = 30, .b = 30, .a = 150};
     static Color_t colors[2] = {0};
     colors[0] = bg_color;
     colors[1] = bg_color_secondary;
-    ui_container_update_background_colors_immediate(g_modal->container, colors, 2);
-    g_modal->container->background->type = BACKGROUND_GRADIENT;
-    g_modal->container->background->border_radius_em = 2.0;
-    g_modal->container->background->blur = true;
+    ui_container_update_background_colors_immediate(container, colors, 2);
+    container->background->type = BACKGROUND_GRADIENT;
+    container->background->border_radius_em = 2.0;
+    container->background->blur = true;
 
+    return container;
+}
+
+static void create_exit_button(Ui_t *ui) {
     const Layout_t close_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X,
         .offset_x = -0.02,
@@ -310,24 +310,42 @@ void settings_show(Ui_t *ui) {
     };
     Drawable_t *close_btn = ui_make_text(ui, &close_data, g_modal->container, &close_layout);
     ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, close_btn, on_close_settings, NULL);
+}
 
+static void create_settings_title(Ui_t *ui) {
     const Layout_t text_layout = {
-        .flags = LAYOUT_CENTER,
-        .absolute = true,
+        .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
+        .offset_y = 0.03,
     };
     const Drawable_TextData_t text_data = {
-        .text = "this is the settings screen",
+        .text = "Settings",
+        .font_type = FONT_UI,
+        .em = 1.5,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+}
+
+static Drawable_t *create_hints_setting(Ui_t *ui) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS,
+        .offset_x = 0.5,
+        .offset_y = 0.2,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Reading hints visibility:",
         .font_type = FONT_UI,
         .em = 1.0,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
-    ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
 
     const Layout_t toggle_layout = {
-        .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
-        .offset_y = 0.1,
+        .flags = LAYOUT_PROPORTIONAL_POS,
+        .offset_x = 0.55,
+        .offset_y = 0.2,
     };
-    const char *opts[] = {"test 1", "test 2", "test 3"};
+    const char *opts[] = {"Show", "Hide"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof (opts) / sizeof (const char *),
@@ -335,9 +353,251 @@ void settings_show(Ui_t *ui) {
         .text_color = {.r=255,.g=255,.b=255,.a=255},
         .background_color = {.r=100,.g=100,.b=100,.a=70},
         .active_color = {.r=210,.g=210,.b=210,.a=90},
-        .active_index = 1,
+        .active_index = 0, // TODO: Get actual settings
     };
     ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+
+    return text;
+}
+
+static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.5,
+        .offset_y = 0.1,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Dynamic lyric fill:",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.55,
+        .offset_y = 0.1,
+    };
+    const char *opts[] = {"Fill + Pulse", "Fill Only", "Disabled"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof (opts) / sizeof (const char *),
+        .text_em = 1.0,
+        .text_color = {.r=255,.g=255,.b=255,.a=255},
+        .background_color = {.r=100,.g=100,.b=100,.a=70},
+        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .active_index = 0, // TODO: Get actual settings
+    };
+    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+
+    return text;
+}
+
+static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.5,
+        .offset_y = 0.1,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Default lyric language:",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.55,
+        .offset_y = 0.1,
+    };
+    const char *opts[] = {"Original", "Translated"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof (opts) / sizeof (const char *),
+        .text_em = 1.0,
+        .text_color = {.r=255,.g=255,.b=255,.a=255},
+        .background_color = {.r=100,.g=100,.b=100,.a=70},
+        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .active_index = 0, // TODO: Get actual settings
+    };
+    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+
+    return text;
+}
+
+static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.5,
+        .offset_y = 0.1,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Auto-play:",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = 0.55,
+        .offset_y = 0.1,
+    };
+    const char *opts[] = {"Enabled", "Disabled"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof (opts) / sizeof (const char *),
+        .text_em = 1.0,
+        .text_color = {.r=255,.g=255,.b=255,.a=255},
+        .background_color = {.r=100,.g=100,.b=100,.a=70},
+        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .active_index = 1, // TODO: Get actual settings
+    };
+    ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+
+    return text;
+}
+
+static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
+        .relative_to = prev,
+        .offset_y = 0.1,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Global audio delay: 0ms",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t bar_layout = {
+        .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
+        .relative_to = text,
+        .offset_y = 0.075,
+        .width = 0.5,
+        .height = 0.025,
+    };
+    const Drawable_ProgressBarData_t bar_data = {
+        .border_radius_em = BORDER_RADIUS_AUTO,
+        .progress = 0.5,
+        .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
+        .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+    };
+    Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
+
+    const Layout_t left_text_layout = {
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
+        .relative_to = bar,
+    };
+    const Drawable_TextData_t left_text_data = {
+        .text = "-500",
+        .font_type = FONT_UI,
+        .em = 0.8,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 100},
+    };
+    Drawable_t *left = ui_make_text(ui, &left_text_data, g_modal->container, &left_text_layout);
+    ui_drawable_set_alpha_immediate(left, 100);
+
+    const Layout_t right_text_layout = {
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
+        .relative_to = bar,
+    };
+    const Drawable_TextData_t right_text_data = {
+        .text = "+500",
+        .font_type = FONT_UI,
+        .em = 0.8,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 100},
+    };
+    Drawable_t *right = ui_make_text(ui, &right_text_data, g_modal->container, &right_text_layout);
+    ui_drawable_set_alpha_immediate(right, 100);
+
+    return bar;
+}
+
+static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
+    const Layout_t text_layout = {
+        .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
+        .relative_to = prev,
+        .offset_y = 0.1,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Volume: 100",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t bar_layout = {
+        .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
+        .relative_to = text,
+        .offset_y = 0.075,
+        .width = 0.5,
+        .height = 0.025,
+    };
+    const Drawable_ProgressBarData_t bar_data = {
+        .border_radius_em = BORDER_RADIUS_AUTO,
+        .progress = 1.0,
+        .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
+        .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+    };
+    Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
+
+    const Layout_t left_text_layout = {
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
+        .relative_to = bar,
+    };
+    const Drawable_TextData_t left_text_data = {
+        .text = "0",
+        .font_type = FONT_UI,
+        .em = 0.8,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *left = ui_make_text(ui, &left_text_data, g_modal->container, &left_text_layout);
+    ui_drawable_set_alpha_immediate(left, 100);
+
+    const Layout_t right_text_layout = {
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
+        .relative_to = bar,
+    };
+    const Drawable_TextData_t right_text_data = {
+        .text = "100",
+        .font_type = FONT_UI,
+        .em = 0.8,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 100},
+    };
+    Drawable_t *right = ui_make_text(ui, &right_text_data, g_modal->container, &right_text_layout);
+    ui_drawable_set_alpha_immediate(right, 100);
+}
+
+void settings_show(Ui_t *ui) {
+    if ( g_modal != NULL )
+        error_abort("Settings modal opened more than once");
+    g_modal = calloc(1, sizeof(*g_modal));
+    g_modal->ui = ui;
+
+    g_modal->container = create_container(ui);
+    create_exit_button(ui);
+    create_settings_title(ui);
+
+    Drawable_t *prev = create_hints_setting(ui);
+    prev = create_fill_setting(ui, prev);
+    prev = create_language_setting(ui, prev);
+    prev = create_auto_play_setting(ui, prev);
+    prev = create_audio_delay_setting(ui, prev);
+    create_volume_setting(ui, prev);
 }
 
 void settings_on_frame_end(Ui_t *ui) {

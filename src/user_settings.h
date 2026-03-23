@@ -36,6 +36,8 @@ typedef struct UserSettings_t {
     LyricFillSetting_t lyric_fill;
     LyricLanguageSetting_t lyric_language;
     AutoPlaySetting_t auto_play;
+    double global_audio_offset;
+    int volume;
 } UserSettings_t;
 
 UserSettings_t *settings_get(void);
