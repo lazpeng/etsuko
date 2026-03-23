@@ -9,6 +9,11 @@
 #include "json.h"
 #include "str_utils.h"
 
+#define MODAL_SETTING_INITIAL_VERTICAL_OFFSET (0.1)
+#define MODAL_SETTING_VERTICAL_OFFSET (0.1)
+#define MODAL_SETTING_LABEL_X_POS (0.475)
+#define MODAL_SETTING_VALUE_X_POS (0.525)
+
 struct SettingsModal_t;
 
 static UserSettings_t *g_settings = NULL;
@@ -398,8 +403,8 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     const UserSettings_t *settings = settings_get();
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS,
-        .offset_x = 0.5,
-        .offset_y = 0.2,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_INITIAL_VERTICAL_OFFSET + MODAL_SETTING_VERTICAL_OFFSET,
     };
     const Drawable_TextData_t text_data = {
         .text = "Reading hints visibility:",
@@ -411,8 +416,8 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
 
     const Layout_t toggle_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS,
-        .offset_x = 0.55,
-        .offset_y = 0.2,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_INITIAL_VERTICAL_OFFSET + MODAL_SETTING_VERTICAL_OFFSET,
     };
     const char *opts[] = {"Show", "Hide"};
     const ToggleWidgetOpts_t toggle_opts = {
@@ -452,8 +457,8 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.5,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const Drawable_TextData_t text_data = {
         .text = "Dynamic lyric fill:",
@@ -466,8 +471,8 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t toggle_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.55,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const char *opts[] = {"Fill + Pulse", "Fill Only", "Disabled"};
     const ToggleWidgetOpts_t toggle_opts = {
@@ -504,8 +509,8 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.5,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const Drawable_TextData_t text_data = {
         .text = "Default lyric language:",
@@ -518,8 +523,8 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t toggle_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.55,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const char *opts[] = {"Original", "Translated"};
     const ToggleWidgetOpts_t toggle_opts = {
@@ -556,8 +561,8 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t text_layout = {
         .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.5,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const Drawable_TextData_t text_data = {
         .text = "Auto-play:",
@@ -570,8 +575,8 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t toggle_layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
         .relative_to = prev,
-        .offset_x = 0.55,
-        .offset_y = 0.1,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const char *opts[] = {"Enabled", "Disabled"};
     const ToggleWidgetOpts_t toggle_opts = {
@@ -727,15 +732,15 @@ static void on_reset_clicked(Ui_t *) {
 static void create_reset_button(Ui_t *ui) {
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y,
-        .offset_x = 0.05,
-        .offset_y = -0.05,
+        .offset_x = 0.01,
+        .offset_y = -0.02,
     };
     const ButtonWidgetOpts_t opts = {
         .bg_color = {.r = 150, .g = 150, .b = 150, .a = 150},
         .text = "Reset",
         .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
-        .text_em = 0.8,
+        .text_em = 1.0,
     };
     ButtonWidget_t *button = ui_build_button_widget(ui, g_modal->container, &layout, &opts);
     button->on_click_callback = on_reset_clicked;
