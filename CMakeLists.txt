@@ -71,6 +71,7 @@ if (EMSCRIPTEN)
             "SHELL:-g0"
             "SHELL:-flto"
             "SHELL:-sFILESYSTEM=1"
+            "SHELL:-lidbfs.js"
             "SHELL:--closure=1"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"

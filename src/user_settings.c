@@ -163,8 +163,6 @@ EM_JS(void, settings_start_sync, (void), {
     Module.etsukoSettingsSyncStarted = true;
     if (Module.etsukoSettingsSyncState === undefined) Module.etsukoSettingsSyncState = 0;
     try {
-        var FS = Module['FS'];
-        var IDBFS = Module['IDBFS'];
         if (!FS.analyzePath('/persist').exists) {
             FS.mkdir('/persist');
             FS.mount(IDBFS, {}, '/persist');
@@ -180,6 +178,10 @@ EM_JS(void, settings_start_sync, (void), {
 EM_JS(int, settings_sync_state, (void), {
     if (Module.etsukoSettingsSyncState === undefined) return 0;
     return Module.etsukoSettingsSyncState;
+})
+
+EM_JS(void, settings_flush_sync, (void), {
+    FS.syncfs(false, function(err) { if (err) console.error(err); });
 })
 #else
 static UserSettings_t *read_settings_from_user_json(void) {
@@ -233,7 +235,7 @@ void save_current_settings(void) {
     }
 
 #ifdef __EMSCRIPTEN__
-    emscripten_run_script("FS.syncfs(false, function(err) { if (err) console.error(err); });");
+    settings_flush_sync();
 #endif
 
     str_buf_destroy(buf);
@@ -251,11 +253,13 @@ bool settings_ensure_loaded(void) {
     }
     if ( state < 0 ) {
         g_settings = calloc(1, sizeof(*g_settings));
+        g_settings->volume = 100;
         return true;
     }
     g_settings = read_settings_emscripten();
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
+        g_settings->volume = 100;
     }
     return true;
 #else
