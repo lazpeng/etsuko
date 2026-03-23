@@ -6,6 +6,7 @@
 #include "events.h"
 #include "song.h"
 #include "str_utils.h"
+#include "user_settings.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -726,7 +727,8 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     int32_t prev_active = -1;
     int32_t first_active = -1;
     const double offset = view->song->time_offset;
-    const double elapsed_time = audio_elapsed_time() + offset;
+    const double user_offset = settings_get()->global_audio_offset;
+    const double elapsed_time = audio_elapsed_time() + offset + user_offset;
 
     for ( int32_t i = 0; i < (int32_t)view->song->lyrics_lines->size; i++ ) {
         const Song_Line_t *line = view->song->lyrics_lines->data[i];
