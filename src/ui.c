@@ -2010,6 +2010,10 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
             render_destroy_texture(drawable->texture);
             drawable->texture = NULL;
         }
+        if ( drawable->shadow != NULL ) {
+            render_destroy_shadow(drawable->shadow);
+            drawable->shadow = NULL;
+        }
         internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
