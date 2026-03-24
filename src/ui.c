@@ -198,8 +198,8 @@ static void handle_global_mouse_input(Ui_t *ui) {
         const EventDef_t *def = ui->global_events->data[i];
 
         if ( def->type == UI_EVENT_MOUSE_MOVE && events_mouse_moved() ) {
-            const UiEventOpts_t opts = {.ui = ui, .event = def->type,
-                                        .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = 0}};
+            const UiEventOpts_t opts = {
+                .ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = false, .duration = 0}};
             def->callback(&opts, NULL, def->custom_data);
         } else if ( def->type == UI_EVENT_MOUSE_STOPPED && !events_mouse_moved() ) {
             const UiEventOpts_t opts = {
@@ -282,7 +282,8 @@ static void handle_mouse_input(Ui_t *ui) {
             for ( size_t e = 0; e < drawable->events->size; e++ ) {
                 const EventDef_t *def = drawable->events->data[e];
                 if ( clicked && def->type == UI_EVENT_MOUSE_CLICK ) {
-                    const UiEventOpts_t opts = {.ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    const UiEventOpts_t opts = {
+                        .ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, drawable, def->custom_data);
                 }
             }
@@ -352,7 +353,8 @@ done_hit_test:
             for ( size_t e = 0; e < hovered_drawable->events->size; e++ ) {
                 const EventDef_t *def = hovered_drawable->events->data[e];
                 if ( def->type == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-                    const UiEventOpts_t opts = {.ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
+                    const UiEventOpts_t opts = {
+                        .ui = ui, .event = def->type, .mouse = {.x = mouse_x, .y = mouse_y, .clicked = clicked}};
                     def->callback(&opts, hovered_drawable, def->custom_data);
                 }
             }
@@ -415,17 +417,6 @@ void ui_begin_loop(Ui_t *ui) {
 
     render_clear();
     update_animations(ui, events_get_delta_time());
-}
-
-static void draw_dynamic_progressbar(const Drawable_t *drawable, const Bounds_t *base_bounds) {
-    const Drawable_ProgressBarData_t *data = drawable->custom_data;
-
-    Bounds_t bounds = *base_bounds;
-
-    const float border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
-    render_draw_rounded_rect(drawable->texture, &bounds, &data->bg_color, border_radius);
-    bounds.w *= MIN(1.0, data->progress);
-    render_draw_rounded_rect(drawable->texture, &bounds, &data->fg_color, border_radius);
 }
 
 static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
@@ -878,9 +869,7 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     }
 
     if ( drawable->dynamic ) {
-        if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
-            draw_dynamic_progressbar(drawable, &rect);
-        } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
+        if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
             draw_dynamic_rectangle(drawable, &rect);
         } else {
             error_abort("Unrecognized dynamic drawable");
@@ -1468,18 +1457,6 @@ static Drawable_ImageData_t *dup_image_data(const Drawable_ImageData_t *data) {
 
 static void free_image_data(Drawable_ImageData_t *data) { free(data); }
 
-static Drawable_ProgressBarData_t *dup_progressbar_data(const Drawable_ProgressBarData_t *data) {
-    Drawable_ProgressBarData_t *result = calloc(1, sizeof(*result));
-    if ( result == NULL ) {
-        error_abort("Failed to allocate progress bar data");
-    }
-    result->progress = data->progress;
-    result->border_radius_em = data->border_radius_em;
-    result->fg_color = data->fg_color;
-    result->bg_color = data->bg_color;
-    return result;
-}
-
 static Drawable_RectangleData_t *dup_rectangle_data(const Drawable_RectangleData_t *data) {
     Drawable_RectangleData_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
@@ -1490,7 +1467,6 @@ static Drawable_RectangleData_t *dup_rectangle_data(const Drawable_RectangleData
     return result;
 }
 
-static void free_progressbar_data(Drawable_ProgressBarData_t *data) { free(data); }
 static void free_rectangle_data(Drawable_RectangleData_t *data) { free(data); }
 
 static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Container_t *container, const int32_t start) {
@@ -1815,20 +1791,6 @@ Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length
     return result;
 }
 
-Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container,
-                                const Layout_t *layout) {
-    Drawable_t *result = make_drawable(container, DRAW_TYPE_PROGRESS_BAR, true);
-
-    result->texture = render_make_null();
-    result->custom_data = dup_progressbar_data(data);
-    result->layout = *layout;
-    result->layout.z_index += container->layout.z_index;
-
-    ui_reposition_drawable(result);
-    vec_add_sorted_drawable(container->child_drawables, result);
-    return result;
-}
-
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_RECTANGLE, true);
 
@@ -1871,9 +1833,6 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
         } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
             Drawable_ImageData_t *image_data = drawable->custom_data;
             free_image_data(image_data);
-        } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR ) {
-            Drawable_ProgressBarData_t *progress_bar_data = drawable->custom_data;
-            free_progressbar_data(progress_bar_data);
         } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
             Drawable_RectangleData_t *rectangle_data = drawable->custom_data;
             free_rectangle_data(rectangle_data);
@@ -1965,16 +1924,7 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
 void ui_destroy_container(Ui_t *ui, Container_t *container) {
     while ( container->widgets->size > 0 ) {
         const WidgetEntry_t *entry = container->widgets->data[0];
-        const int entry_id = entry->id;
-        if ( entry->destroy_callback != NULL ) {
-            entry->destroy_callback(ui, entry->widget_data);
-        } else {
-            // The destroy callback will unregister and free the actual widget
-            // so when there's no such callback, do it manually
-            // Assume the widget is trivial and the drawables it created will be automatically cleaned up by the loop below
-            ui_unregister_widget(container, entry_id);
-            free(entry->widget_data);
-        }
+        entry->destroy_callback(ui, entry->widget_data);
     }
     vec_destroy(container->widgets);
 
@@ -2068,7 +2018,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);
         }
-    } else if ( drawable->type == DRAW_TYPE_PROGRESS_BAR || drawable->type == DRAW_TYPE_RECTANGLE ) {
+    } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
         ui_reposition_drawable(drawable);
     } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
         // It should recompute itself inside some loop() function somewhere
@@ -2792,8 +2742,11 @@ static void toggle_widget_destroy(Ui_t *ui, void *widget_data) {
     ui_destroy_toggle_widget(ui, widget);
 }
 
-static void toggle_widget_on_click(const UiEventOpts_t *, Drawable_t *target, void *custom_data) {
+static void toggle_widget_on_click(const UiEventOpts_t *opts, Drawable_t *target, void *custom_data) {
     ToggleWidget_t *widget = custom_data;
+    if ( !widget->editable )
+        return;
+
     int index = -1;
     for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
         const Drawable_t *text = widget->text_drawables->data[i];
@@ -2807,7 +2760,7 @@ static void toggle_widget_on_click(const UiEventOpts_t *, Drawable_t *target, vo
         return;
 
     if ( widget->on_change_callback != NULL ) {
-        widget->on_change_callback(widget, index);
+        widget->on_change_callback(opts->ui, widget, index);
     }
     widget->active_index = index;
     toggle_widget_reconfigure(widget);
@@ -2815,6 +2768,9 @@ static void toggle_widget_on_click(const UiEventOpts_t *, Drawable_t *target, vo
 
 int ui_register_widget(const Container_t *parent, const c_reconfigure_widget reconfigure_callback,
                        const c_destroy_widget destroy_callback, void *widget_data) {
+    if ( destroy_callback == NULL )
+        error_abort("ui_register_widget: Every widget needs to register a destroy callback");
+
     int id = 0;
     const size_t size = parent->widgets->size;
     if ( size > 0 ) {
@@ -2850,15 +2806,16 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
     if ( opts->num_opts <= 0 )
         error_abort("ui_build_toggle_widget: empty opts");
 
-    ToggleWidget_t *result = calloc(1, sizeof(*result));
+    ToggleWidget_t *widget = calloc(1, sizeof(*widget));
 
-    result->parent = parent;
-    result->d_anchor = ui_make_custom(ui, parent, layout);
-    result->d_anchor->enabled = false;
-    result->active_index = opts->active_index;
-    result->text_drawables = vec_init();
+    widget->parent = parent;
+    widget->d_anchor = ui_make_custom(ui, parent, layout);
+    widget->d_anchor->enabled = false;
+    widget->editable = true;
+    widget->active_index = opts->active_index;
+    widget->text_drawables = vec_init();
 
-    Drawable_t *prev = result->d_anchor;
+    Drawable_t *prev = widget->d_anchor;
     for ( int i = 0; i < opts->num_opts; i++ ) {
         const char *text = opts->opts[i];
         const Drawable_TextData_t data = {
@@ -2866,32 +2823,31 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
             .em = opts->text_em,
             .text = (char *)text,
         };
-        const int add_flag = prev == result->d_anchor ? 0 : LAYOUT_RELATION_X_INCLUDE_WIDTH;
-        const Layout_t text_layout = {.flags =
-                                          LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | add_flag,
+        const int add_flag = prev == widget->d_anchor ? 0 : LAYOUT_RELATION_X_INCLUDE_WIDTH;
+        const Layout_t text_layout = {.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | add_flag,
                                       .relative_to = prev,
                                       .offset_x = i > 0 ? prev->bounds.h * 1.5 : 0,
                                       .z_index = 1};
 
         prev = ui_make_text(ui, &data, parent, &text_layout);
-        vec_add(result->text_drawables, prev);
+        vec_add(widget->text_drawables, prev);
         // TODO: Maybe create a similar rectangle but hidden for every text and use that as the event callback target
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, toggle_widget_on_click, result);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, toggle_widget_on_click, widget);
     }
 
     const Drawable_RectangleData_t bg_data = {.color = opts->background_color, .border_radius_em = BORDER_RADIUS_AUTO};
-    result->d_background = ui_make_rectangle(ui, &bg_data, parent, &(Layout_t){});
+    widget->d_background = ui_make_rectangle(ui, &bg_data, parent, &(Layout_t){});
 
-    if ( opts->active_index > (int32_t)result->text_drawables->size - 1 || opts->active_index < 0 )
+    if ( opts->active_index > (int32_t)widget->text_drawables->size - 1 || opts->active_index < 0 )
         error_abort("ui_build_toggle_widget: active_index is off bounds");
 
     const Drawable_RectangleData_t fg_data = {.color = opts->active_color, .border_radius_em = BORDER_RADIUS_AUTO};
-    result->d_foreground = ui_make_rectangle(ui, &fg_data, parent, &(Layout_t){});
+    widget->d_foreground = ui_make_rectangle(ui, &fg_data, parent, &(Layout_t){});
 
-    toggle_widget_reconfigure(result);
-    result->entry_id = ui_register_widget(parent, toggle_widget_reconfigure, toggle_widget_destroy, result);
+    toggle_widget_reconfigure(widget);
+    widget->entry_id = ui_register_widget(parent, toggle_widget_reconfigure, toggle_widget_destroy, widget);
 
-    return result;
+    return widget;
 }
 
 void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget) {
@@ -2927,15 +2883,15 @@ static void button_widget_mouse_event(const UiEventOpts_t *opts, Drawable_t *bg_
 
     if ( opts->event == UI_EVENT_MOUSE_CLICK && widget->active )
         if ( widget->on_click_callback != NULL )
-            widget->on_click_callback(opts->ui);
+            widget->on_click_callback(opts->ui, widget);
 }
 
 ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts) {
-    ButtonWidget_t *result = calloc(1, sizeof(*result));
-    result->parent = parent;
-    result->active = true;
-    result->bg_show_type = opts->bg_show_type;
-    result->background_alpha = opts->bg_color.a;
+    ButtonWidget_t *widget = calloc(1, sizeof(*widget));
+    widget->parent = parent;
+    widget->active = true;
+    widget->bg_show_type = opts->bg_show_type;
+    widget->background_alpha = opts->bg_color.a;
 
     const Drawable_TextData_t text_data = {
         .text = (char *)opts->text,
@@ -2946,40 +2902,34 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_CENTER,
         .z_index = 1,
     };
-    result->d_text = ui_make_text(ui, &text_data, parent, &text_layout);
-    ui_drawable_set_alpha_immediate(result->d_text, opts->text_color.a);
+    widget->d_text = ui_make_text(ui, &text_data, parent, &text_layout);
+    ui_drawable_set_alpha_immediate(widget->d_text, opts->text_color.a);
 
-    const Drawable_RectangleData_t rect_data = {
-        .border_radius_em = BORDER_RADIUS_AUTO,
-        .color = opts->bg_color
-    };
+    const Drawable_RectangleData_t rect_data = {.border_radius_em = BORDER_RADIUS_AUTO, .color = opts->bg_color};
     Layout_t rect_layout = *layout;
     rect_layout.flags |= LAYOUT_RELATIVE_TO_SIZE;
-    rect_layout.relative_to_size = result->d_text;
+    rect_layout.relative_to_size = widget->d_text;
     rect_layout.width = 1.5;
     rect_layout.height = 1.5;
 
-    result->d_background = ui_make_rectangle(ui, &rect_data, parent, &rect_layout);
-    result->d_text->layout.relative_to = result->d_background;
-    result->d_text->layout.flags |= LAYOUT_PROPORTIONAL_POS_TO_RELATIVE;
-    ui_reposition_drawable(result->d_text);
+    widget->d_background = ui_make_rectangle(ui, &rect_data, parent, &rect_layout);
+    widget->d_text->layout.relative_to = widget->d_background;
+    widget->d_text->layout.flags |= LAYOUT_PROPORTIONAL_POS_TO_RELATIVE;
+    ui_reposition_drawable(widget->d_text);
 
-    result->entry_id = ui_register_widget(parent, NULL, button_widget_destroy, result);
+    widget->entry_id = ui_register_widget(parent, NULL, button_widget_destroy, widget);
 
     if ( opts->bg_show_type != BUTTON_BG_SHOW_ALWAYS ) {
-        ui_drawable_set_alpha_immediate(result->d_background, 0);
-        const Animation_FadeInOutData_t data = {
-            .duration = 0.3,
-            .ease_func = ANIM_EASE_NONE
-        };
-        ui_animate_fade(result->d_background, &data);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, result->d_background, button_widget_mouse_event, result);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, result->d_background, button_widget_mouse_event, result);
+        ui_drawable_set_alpha_immediate(widget->d_background, 0);
+        const Animation_FadeInOutData_t data = {.duration = 0.3, .ease_func = ANIM_EASE_NONE};
+        ui_animate_fade(widget->d_background, &data);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_background, button_widget_mouse_event, widget);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_background, button_widget_mouse_event, widget);
     }
 
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, result->d_background, button_widget_mouse_event, result);
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, widget->d_background, button_widget_mouse_event, widget);
 
-    return result;
+    return widget;
 }
 
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget) {
@@ -2992,4 +2942,115 @@ void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget) {
 void ui_widget_button_enabled(const ButtonWidget_t *widget, const bool enabled) {
     widget->d_background->enabled = enabled;
     widget->d_text->enabled = enabled;
+}
+
+static void progress_bar_reconfigure(void *widget_data) {
+    const ProgressBarWidget_t *widget = widget_data;
+
+    if ( widget->d_handle != NULL ) {
+        widget->d_handle->layout.width = widget->d_fg->bounds.h * widget->handle_relative_size;
+        widget->d_handle->layout.offset_x = widget->d_fg->layout.width;
+        ui_reposition_drawable(widget->d_handle);
+    }
+}
+
+static void progress_bar_destroy(Ui_t *ui, void *widget) { ui_destroy_progress_bar_widget(ui, widget); }
+
+static void progress_bar_widget_event(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
+    ProgressBarWidget_t *widget = custom_data;
+
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED && widget->d_handle != NULL ) {
+        ui_drawable_set_alpha(widget->d_handle, widget->fg_color.a);
+    }
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED && widget->d_handle != NULL ) {
+        ui_drawable_set_alpha(widget->d_handle, 0);
+    }
+
+    const bool changed = opts->event == UI_EVENT_MOUSE_CLICK || opts->event == UI_EVENT_MOUSE_DRAG;
+    if ( widget->editable && changed ) {
+        double progress_bar_x;
+        ui_get_drawable_canon_pos(widget->d_bg, &progress_bar_x, NULL);
+        const double distance_from_x = opts->mouse.x - progress_bar_x;
+        const double progress = MAX(0.0, MIN(1.0, distance_from_x / widget->d_bg->bounds.w));
+
+        if ( progress != widget->d_fg->layout.width ) {
+            ui_widget_progress_bar_progress(widget, progress);
+            if ( widget->on_change_callback != NULL )
+                widget->on_change_callback(opts->ui, widget, progress);
+        }
+    }
+}
+
+ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout,
+                                                  const ProgressBarWidgetOpts_t *opts) {
+    ProgressBarWidget_t *widget = calloc(1, sizeof(*widget));
+    widget->parent = parent;
+    widget->bg_color = opts->bg_color;
+    widget->fg_color = opts->fg_color;
+    widget->editable = opts->user_editable;
+
+    const Drawable_RectangleData_t bg_data = {.border_radius_em = opts->border_radius, .color = opts->bg_color};
+    widget->d_bg = ui_make_rectangle(ui, &bg_data, parent, layout);
+
+    const double progress = MAX(0.0, MIN(1.0, opts->initial_progress));
+    const Drawable_RectangleData_t fg_data = {.border_radius_em = opts->border_radius, .color = opts->fg_color};
+    const Layout_t fg_layout = {.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE,
+                                .height = 1.0,
+                                .width = progress,
+                                .relative_to = widget->d_bg,
+                                .relative_to_size = widget->d_bg};
+    widget->d_fg = ui_make_rectangle(ui, &fg_data, parent, &fg_layout);
+
+    if ( opts->handle_type != PROG_BAR_HANDLE_NONE ) {
+        widget->handle_relative_size = opts->handle_relative_size <= 0 ? 1.5 : opts->handle_relative_size;
+        Color_t handle_color = opts->fg_color;
+        handle_color.a = 0xFF;
+
+        const Drawable_RectangleData_t handle_data = {.border_radius_em = BORDER_RADIUS_AUTO, .color = handle_color};
+        const Layout_t handle_layout = {.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_HEIGHT | LAYOUT_PROPORTIONAL_POS |
+                                                 LAYOUT_PROPORTIONAL_POS_TO_RELATIVE | LAYOUT_ANCHOR_CENTER_X |
+                                                 LAYOUT_ANCHOR_CENTER_Y,
+                                        .height = widget->handle_relative_size,
+                                        .offset_y = 0.5,
+                                        .offset_x = progress,
+                                        .width = widget->d_fg->bounds.h * widget->handle_relative_size,
+                                        .relative_to = widget->d_bg,
+                                        .relative_to_size = widget->d_bg};
+        widget->d_handle = ui_make_rectangle(ui, &handle_data, parent, &handle_layout);
+    }
+
+    if ( opts->user_editable ) {
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, widget->d_bg, progress_bar_widget_event, widget);
+
+        if ( opts->draggable )
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, widget->d_bg, progress_bar_widget_event, widget);
+
+        if ( opts->handle_type == PROG_BAR_HANDLE_SHOW_ON_HOVER ) {
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_bg, progress_bar_widget_event, widget);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_bg, progress_bar_widget_event, widget);
+            ui_animate_fade(widget->d_handle, &(Animation_FadeInOutData_t){.duration = 0.3});
+            ui_drawable_set_alpha_immediate(widget->d_handle, 0);
+        }
+    }
+
+    widget->entry_id = ui_register_widget(parent, progress_bar_reconfigure, progress_bar_destroy, widget);
+    return widget;
+}
+
+void ui_destroy_progress_bar_widget(Ui_t *ui, ProgressBarWidget_t *widget) {
+    ui_destroy_drawable(ui, widget->d_bg);
+    ui_destroy_drawable(ui, widget->d_fg);
+    if ( widget->d_handle != NULL )
+        ui_destroy_drawable(ui, widget->d_handle);
+
+    ui_unregister_widget(widget->parent, widget->entry_id);
+    free(widget);
+}
+
+void ui_widget_progress_bar_progress(ProgressBarWidget_t *widget, const double progress) {
+    if ( progress != widget->d_fg->layout.width ) {
+        widget->d_fg->layout.width = progress;
+        ui_reposition_drawable(widget->d_fg);
+        progress_bar_reconfigure(widget);
+    }
 }

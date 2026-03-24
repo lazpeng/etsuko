@@ -464,7 +464,7 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
     destroy_resource_load(&menu->load_no_album_art);
 }
 
-static void on_settings_click(Ui_t *ui) {
+static void on_settings_click(Ui_t *ui, const ButtonWidget_t *) {
     settings_show(ui);
 }
 

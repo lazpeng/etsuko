@@ -283,23 +283,15 @@ typedef struct SettingsModal_t {
     bool should_close;
     bool should_rebuild;
     WEAK Drawable_t *audio_delay_label;
-    WEAK Drawable_t *audio_delay_bar;
     WEAK Drawable_t *volume_label;
-    WEAK Drawable_t *volume_bar;
 } SettingsModal_t;
 
-static void on_audio_delay_changed(const UiEventOpts_t *opts, Drawable_t *bar, void *) {
-    double pb_x;
-    ui_get_drawable_canon_pos(bar, &pb_x, NULL);
-    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
+static void on_audio_delay_changed(Ui_t *, const ProgressBarWidget_t *, const double progress) {
     const int ms = (int)(progress * 1000.0 - 500.0);
     if ( ms == settings_get()->global_audio_offset_ms )
         return;
 
     settings_get()->global_audio_offset_ms = ms;
-
-    Drawable_ProgressBarData_t *data = g_modal->audio_delay_bar->custom_data;
-    data->progress = (float)progress;
 
     Drawable_TextData_t *td = g_modal->audio_delay_label->custom_data;
     free(td->text);
@@ -307,18 +299,12 @@ static void on_audio_delay_changed(const UiEventOpts_t *opts, Drawable_t *bar, v
     ui_recompute_drawable(g_modal->ui, g_modal->audio_delay_label);
 }
 
-static void on_volume_changed(const UiEventOpts_t *opts, Drawable_t *bar, void *) {
-    double pb_x;
-    ui_get_drawable_canon_pos(bar, &pb_x, NULL);
-    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.x - pb_x) / bar->bounds.w));
+static void on_volume_changed(Ui_t *, const ProgressBarWidget_t *, const double progress) {
     const int volume = (int)(progress * 100.0);
     if ( volume == settings_get()->volume )
         return;
 
     settings_get()->volume = volume;
-
-    Drawable_ProgressBarData_t *data = g_modal->volume_bar->custom_data;
-    data->progress = (float)progress;
 
     Drawable_TextData_t *td = g_modal->volume_label->custom_data;
     free(td->text);
@@ -385,7 +371,7 @@ static void create_settings_title(Ui_t *ui) {
     ui_make_text(ui, &text_data, g_modal->container, &text_layout);
 }
 
-static void on_hints_changed(ToggleWidget_t *, const int selected) {
+static void on_hints_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
     switch (selected) {
     case 0:
@@ -435,7 +421,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     return text;
 }
 
-static void on_fill_changed(ToggleWidget_t *, const int selected) {
+static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
     switch (selected) {
     case 0:
@@ -490,7 +476,7 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     return text;
 }
 
-static void on_language_changed(ToggleWidget_t *, const int selected) {
+static void on_language_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
     switch (selected) {
     case 0:
@@ -542,7 +528,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     return text;
 }
 
-static void on_auto_play_changed(ToggleWidget_t *, const int selected) {
+static void on_auto_play_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
     switch (selected) {
     case 0:
@@ -610,6 +596,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+    g_modal->audio_delay_label = text;
 
     const Layout_t bar_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
@@ -618,21 +605,21 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
         .width = 0.5,
         .height = 0.025,
     };
-    const Drawable_ProgressBarData_t bar_data = {
-        .border_radius_em = BORDER_RADIUS_AUTO,
-        .progress = (float)((settings->global_audio_offset_ms + 500.0) / 1000.0),
+    const ProgressBarWidgetOpts_t bar_opts = {
+        .border_radius = BORDER_RADIUS_AUTO,
+        .initial_progress = (float)((settings->global_audio_offset_ms + 500.0) / 1000.0),
         .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+        .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
+        .user_editable = true,
+        .draggable = true
     };
-    Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
-    g_modal->audio_delay_label = text;
-    g_modal->audio_delay_bar = bar;
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, bar, on_audio_delay_changed, NULL);
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG,  bar, on_audio_delay_changed, NULL);
+    ProgressBarWidget_t *bar_widget = ui_build_progress_bar_widget(ui, g_modal->container, &bar_layout, &bar_opts);
+    bar_widget->on_change_callback = on_audio_delay_changed;
 
     const Layout_t left_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
-        .relative_to = bar,
+        .relative_to = bar_widget->d_bg,
     };
     const Drawable_TextData_t left_text_data = {
         .text = "-500",
@@ -645,7 +632,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
 
     const Layout_t right_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
-        .relative_to = bar,
+        .relative_to = bar_widget->d_bg,
     };
     const Drawable_TextData_t right_text_data = {
         .text = "+500",
@@ -656,7 +643,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     Drawable_t *right = ui_make_text(ui, &right_text_data, g_modal->container, &right_text_layout);
     ui_drawable_set_alpha_immediate(right, 100);
 
-    return bar;
+    return bar_widget->d_bg;
 }
 
 static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
@@ -675,6 +662,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+    g_modal->volume_label = text;
 
     const Layout_t bar_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
@@ -683,21 +671,21 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
         .width = 0.5,
         .height = 0.025,
     };
-    const Drawable_ProgressBarData_t bar_data = {
-        .border_radius_em = BORDER_RADIUS_AUTO,
-        .progress = (float)(settings->volume / 100.0),
+    const ProgressBarWidgetOpts_t bar_opts = {
         .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
         .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+        .border_radius = BORDER_RADIUS_AUTO,
+        .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
+        .user_editable = true,
+        .draggable = true,
+        .initial_progress = settings->volume / 100.0
     };
-    Drawable_t *bar = ui_make_progressbar(ui, &bar_data, g_modal->container, &bar_layout);
-    g_modal->volume_label = text;
-    g_modal->volume_bar = bar;
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, bar, on_volume_changed, NULL);
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG,  bar, on_volume_changed, NULL);
+    ProgressBarWidget_t *bar_widget = ui_build_progress_bar_widget(ui, g_modal->container, &bar_layout, &bar_opts);
+    bar_widget->on_change_callback = on_volume_changed;
 
     const Layout_t left_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
-        .relative_to = bar,
+        .relative_to = bar_widget->d_bg,
     };
     const Drawable_TextData_t left_text_data = {
         .text = "0",
@@ -710,7 +698,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
 
     const Layout_t right_text_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
-        .relative_to = bar,
+        .relative_to = bar_widget->d_bg,
     };
     const Drawable_TextData_t right_text_data = {
         .text = "100",
@@ -722,7 +710,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     ui_drawable_set_alpha_immediate(right, 100);
 }
 
-static void on_reset_clicked(Ui_t *) {
+static void on_reset_clicked(Ui_t *, const ButtonWidget_t *) {
     UserSettings_t *settings = settings_get();
     *settings = (UserSettings_t){0};
     settings->volume = 100;
@@ -748,7 +736,7 @@ static void create_reset_button(Ui_t *ui) {
 
 void settings_show(Ui_t *ui) {
     if ( g_modal != NULL )
-        error_abort("Settings modal opened more than once");
+        return;
     g_modal = calloc(1, sizeof(*g_modal));
     g_modal->ui = ui;
 

@@ -82,7 +82,6 @@ typedef struct Layout_t {
 typedef enum DrawableType_t {
     DRAW_TYPE_TEXT = 0,
     DRAW_TYPE_IMAGE,
-    DRAW_TYPE_PROGRESS_BAR,
     DRAW_TYPE_RECTANGLE,
     DRAW_TYPE_CUSTOM_TEXTURE
 } DrawableType_t;
@@ -291,12 +290,6 @@ typedef struct Drawable_ImageData_t {
     bool draw_shadow;
 } Drawable_ImageData_t;
 
-typedef struct Drawable_ProgressBarData_t {
-    double progress;
-    double border_radius_em;
-    Color_t fg_color, bg_color;
-} Drawable_ProgressBarData_t;
-
 typedef struct Drawable_RectangleData_t {
     double border_radius_em;
     Color_t color;
@@ -354,12 +347,13 @@ typedef struct WidgetEntry_t {
 } WidgetEntry_t;
 
 struct ToggleWidget_t;
-typedef void (*c_widget_toggle_on_change)(struct ToggleWidget_t *widget, int selected_opt);
+typedef void (*c_widget_toggle_on_change)(Ui_t *ui, const struct ToggleWidget_t *widget, int selected_opt);
 
 typedef struct ToggleWidget_t {
     int active_index;
     OWNING Vector_t *text_drawables;
     OWNING Drawable_t *d_anchor, *d_background, *d_foreground;
+    bool editable;
     int entry_id;
     WEAK Container_t *parent;
     WEAK c_widget_toggle_on_change on_change_callback;
@@ -373,7 +367,8 @@ typedef struct ToggleWidgetOpts_t {
     Color_t text_color, active_color, background_color;
 } ToggleWidgetOpts_t;
 
-typedef void (*c_widget_button_on_click)(Ui_t *ui);
+struct ButtonWidget_t;
+typedef void (*c_widget_button_on_click)(Ui_t *ui, const struct ButtonWidget_t *widget);
 
 typedef enum ButtonWidgetBackgroundShowType_t {
     BUTTON_BG_DISABLED = 0,
@@ -398,6 +393,34 @@ typedef struct ButtonWidgetOpts_t {
     Color_t bg_color, text_color;
     ButtonWidgetBackgroundShowType_t bg_show_type;
 } ButtonWidgetOpts_t;
+
+struct ProgressBarWidget_t;
+typedef void (*c_progress_bar_widget_on_change)(Ui_t *ui, const struct ProgressBarWidget_t *widget, double progress);
+
+typedef struct ProgressBarWidget_t {
+    OWNING Drawable_t *d_bg, *d_fg, *d_handle;
+    WEAK Container_t *parent;
+    Color_t bg_color, fg_color;
+    bool editable;
+    c_progress_bar_widget_on_change on_change_callback;
+    int entry_id;
+    double handle_relative_size;
+} ProgressBarWidget_t;
+
+typedef enum ProgressBarWidgetHandleType_t {
+    PROG_BAR_HANDLE_NONE = 0,
+    PROG_BAR_HANDLE_SHOW_ALWAYS,
+    PROG_BAR_HANDLE_SHOW_ON_HOVER,
+} ProgressBarWidgetHandleType_t;
+
+typedef struct ProgressBarWidgetOpts_t {
+    Color_t bg_color, fg_color;
+    bool user_editable, draggable;
+    ProgressBarWidgetHandleType_t handle_type;
+    double handle_relative_size;
+    double border_radius;
+    double initial_progress;
+} ProgressBarWidgetOpts_t;
 
 typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
@@ -451,7 +474,6 @@ void ui_get_container_canon_pos(const Container_t *container, double *x, double 
 Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, const Drawable_ImageData_t *data,
                           Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_progressbar(Ui_t *ui, const Drawable_ProgressBarData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);
@@ -498,5 +520,8 @@ void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget);
 ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts);
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget);
 void ui_widget_button_enabled(const ButtonWidget_t *widget, bool enabled);
+ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ProgressBarWidgetOpts_t *opts);
+void ui_destroy_progress_bar_widget(Ui_t *ui, ProgressBarWidget_t *widget);
+void ui_widget_progress_bar_progress(ProgressBarWidget_t *widget, double progress);
 
 #endif // ETSUKO_UI_H
