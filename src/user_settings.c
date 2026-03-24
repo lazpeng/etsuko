@@ -188,7 +188,7 @@ EM_JS(void, settings_start_sync, (void), {
     if ( Module.etsukoSettingsSyncStarted )
         return;
     Module.etsukoSettingsSyncStarted = true;
-    if ( Module.etsukoSettingsSyncState == = undefined )
+    if ( Module.etsukoSettingsSyncState === undefined )
         Module.etsukoSettingsSyncState = 0;
     try {
         if ( !FS.analyzePath('/persist').exists ) {
@@ -201,7 +201,7 @@ EM_JS(void, settings_start_sync, (void), {
 })
 
 EM_JS(int, settings_sync_state, (void), {
-    if ( Module.etsukoSettingsSyncState == = undefined )
+    if ( Module.etsukoSettingsSyncState === undefined )
         return 0;
     return Module.etsukoSettingsSyncState;
 })
