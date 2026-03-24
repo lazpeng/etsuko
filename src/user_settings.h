@@ -31,11 +31,17 @@ typedef enum AutoPlaySetting_t {
     SET_AUTO_PLAY_ENABLED
 } AutoPlaySetting_t;
 
+typedef enum PastLyricsVisibility_t {
+    SET_PAST_LYRICS_HIDE = 0,
+    SET_PAST_LYRICS_SHOW
+} PastLyricsVisibility_t;
+
 typedef struct UserSettings_t {
     ReadHintSetting_t read_hints_visibility;
     LyricFillSetting_t lyric_fill;
     LyricLanguageSetting_t lyric_language;
     AutoPlaySetting_t auto_play;
+    PastLyricsVisibility_t past_language_visibility;
     double global_audio_offset_ms;
     int volume;
 } UserSettings_t;

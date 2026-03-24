@@ -1,5 +1,6 @@
 #include "user_settings.h"
 
+#include "config.h"
 #include "error.h"
 #include "ui.h"
 
@@ -10,7 +11,7 @@
 #include "str_utils.h"
 
 #define MODAL_SETTING_INITIAL_VERTICAL_OFFSET (0.1)
-#define MODAL_SETTING_VERTICAL_OFFSET (0.1)
+#define MODAL_SETTING_VERTICAL_OFFSET (0.075)
 #define MODAL_SETTING_LABEL_X_POS (0.475)
 #define MODAL_SETTING_VALUE_X_POS (0.525)
 
@@ -25,10 +26,13 @@ static const char *read_hints_to_string(const ReadHintSetting_t value) {
 
 static const char *lyric_fill_to_string(const LyricFillSetting_t value) {
     switch ( value ) {
-    case SET_LYRIC_FILL_ONLY: return "fill";
-    case SET_LYRIC_FILL_DISABLED: return "disabled";
+    case SET_LYRIC_FILL_ONLY:
+        return "fill";
+    case SET_LYRIC_FILL_DISABLED:
+        return "disabled";
     case SET_LYRIC_FILL_WITH_PULSE:
-    default: return "pulse";
+    default:
+        return "pulse";
     }
 }
 
@@ -74,6 +78,18 @@ static void auto_play_from_string(UserSettings_t *settings, const char *value) {
     }
 }
 
+static const char *past_lyrics_visibility_to_string(const PastLyricsVisibility_t value) {
+    return value == SET_PAST_LYRICS_SHOW ? "shown" : "hidden";
+}
+
+static void past_lyrics_visibility_from_string(UserSettings_t *settings, const char *value) {
+    if ( str_equals_right_sized(value, "shown") ) {
+        settings->past_language_visibility = SET_PAST_LYRICS_SHOW;
+    } else if ( str_equals_right_sized(value, "hidden") ) {
+        settings->past_language_visibility = SET_PAST_LYRICS_HIDE;
+    }
+}
+
 static UserSettings_t *read_settings_from_json_string(const char *src) {
     if ( str_is_empty(src) )
         return NULL;
@@ -96,6 +112,7 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
     const char *lyric_language = json_get_string(json_obj_get(root_obj, "lyric_language"));
     const char *auto_play = json_get_string(json_obj_get(root_obj, "auto_play"));
+    const char *past_lyrics_visibility = json_get_string(json_obj_get(root_obj, "past_lyrics_visibility"));
     const JsonField_t *volume_field = json_obj_get(root_obj, "volume");
     const JsonField_t *audio_offset_field = json_obj_get(root_obj, "global_audio_offset");
 
@@ -107,6 +124,8 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         lyric_language_from_string(settings, lyric_language);
     if ( !str_is_empty(auto_play) )
         auto_play_from_string(settings, auto_play);
+    if ( !str_is_empty(past_lyrics_visibility) )
+        past_lyrics_visibility_from_string(settings, past_lyrics_visibility);
     if ( volume_field != NULL )
         settings->volume = (int)json_get_number(volume_field);
     if ( audio_offset_field != NULL )
@@ -127,6 +146,8 @@ static StrBuffer_t *settings_to_json_string(const UserSettings_t *settings) {
     json_buf_add_string(buf, &first, "lyric_fill", lyric_fill_to_string(settings->lyric_fill));
     json_buf_add_string(buf, &first, "lyric_language", lyric_language_to_string(settings->lyric_language));
     json_buf_add_string(buf, &first, "auto_play", auto_play_to_string(settings->auto_play));
+    json_buf_add_string(buf, &first, "past_lyrics_visibility",
+                        past_lyrics_visibility_to_string(settings->past_language_visibility));
     json_buf_add_number(buf, &first, "volume", settings->volume);
     json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset_ms);
     json_buf_end_object(buf);
@@ -164,29 +185,33 @@ static UserSettings_t *read_settings_emscripten(void) {
 }
 
 EM_JS(void, settings_start_sync, (void), {
-    if (Module.etsukoSettingsSyncStarted) return;
+    if ( Module.etsukoSettingsSyncStarted )
+        return;
     Module.etsukoSettingsSyncStarted = true;
-    if (Module.etsukoSettingsSyncState === undefined) Module.etsukoSettingsSyncState = 0;
+    if ( Module.etsukoSettingsSyncState == = undefined )
+        Module.etsukoSettingsSyncState = 0;
     try {
-        if (!FS.analyzePath('/persist').exists) {
+        if ( !FS.analyzePath('/persist').exists ) {
             FS.mkdir('/persist');
             FS.mount(IDBFS, {}, '/persist');
         }
-        FS.syncfs(true, function(err) {
-            Module.etsukoSettingsSyncState = err ? -1 : 1;
-        });
-    } catch (e) {
-        Module.etsukoSettingsSyncState = -1;
+        FS.syncfs(true, function(err) { Module.etsukoSettingsSyncState = err ? -1 : 1; });
     }
+    catch(e) { Module.etsukoSettingsSyncState = -1; }
 })
 
 EM_JS(int, settings_sync_state, (void), {
-    if (Module.etsukoSettingsSyncState === undefined) return 0;
+    if ( Module.etsukoSettingsSyncState == = undefined )
+        return 0;
     return Module.etsukoSettingsSyncState;
 })
 
 EM_JS(void, settings_flush_sync, (void), {
-    FS.syncfs(false, function(err) { if (err) console.error(err); });
+    FS.syncfs(
+        false, function(err) {
+            if ( err )
+                console.error(err);
+        });
 })
 #else
 static UserSettings_t *read_settings_from_user_json(void) {
@@ -259,12 +284,16 @@ bool settings_ensure_loaded(void) {
     if ( state < 0 ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->past_language_visibility =
+            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
         return true;
     }
     g_settings = read_settings_emscripten();
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->past_language_visibility =
+            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
     return true;
 #else
@@ -272,6 +301,8 @@ bool settings_ensure_loaded(void) {
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->past_language_visibility =
+            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
     return true;
 #endif
@@ -321,7 +352,7 @@ static Container_t *create_container(const Ui_t *ui) {
     const Layout_t layout = {
         .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
         .width = 0.6,
-        .height = 0.6,
+        .height = 0.75,
         .z_index = 100,
         .absolute = true,
     };
@@ -373,7 +404,7 @@ static void create_settings_title(Ui_t *ui) {
 
 static void on_hints_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
-    switch (selected) {
+    switch ( selected ) {
     case 0:
         settings->read_hints_visibility = SET_READ_HINTS_SHOWN;
         break;
@@ -408,11 +439,11 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     const char *opts[] = {"Show", "Hide"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
-        .num_opts = sizeof (opts) / sizeof (const char *),
+        .num_opts = sizeof(opts) / sizeof(const char *),
         .text_em = 1.0,
-        .text_color = {.r=255,.g=255,.b=255,.a=255},
-        .background_color = {.r=100,.g=100,.b=100,.a=70},
-        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
         .active_index = (int)settings->read_hints_visibility,
     };
     ToggleWidget_t *toggle = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
@@ -423,7 +454,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
 
 static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
-    switch (selected) {
+    switch ( selected ) {
     case 0:
         settings->lyric_fill = SET_LYRIC_FILL_WITH_PULSE;
         break;
@@ -436,6 +467,58 @@ static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) 
     default:
         break;
     }
+}
+
+static void on_past_lyrics_visibility_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch ( selected ) {
+    case 0:
+        settings->past_language_visibility = SET_PAST_LYRICS_HIDE;
+        break;
+    case 1:
+        settings->past_language_visibility = SET_PAST_LYRICS_SHOW;
+        break;
+    default:
+        break;
+    }
+}
+
+static Drawable_t *create_past_lyrics_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Past lyrics visibility:",
+        .font_type = FONT_UI,
+        .em = 1.0,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const char *opts[] = {"Hide", "Show"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof(opts) / sizeof(const char *),
+        .text_em = 1.0,
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
+        .active_index = (int)settings->past_language_visibility,
+    };
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_past_lyrics_visibility_changed;
+
+    return text;
 }
 
 static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
@@ -463,11 +546,11 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     const char *opts[] = {"Fill + Pulse", "Fill Only", "Disabled"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
-        .num_opts = sizeof (opts) / sizeof (const char *),
+        .num_opts = sizeof(opts) / sizeof(const char *),
         .text_em = 1.0,
-        .text_color = {.r=255,.g=255,.b=255,.a=255},
-        .background_color = {.r=100,.g=100,.b=100,.a=70},
-        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
         .active_index = (int)settings->lyric_fill,
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
@@ -478,7 +561,7 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
 
 static void on_language_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
-    switch (selected) {
+    switch ( selected ) {
     case 0:
         settings->lyric_language = SET_LYRIC_LANGUAGE_PREFER_ORIGINAL;
         break;
@@ -515,11 +598,11 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     const char *opts[] = {"Original", "Translated"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
-        .num_opts = sizeof (opts) / sizeof (const char *),
+        .num_opts = sizeof(opts) / sizeof(const char *),
         .text_em = 1.0,
-        .text_color = {.r=255,.g=255,.b=255,.a=255},
-        .background_color = {.r=100,.g=100,.b=100,.a=70},
-        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
         .active_index = (int)settings->lyric_language,
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
@@ -530,7 +613,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
 
 static void on_auto_play_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
     UserSettings_t *settings = settings_get();
-    switch (selected) {
+    switch ( selected ) {
     case 0:
         settings->auto_play = SET_AUTO_PLAY_ENABLED;
         break;
@@ -567,11 +650,11 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     const char *opts[] = {"Enabled", "Disabled"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
-        .num_opts = sizeof (opts) / sizeof (const char *),
+        .num_opts = sizeof(opts) / sizeof(const char *),
         .text_em = 1.0,
-        .text_color = {.r=255,.g=255,.b=255,.a=255},
-        .background_color = {.r=100,.g=100,.b=100,.a=70},
-        .active_color = {.r=210,.g=210,.b=210,.a=90},
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
         .active_index = settings->auto_play == SET_AUTO_PLAY_ENABLED ? 0 : 1,
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
@@ -605,15 +688,13 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
         .width = 0.5,
         .height = 0.025,
     };
-    const ProgressBarWidgetOpts_t bar_opts = {
-        .border_radius = BORDER_RADIUS_AUTO,
-        .initial_progress = (float)((settings->global_audio_offset_ms + 500.0) / 1000.0),
-        .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
-        .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
-        .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
-        .user_editable = true,
-        .draggable = true
-    };
+    const ProgressBarWidgetOpts_t bar_opts = {.border_radius = BORDER_RADIUS_AUTO,
+                                              .initial_progress = (float)((settings->global_audio_offset_ms + 500.0) / 1000.0),
+                                              .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
+                                              .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+                                              .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
+                                              .user_editable = true,
+                                              .draggable = true};
     ProgressBarWidget_t *bar_widget = ui_build_progress_bar_widget(ui, g_modal->container, &bar_layout, &bar_opts);
     bar_widget->on_change_callback = on_audio_delay_changed;
 
@@ -671,15 +752,13 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
         .width = 0.5,
         .height = 0.025,
     };
-    const ProgressBarWidgetOpts_t bar_opts = {
-        .bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
-        .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
-        .border_radius = BORDER_RADIUS_AUTO,
-        .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
-        .user_editable = true,
-        .draggable = true,
-        .initial_progress = settings->volume / 100.0
-    };
+    const ProgressBarWidgetOpts_t bar_opts = {.bg_color = {.r = 50, .g = 50, .b = 50, .a = 100},
+                                              .fg_color = {.r = 200, .g = 200, .b = 200, .a = 150},
+                                              .border_radius = BORDER_RADIUS_AUTO,
+                                              .handle_type = PROG_BAR_HANDLE_SHOW_ALWAYS,
+                                              .user_editable = true,
+                                              .draggable = true,
+                                              .initial_progress = settings->volume / 100.0};
     ProgressBarWidget_t *bar_widget = ui_build_progress_bar_widget(ui, g_modal->container, &bar_layout, &bar_opts);
     bar_widget->on_change_callback = on_volume_changed;
 
@@ -745,6 +824,7 @@ void settings_show(Ui_t *ui) {
     create_settings_title(ui);
 
     Drawable_t *prev = create_hints_setting(ui);
+    prev = create_past_lyrics_setting(ui, prev);
     prev = create_fill_setting(ui, prev);
     prev = create_language_setting(ui, prev);
     prev = create_auto_play_setting(ui, prev);

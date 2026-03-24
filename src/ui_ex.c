@@ -679,7 +679,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         scale_hint_for_line(view, index);
     }
 
-    const bool should_hide_past = config_get()->karaoke.hide_past_lyrics;
+    const bool should_hide_past = settings_get()->past_language_visibility == SET_PAST_LYRICS_HIDE;
     const int32_t comp_idx = get_past_hidden_line_index(view);
     const double prev_scroll_pos = get_lyric_line_scroll_position(view, comp_idx);
     const double current_scroll_pos = view->container->overflow_y.current_amount;
