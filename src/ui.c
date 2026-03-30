@@ -1768,7 +1768,7 @@ static void apply_shadow_to_image(Drawable_t *drawable) {
     drawable->shadow = render_make_shadow(drawable->texture, &drawable->bounds, 1.f, offset);
 }
 
-Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, const int length, const Drawable_ImageData_t *weak_data,
+Drawable_t *ui_make_image(const unsigned char *bytes, const int length, const Drawable_ImageData_t *weak_data,
                           Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_IMAGE, false);
     Drawable_ImageData_t *data = dup_image_data(weak_data);
@@ -2018,6 +2018,9 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
         const Drawable_ImageData_t *data = drawable->custom_data;
+        if ( data->border_radius_em > 0 ) {
+            drawable->texture->border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+        }
         ui_reposition_drawable(drawable);
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);

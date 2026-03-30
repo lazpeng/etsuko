@@ -472,8 +472,8 @@ void ui_get_drawable_canon_pos(const Drawable_t *drawable, double *x, double *y)
 void ui_get_container_canon_pos(const Container_t *container, double *x, double *y, bool include_viewport_offset);
 // Drawables
 Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout);
-Drawable_t *ui_make_image(Ui_t *ui, const unsigned char *bytes, int length, const Drawable_ImageData_t *data,
-                          Container_t *container, const Layout_t *layout);
+Drawable_t *ui_make_image(const unsigned char *bytes, int length, const Drawable_ImageData_t *data, Container_t *container,
+                          const Layout_t *layout);
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable);

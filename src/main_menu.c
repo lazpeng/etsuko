@@ -389,7 +389,7 @@ static void setup_album(const char *_, const void *value, void *userdata) {
         }
 
         Drawable_t *image =
-            ui_make_image(menu->ui, no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
+            ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
         grid->last_in_row = image;
         if ( set_first ) {
             grid->first_in_row = image;

@@ -473,7 +473,7 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Album art
     state->drawables.album_image = ui_make_image(
-        state->ui, state->resources.album_art_buffer->data, (int)state->resources.album_art_buffer->downloaded_bytes,
+        state->resources.album_art_buffer->data, (int)state->resources.album_art_buffer->downloaded_bytes,
         &(Drawable_ImageData_t){
             .border_radius_em = 2.0,
             .draw_shadow = config_get()->karaoke.draw_album_art_shadow,
@@ -577,7 +577,7 @@ void karaoke_setup(Karaoke_t *state) {
     const unsigned char *play_bytes = incbin_play_img;
     const int play_bytes_len = sizeof incbin_play_img;
     state->drawables.play_button =
-        ui_make_image(state->ui, play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
+        ui_make_image(play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
                       &(Layout_t){.offset_x = 0,
                                   .offset_y = 0,
                                   .width = 0.05,
@@ -585,12 +585,11 @@ void karaoke_setup(Karaoke_t *state) {
 
     const unsigned char *pause_bytes = incbin_pause_img;
     const int pause_bytes_len = sizeof incbin_pause_img;
-    state->drawables.pause_button = ui_make_image(
-        state->ui, pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
-        &(Layout_t){.offset_x = 0,
-                    .offset_y = 0,
-                    .width = 0.05,
-                    .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
+    state->drawables.pause_button = ui_make_image(pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
+                      &(Layout_t){.offset_x = 0,
+                                  .offset_y = 0,
+                                  .width = 0.05,
+                                  .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
     state->drawables.pause_button->enabled = false;
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
