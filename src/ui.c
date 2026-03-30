@@ -2205,6 +2205,7 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
         return existing;
     }
     // duplicate the animation
+    // TODO: Remove allocation on every invocation of animations by reusing existing buffers
     Animation_t *animation = calloc(1, sizeof(*animation));
     // copy everything from the base anim
     memcpy(animation, base_anim, sizeof(*animation));
