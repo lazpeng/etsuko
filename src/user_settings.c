@@ -830,7 +830,7 @@ void settings_show(Ui_t *ui) {
     Drawable_t *prev = create_hints_setting(ui);
     prev = create_past_lyrics_setting(ui, prev);
     prev = create_fill_setting(ui, prev);
-    prev = create_language_setting(ui, prev);
+    //prev = create_language_setting(ui, prev);
     prev = create_auto_play_setting(ui, prev);
     prev = create_audio_delay_setting(ui, prev);
     create_volume_setting(ui, prev);
