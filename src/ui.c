@@ -2041,10 +2041,17 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
         position_layout(&container->layout, container->parent, &container->bounds);
     }
 
-    // First measure (recompute does that in all cases)
+    // First measure drawables that don't depend on any other for their size
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
-        ui_recompute_drawable(ui, drawable);
+        if ( drawable->layout.relative_to_size == NULL )
+            ui_recompute_drawable(ui, drawable);
+    }
+    // then those that do (saves having to store a flag whether they were recomputed or not)
+    for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
+        Drawable_t *drawable = container->child_drawables->data[i];
+        if ( drawable->layout.relative_to_size != NULL )
+            ui_recompute_drawable(ui, drawable);
     }
     // then position
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -2690,6 +2697,15 @@ void ui_container_update_background_colors_immediate(const Container_t *containe
 static void toggle_widget_reconfigure(void *widget_data) {
     const ToggleWidget_t *result = widget_data;
 
+    // Update each text's offset_x using the current (post-resize) text height and
+    // reposition before reading end_x, so final_text_width is based on correct positions.
+    for ( size_t i = 0; i < result->text_drawables->size; i++ ) {
+        Drawable_t *text = result->text_drawables->data[i];
+        if ( i > 0 )
+            text->layout.offset_x = text->bounds.h * 1.5;
+        ui_reposition_drawable(text);
+    }
+
     const double start_x = result->d_anchor->bounds.x;
     double end_x = 0, end_w = 0;
     Drawable_t *prev = result->d_anchor;
@@ -2706,13 +2722,6 @@ static void toggle_widget_reconfigure(void *widget_data) {
     result->d_anchor->bounds.w = final_width;
     result->d_anchor->bounds.h = prev->bounds.h + extra_height;
     ui_reposition_drawable(result->d_anchor);
-
-    for ( size_t i = 0; i < result->text_drawables->size; i++ ) {
-        Drawable_t *text = result->text_drawables->data[i];
-        if ( i > 0 )
-            text->layout.offset_x = text->bounds.h * 1.5;
-        ui_reposition_drawable(text);
-    }
 
     const Layout_t bg_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_HEIGHT | LAYOUT_PROPORTIONAL_H,
