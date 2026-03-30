@@ -190,10 +190,6 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void 
         error_abort("on_line_event: could not find the index of the hovered line drawable");
 
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-        // If the user puts the cursor over a line, change its alpha to be the lowest under the active (0xFF)
-        // considering that alpha decreases with the distance from the active line
-        ui_drawable_set_alpha_immediate((Drawable_t *)drawable, calculate_alpha(0)); // this cast is bad
-        // otherwise, when this condition isn't true anymore, the main loop takes care of setting the correct alpha back
         view->current_hovered_index = index;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
         view->current_hovered_index = -1;
@@ -606,7 +602,9 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     }
 
     // don't change the alpha if the user is hovering over the line
-    if ( alpha != drawable->alpha_mod && view->current_hovered_index != index ) {
+    if ( view->current_hovered_index == index ) {
+        ui_drawable_set_alpha(drawable, calculate_alpha(0));
+    } else if ( alpha != drawable->alpha_mod ) {
         ui_drawable_set_alpha(drawable, alpha);
         fade_hint_for_line(view, index);
     }
@@ -685,7 +683,9 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     const double current_scroll_pos = view->container->overflow_y.current_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( should_hide_past && current_scroll_pos >= prev_scroll_pos ) {
-        if ( view->current_hovered_index != index ) {
+        if ( view->current_hovered_index == index ) {
+            ui_drawable_set_alpha(drawable, calculate_alpha(0));
+        } else {
             ui_drawable_set_alpha(drawable, 0);
         }
         fade_hint_for_line(view, index);
@@ -697,8 +697,11 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
             distance = calculate_distance(view, index, view->current_active_index);
         }
         // Don't change the alpha if the user is hovering over the line
-        if ( view->current_hovered_index != index )
+        if ( view->current_hovered_index == index ) {
+            ui_drawable_set_alpha(drawable, calculate_alpha(0));
+        } else {
             ui_drawable_set_alpha(drawable, calculate_alpha(distance));
+        }
         fade_hint_for_line(view, index);
     }
 }
