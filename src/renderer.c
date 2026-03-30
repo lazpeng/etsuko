@@ -37,7 +37,7 @@
 #define DEFAULT_WIDTH (1280)
 #define DEFAULT_HEIGHT (720)
 #define DEFAULT_PT (16)
-#define BASE_DPI 72.f
+#define BASE_DPI 96.f
 // 1MB
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
 #define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
@@ -884,14 +884,15 @@ int32_t render_measure_pixels_from_em(const double em) {
     const double scale_w = g_renderer->viewport.w / DEFAULT_WIDTH;
     const double scale_h = g_renderer->viewport.h / DEFAULT_HEIGHT;
     const double scale = MIN(scale_w, scale_h);
-    const double rem = round(DEFAULT_PT * scale);
+    const double rem = DEFAULT_PT * scale;
     const double pixels = em * rem;
     return (int32_t)pixels;
 }
 
 int32_t render_measure_pt_from_em(const double em) {
     const double pixels = render_measure_pixels_from_em(em);
-    const int32_t pt_size = (int32_t)lround(pixels * BASE_DPI / g_renderer->h_dpi);
+    const double dpi_scale = BASE_DPI / MIN(g_renderer->h_dpi, g_renderer->v_dpi);
+    const int32_t pt_size = (int32_t)lround(pixels * dpi_scale);
     return pt_size;
 }
 
