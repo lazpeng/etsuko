@@ -699,8 +699,9 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     bar_widget->on_change_callback = on_audio_delay_changed;
 
     const Layout_t left_text_layout = {
-        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = bar_widget->d_bg,
+        .offset_y = -0.01,
     };
     const Drawable_TextData_t left_text_data = {
         .text = "-500",
@@ -712,8 +713,9 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     ui_drawable_set_alpha_immediate(left, 100);
 
     const Layout_t right_text_layout = {
-        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = bar_widget->d_bg,
+        .offset_y = -0.01,
     };
     const Drawable_TextData_t right_text_data = {
         .text = "+500",
@@ -763,8 +765,9 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     bar_widget->on_change_callback = on_volume_changed;
 
     const Layout_t left_text_layout = {
-        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y,
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = bar_widget->d_bg,
+        .offset_y = -0.01,
     };
     const Drawable_TextData_t left_text_data = {
         .text = "0",
@@ -776,8 +779,9 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     ui_drawable_set_alpha_immediate(left, 100);
 
     const Layout_t right_text_layout = {
-        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y,
+        .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = bar_widget->d_bg,
+        .offset_y = -0.01,
     };
     const Drawable_TextData_t right_text_data = {
         .text = "100",
