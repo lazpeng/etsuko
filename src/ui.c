@@ -1089,11 +1089,6 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         render_draw_rounded_rect(ui->null_texture, &container_screen_bounds, &color, 0);
     }
 
-    const bool clip = container->overflow_y.kind != OVERFLOW_NOTHING;
-    if ( clip ) {
-        render_push_scissor(&container_screen_bounds);
-    }
-
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y - container->overflow_y.current_amount;
 
@@ -1116,10 +1111,6 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
             draw_all_container(ui, container->child_containers->data[c_idx], base_bounds);
             c_idx += 1;
         }
-    }
-
-    if ( clip ) {
-        render_pop_scissor();
     }
 }
 

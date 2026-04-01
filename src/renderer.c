@@ -44,87 +44,123 @@
 #define PROJECTION_MATRIX_SIZE (16)
 #define MAX_SCISSOR_STACK (16)
 
+typedef struct FontData_t {
+    stbtt_fontinfo ui_font_info, lyrics_font_info;
+    unsigned char *ui_font_data, *lyrics_font_data;
+} FontData_t;
+
+typedef struct TextureShaderData_t {
+    GLuint id;
+    GLint projection_loc;
+    GLint alpha_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+    GLint border_radius_loc;
+    GLint rect_size_loc;
+    GLint color_mod_loc;
+    GLint num_regions_loc;
+    GLint regions_loc;
+    GLint num_erase_regions_loc;
+    GLint erase_regions_loc;
+} TextureShaderData_t;
+
+typedef struct RectShaderData_t {
+    GLuint id;
+    GLint projection_loc;
+    GLint color_loc;
+    GLint pos_loc;
+    GLint size_loc;
+    GLint radius_loc;
+} RectShaderData_t;
+
+typedef struct SimpleGradientShaderData_t {
+    GLuint id;
+    GLint top_color_loc;
+    GLint bottom_color_loc;
+    GLint projection_loc;
+} SimpleGradientShaderData_t;
+
+typedef struct BlurShaderData_t {
+    GLuint id;
+    GLint texture_loc;
+    GLint direction_loc;
+    GLint size_loc;
+    GLint projection_loc;
+} BlurShaderData_t;
+
+typedef struct RandomGradientShaderData_t {
+    GLuint id;
+    GLint time_loc;
+    GLint resolution_loc;
+    GLint projection_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+    GLint border_radius_loc;
+    GLint rect_size_loc;
+} RandomGradientShaderData_t;
+
+typedef struct DynamicGradientShaderData_t {
+    GLuint id;
+    GLint time_loc;
+    GLint noise_mag_loc;
+    GLint colors;
+    GLint resolution_loc;
+    GLint projection_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+    GLint border_radius_loc;
+    GLint rect_size_loc;
+} DynamicGradientShaderData_t;
+
+typedef struct AmLikeShaderData_t {
+    GLuint id;
+    GLint resolution_loc;
+    GLint time_loc;
+    GLint colors_loc;
+    GLint projection_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+    GLint border_radius_loc;
+    GLint rect_size_loc;
+} AmLikeShaderData_t;
+
+typedef struct CopyShaderData_t {
+    GLuint id;
+} CopyShaderData_t;
+
+typedef struct ShaderData_t {
+    GLuint active_shader_program;
+    
+    TextureShaderData_t tex;
+    RectShaderData_t rect;
+    SimpleGradientShaderData_t grad;
+    BlurShaderData_t blur;
+    RandomGradientShaderData_t rand_grad;
+    DynamicGradientShaderData_t dyn_grad;
+    AmLikeShaderData_t am_like;
+    CopyShaderData_t copy;
+} ShaderData_t;
+
 typedef struct ScissorEntry_t {
     int x, y, w, h;
 } ScissorEntry_t;
 
+typedef struct ScissorData_t {
+    ScissorEntry_t entries[MAX_SCISSOR_STACK];
+    int depth;
+} ScissorData_t;
+
 typedef struct Renderer_t {
     GLFWwindow *window;
     Bounds_t viewport;
-    stbtt_fontinfo ui_font_info, lyrics_font_info;
-    unsigned char *ui_font_data, *lyrics_font_data;
     double h_dpi, v_dpi;
     RenderTarget_t *render_target;
-    BlendMode_t blend_mode;
-    bool rendering_to_fbo;
-    double window_pixel_scale;
-
-    // OpenGL objects
-    GLuint active_shader_program;
-    GLuint texture_shader;
-    GLuint rect_shader;
-    GLuint gradient_shader;
-    GLuint dyn_gradient_shader;
-    GLuint am_gradient_shader;
-    GLuint cloud_gradient_shader;
-    GLuint rand_gradient_shader;
-    GLuint blur_shader;
-    GLuint copy_shader;
     float projection_matrix[PROJECTION_MATRIX_SIZE];
-
-    // Shader uniform locations
-    GLint tex_projection_loc;
-    GLint tex_alpha_loc;
-    GLint tex_use_bounds_loc;
-    GLint tex_bounds_loc;
-    GLint tex_border_radius_loc;
-    GLint tex_rect_size_loc;
-    GLint tex_color_mod_loc;
-    GLint tex_num_regions_loc;
-    GLint tex_regions_loc;
-    GLint tex_num_erase_regions_loc;
-    GLint tex_erase_regions_loc;
-    GLint rect_projection_loc;
-    GLint rect_color_loc;
-    GLint rect_pos_loc;
-    GLint rect_size_loc;
-    GLint rect_radius_loc;
-    GLint gradient_top_color_loc;
-    GLint gradient_bottom_color_loc;
-    GLint gradient_projection_loc;
-    GLint frost_time_loc;
-    GLint blur_texture_loc;
-    GLint blur_direction_loc;
-    GLint blur_size_loc;
-    GLint blur_projection_loc;
-    GLint rand_grad_time_loc;
-    GLint rand_grad_resolution_loc;
-    GLint rand_grad_projection_loc;
-    GLint rand_grad_use_bounds_loc;
-    GLint rand_grad_bounds_loc;
-    GLint rand_grad_border_radius_loc;
-    GLint rand_grad_rect_size_loc;
-    GLint dyn_grad_time_loc;
-    GLint dyn_grad_noise_mag_loc;
-    GLint dyn_grad_colors;
-    GLint dyn_grad_resolution_loc;
-    GLint dyn_grad_projection_loc;
-    GLint dyn_grad_use_bounds_loc;
-    GLint dyn_grad_bounds_loc;
-    GLint dyn_grad_border_radius_loc;
-    GLint dyn_grad_rect_size_loc;
-    GLint aml_resolution_loc;
-    GLint aml_time_loc;
-    GLint aml_colors_loc;
-    GLint aml_projection_loc;
-    GLint aml_use_bounds_loc;
-    GLint aml_bounds_loc;
-    GLint aml_border_radius_loc;
-    GLint aml_rect_size_loc;
-
-    // Scissor stack for OVERFLOW_CLIP containers
-    ScissorEntry_t scissor_stack[MAX_SCISSOR_STACK];
-    int scissor_stack_depth;
+    BlendMode_t blend_mode;
+    double window_pixel_scale;
+    FontData_t fonts;
+    ShaderData_t shaders;
+    ScissorData_t scissor_data;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
@@ -224,9 +260,9 @@ static void update_projection_matrix(void) {
 }
 
 static void set_shader_program(const GLuint program) {
-    if ( g_renderer->active_shader_program != program ) {
+    if ( g_renderer->shaders.active_shader_program != program ) {
         glUseProgram(program);
-        g_renderer->active_shader_program = program;
+        g_renderer->shaders.active_shader_program = program;
     }
 }
 
@@ -335,80 +371,76 @@ void render_init(void) {
 
     // Compile shaders
     char *buffer = begin_shader_compilation();
-    g_renderer->texture_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_texture_frag_shader, "tex");
-    g_renderer->rect_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_rect_frag_shader, "rect");
-    g_renderer->gradient_shader =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_gradient_frag_shader, "gradient");
-    g_renderer->dyn_gradient_shader =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
-    g_renderer->am_gradient_shader =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
-    g_renderer->rand_gradient_shader =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
-    g_renderer->blur_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_blur_frag_shader, "blur");
-    g_renderer->copy_shader = create_shader_program(buffer, incbin_default_vert_shader, incbin_copy_frag_shader, "copy");
+    g_renderer->shaders.tex.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_texture_frag_shader, "tex");
+    g_renderer->shaders.rect.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_rect_frag_shader, "rect");
+    g_renderer->shaders.grad.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_gradient_frag_shader, "gradient");
+    g_renderer->shaders.dyn_grad.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
+    g_renderer->shaders.am_like.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
+    g_renderer->shaders.rand_grad.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
+    g_renderer->shaders.blur.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_blur_frag_shader, "blur");
+    g_renderer->shaders.copy.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_copy_frag_shader, "copy");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
-    g_renderer->tex_projection_loc = glGetUniformLocation(g_renderer->texture_shader, "u_projection");
-    g_renderer->tex_alpha_loc = glGetUniformLocation(g_renderer->texture_shader, "u_alpha");
-    g_renderer->tex_use_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "u_use_bounds");
-    g_renderer->tex_bounds_loc = glGetUniformLocation(g_renderer->texture_shader, "u_bounds");
-    g_renderer->tex_border_radius_loc = glGetUniformLocation(g_renderer->texture_shader, "u_borderRadius");
-    g_renderer->tex_rect_size_loc = glGetUniformLocation(g_renderer->texture_shader, "u_rectSize");
-    g_renderer->tex_color_mod_loc = glGetUniformLocation(g_renderer->texture_shader, "u_colorModFactor");
-    g_renderer->tex_num_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_num_regions");
-    g_renderer->tex_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_regions");
-    g_renderer->tex_num_erase_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_num_erase_regions");
-    g_renderer->tex_erase_regions_loc = glGetUniformLocation(g_renderer->texture_shader, "u_erase_regions");
+    g_renderer->shaders.tex.projection_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_projection");
+    g_renderer->shaders.tex.alpha_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_alpha");
+    g_renderer->shaders.tex.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_use_bounds");
+    g_renderer->shaders.tex.bounds_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_bounds");
+    g_renderer->shaders.tex.border_radius_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_borderRadius");
+    g_renderer->shaders.tex.rect_size_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_rectSize");
+    g_renderer->shaders.tex.color_mod_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_colorModFactor");
+    g_renderer->shaders.tex.num_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_regions");
+    g_renderer->shaders.tex.regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_regions");
+    g_renderer->shaders.tex.num_erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_erase_regions");
+    g_renderer->shaders.tex.erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_erase_regions");
 
     // Get uniform locations for rect shader
-    g_renderer->rect_projection_loc = glGetUniformLocation(g_renderer->rect_shader, "u_projection");
-    g_renderer->rect_color_loc = glGetUniformLocation(g_renderer->rect_shader, "u_color");
-    g_renderer->rect_pos_loc = glGetUniformLocation(g_renderer->rect_shader, "u_rectPos");
-    g_renderer->rect_size_loc = glGetUniformLocation(g_renderer->rect_shader, "u_rectSize");
-    g_renderer->rect_radius_loc = glGetUniformLocation(g_renderer->rect_shader, "u_cornerRadius");
+    g_renderer->shaders.rect.projection_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_projection");
+    g_renderer->shaders.rect.color_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_color");
+    g_renderer->shaders.rect.pos_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_rectPos");
+    g_renderer->shaders.rect.size_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_rectSize");
+    g_renderer->shaders.rect.radius_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_cornerRadius");
 
     // Get uniform locations for the gradient shader
-    g_renderer->gradient_top_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_topColor");
-    g_renderer->gradient_bottom_color_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_bottomColor");
-    g_renderer->gradient_projection_loc = glGetUniformLocation(g_renderer->gradient_shader, "u_projection");
+    g_renderer->shaders.grad.top_color_loc = glGetUniformLocation(g_renderer->shaders.grad.id, "u_topColor");
+    g_renderer->shaders.grad.bottom_color_loc = glGetUniformLocation(g_renderer->shaders.grad.id, "u_bottomColor");
+    g_renderer->shaders.grad.projection_loc = glGetUniformLocation(g_renderer->shaders.grad.id, "u_projection");
 
     // Get uniform locations for the random gradient shader
-    g_renderer->rand_grad_time_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_time");
-    g_renderer->rand_grad_resolution_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_resolution");
-    g_renderer->rand_grad_projection_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_projection");
-    g_renderer->rand_grad_use_bounds_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_use_bounds");
-    g_renderer->rand_grad_bounds_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_bounds");
-    g_renderer->rand_grad_border_radius_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_borderRadius");
-    g_renderer->rand_grad_rect_size_loc = glGetUniformLocation(g_renderer->rand_gradient_shader, "u_rectSize");
+    g_renderer->shaders.rand_grad.time_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_time");
+    g_renderer->shaders.rand_grad.resolution_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_resolution");
+    g_renderer->shaders.rand_grad.projection_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_projection");
+    g_renderer->shaders.rand_grad.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_use_bounds");
+    g_renderer->shaders.rand_grad.bounds_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_bounds");
+    g_renderer->shaders.rand_grad.border_radius_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_borderRadius");
+    g_renderer->shaders.rand_grad.rect_size_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_rectSize");
 
     // Get uniform locations for the dynamic gradient shader
-    g_renderer->dyn_grad_time_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_time");
-    g_renderer->dyn_grad_noise_mag_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_noise_magnitude");
-    g_renderer->dyn_grad_colors = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_colors");
-    g_renderer->dyn_grad_resolution_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_resolution");
-    g_renderer->dyn_grad_projection_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_projection");
-    g_renderer->dyn_grad_use_bounds_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_use_bounds");
-    g_renderer->dyn_grad_bounds_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_bounds");
-    g_renderer->dyn_grad_border_radius_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_borderRadius");
-    g_renderer->dyn_grad_rect_size_loc = glGetUniformLocation(g_renderer->dyn_gradient_shader, "u_rectSize");
+    g_renderer->shaders.dyn_grad.time_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_time");
+    g_renderer->shaders.dyn_grad.noise_mag_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_noise_magnitude");
+    g_renderer->shaders.dyn_grad.colors = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_colors");
+    g_renderer->shaders.dyn_grad.resolution_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_resolution");
+    g_renderer->shaders.dyn_grad.projection_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_projection");
+    g_renderer->shaders.dyn_grad.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_use_bounds");
+    g_renderer->shaders.dyn_grad.bounds_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_bounds");
+    g_renderer->shaders.dyn_grad.border_radius_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_borderRadius");
+    g_renderer->shaders.dyn_grad.rect_size_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_rectSize");
 
     // Get uniform locations for blur shader
-    g_renderer->blur_texture_loc = glGetUniformLocation(g_renderer->blur_shader, "u_texture");
-    g_renderer->blur_direction_loc = glGetUniformLocation(g_renderer->blur_shader, "u_direction");
-    g_renderer->blur_size_loc = glGetUniformLocation(g_renderer->blur_shader, "u_blur_size");
-    g_renderer->blur_projection_loc = glGetUniformLocation(g_renderer->blur_shader, "u_projection");
+    g_renderer->shaders.blur.texture_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_texture");
+    g_renderer->shaders.blur.direction_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_direction");
+    g_renderer->shaders.blur.size_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_blur_size");
+    g_renderer->shaders.blur.projection_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_projection");
 
     // Get uniform locations for the AM-like shader
-    g_renderer->aml_resolution_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iResolution");
-    g_renderer->aml_time_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iTime");
-    g_renderer->aml_colors_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "iColors");
-    g_renderer->aml_projection_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "u_projection");
-    g_renderer->aml_use_bounds_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "u_use_bounds");
-    g_renderer->aml_bounds_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "u_bounds");
-    g_renderer->aml_border_radius_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "u_borderRadius");
-    g_renderer->aml_rect_size_loc = glGetUniformLocation(g_renderer->am_gradient_shader, "u_rectSize");
+    g_renderer->shaders.am_like.resolution_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iResolution");
+    g_renderer->shaders.am_like.time_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iTime");
+    g_renderer->shaders.am_like.colors_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iColors");
+    g_renderer->shaders.am_like.projection_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_projection");
+    g_renderer->shaders.am_like.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_use_bounds");
+    g_renderer->shaders.am_like.bounds_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_bounds");
+    g_renderer->shaders.am_like.border_radius_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_borderRadius");
+    g_renderer->shaders.am_like.rect_size_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_rectSize");
 }
 
 void render_finish(void) {
@@ -417,21 +449,19 @@ void render_finish(void) {
     }
 
     // Unload fonts
-    if ( g_renderer->ui_font_data != NULL )
-        free(g_renderer->ui_font_data);
-    if ( g_renderer->lyrics_font_data != NULL )
-        free(g_renderer->lyrics_font_data);
+    if ( g_renderer->fonts.ui_font_data != NULL )
+        free(g_renderer->fonts.ui_font_data);
+    if ( g_renderer->fonts.lyrics_font_data != NULL )
+        free(g_renderer->fonts.lyrics_font_data);
 
     // Delete OpenGL objects
-    glDeleteProgram(g_renderer->texture_shader);
-    glDeleteProgram(g_renderer->rect_shader);
-    glDeleteProgram(g_renderer->gradient_shader);
-    glDeleteProgram(g_renderer->dyn_gradient_shader);
-    glDeleteProgram(g_renderer->rand_gradient_shader);
-    glDeleteProgram(g_renderer->blur_shader);
-    glDeleteProgram(g_renderer->am_gradient_shader);
-    glDeleteProgram(g_renderer->cloud_gradient_shader);
-    glDeleteProgram(g_renderer->copy_shader);
+    glDeleteProgram(g_renderer->shaders.tex.id);
+    glDeleteProgram(g_renderer->shaders.rect.id);
+    glDeleteProgram(g_renderer->shaders.grad.id);
+    glDeleteProgram(g_renderer->shaders.dyn_grad.id);
+    glDeleteProgram(g_renderer->shaders.rand_grad.id);
+    glDeleteProgram(g_renderer->shaders.blur.id);
+    glDeleteProgram(g_renderer->shaders.am_like.id);
 
     // Destroy GL context (GLFW destroys context with window)
     glfwDestroyWindow(g_renderer->window);
@@ -489,7 +519,7 @@ static void draw_random_gradient_bg(const Background_t *background, const Bounds
     const float border_radius = resolve_background_border_radius(background, bounds);
     render_set_blend_mode(BLEND_MODE_BLEND);
 
-    set_shader_program(g_renderer->rand_gradient_shader);
+    set_shader_program(g_renderer->shaders.rand_grad.id);
     glBindVertexArray(background->null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
@@ -500,13 +530,13 @@ static void draw_random_gradient_bg(const Background_t *background, const Bounds
         mark_texture_configured(background->null_tex, bounds);
     }
 
-    glUniformMatrix4fv(g_renderer->rand_grad_projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->rand_grad_use_bounds_loc, 1);
-    glUniform4f(g_renderer->rand_grad_bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->rand_grad_border_radius_loc, border_radius);
-    glUniform2f(g_renderer->rand_grad_rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->rand_grad_time_loc, (float)events_get_elapsed_time());
-    glUniform2f(g_renderer->rand_grad_resolution_loc, (float)bounds->w, (float)bounds->h);
+    glUniformMatrix4fv(g_renderer->shaders.rand_grad.projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(g_renderer->shaders.rand_grad.use_bounds_loc, 1);
+    glUniform4f(g_renderer->shaders.rand_grad.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.rand_grad.border_radius_loc, border_radius);
+    glUniform2f(g_renderer->shaders.rand_grad.rect_size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.rand_grad.time_loc, (float)events_get_elapsed_time());
+    glUniform2f(g_renderer->shaders.rand_grad.resolution_loc, (float)bounds->w, (float)bounds->h);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -521,7 +551,7 @@ static void draw_dynamic_gradient_bg(const Background_t *background, const Bound
     const float border_radius = resolve_background_border_radius(background, bounds);
     render_set_blend_mode(BLEND_MODE_BLEND);
 
-    set_shader_program(g_renderer->dyn_gradient_shader);
+    set_shader_program(g_renderer->shaders.dyn_grad.id);
 
     glBindVertexArray(background->null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
@@ -533,14 +563,14 @@ static void draw_dynamic_gradient_bg(const Background_t *background, const Bound
         mark_texture_configured(background->null_tex, bounds);
     }
 
-    glUniformMatrix4fv(g_renderer->dyn_grad_projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->dyn_grad_use_bounds_loc, 1);
-    glUniform4f(g_renderer->dyn_grad_bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->dyn_grad_border_radius_loc, border_radius);
-    glUniform2f(g_renderer->dyn_grad_rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->dyn_grad_time_loc, (float)events_get_elapsed_time() / 5.f);
-    glUniform1f(g_renderer->dyn_grad_noise_mag_loc, 0.1f);
-    glUniform2f(g_renderer->dyn_grad_resolution_loc, (float)bounds->w, (float)bounds->h);
+    glUniformMatrix4fv(g_renderer->shaders.dyn_grad.projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(g_renderer->shaders.dyn_grad.use_bounds_loc, 1);
+    glUniform4f(g_renderer->shaders.dyn_grad.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.dyn_grad.border_radius_loc, border_radius);
+    glUniform2f(g_renderer->shaders.dyn_grad.rect_size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.dyn_grad.time_loc, (float)events_get_elapsed_time() / 5.f);
+    glUniform1f(g_renderer->shaders.dyn_grad.noise_mag_loc, 0.1f);
+    glUniform2f(g_renderer->shaders.dyn_grad.resolution_loc, (float)bounds->w, (float)bounds->h);
 
     float colors[5][4];
     for ( int i = 0; i < 5; i++ ) {
@@ -551,7 +581,7 @@ static void draw_dynamic_gradient_bg(const Background_t *background, const Bound
         float *a = &colors[i][3];
         deconstruct_colors_opengl(color, r, g, b, a);
     }
-    glUniform4fv(g_renderer->dyn_grad_colors, 5, &colors[0][0]);
+    glUniform4fv(g_renderer->shaders.dyn_grad.colors, 5, &colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -563,7 +593,7 @@ static void draw_am_like_bg(const Background_t *background, const Bounds_t *boun
     const float border_radius = resolve_background_border_radius(background, bounds);
     render_set_blend_mode(BLEND_MODE_BLEND);
 
-    set_shader_program(g_renderer->am_gradient_shader);
+    set_shader_program(g_renderer->shaders.am_like.id);
     glBindVertexArray(background->null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
@@ -574,13 +604,13 @@ static void draw_am_like_bg(const Background_t *background, const Bounds_t *boun
         mark_texture_configured(background->null_tex, bounds);
     }
 
-    glUniformMatrix4fv(g_renderer->aml_projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->aml_use_bounds_loc, 1);
-    glUniform4f(g_renderer->aml_bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->aml_border_radius_loc, border_radius);
-    glUniform2f(g_renderer->aml_rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->aml_time_loc, (float)events_get_elapsed_time());
-    glUniform3f(g_renderer->aml_resolution_loc, (float)bounds->w, (float)bounds->h, 0.f);
+    glUniformMatrix4fv(g_renderer->shaders.am_like.projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(g_renderer->shaders.am_like.use_bounds_loc, 1);
+    glUniform4f(g_renderer->shaders.am_like.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.am_like.border_radius_loc, border_radius);
+    glUniform2f(g_renderer->shaders.am_like.rect_size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.am_like.time_loc, (float)events_get_elapsed_time());
+    glUniform3f(g_renderer->shaders.am_like.resolution_loc, (float)bounds->w, (float)bounds->h, 0.f);
 
     float colors[5][4];
     for ( int i = 0; i < 5; i++ ) {
@@ -591,7 +621,7 @@ static void draw_am_like_bg(const Background_t *background, const Bounds_t *boun
         float *a = &colors[i][3];
         deconstruct_colors_opengl(color, r, g, b, a);
     }
-    glUniform4fv(g_renderer->aml_colors_loc, 5, &colors[0][0]);
+    glUniform4fv(g_renderer->shaders.am_like.colors_loc, 5, &colors[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -605,16 +635,16 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
     const int32_t width = (int32_t)bounds->w, height = (int32_t)bounds->h;
     const RenderTarget_t *target = render_make_texture_target(width, height);
 
-    set_shader_program(g_renderer->gradient_shader);
+    set_shader_program(g_renderer->shaders.grad.id);
 
     const float w = (float)width, h = (float)height;
 
     float r, g, b, a;
     deconstruct_colors_opengl(&background->colors[0], &r, &g, &b, &a);
-    glUniform4f(g_renderer->gradient_top_color_loc, r, g, b, a);
+    glUniform4f(g_renderer->shaders.grad.top_color_loc, r, g, b, a);
     deconstruct_colors_opengl(&background->colors[1], &r, &g, &b, &a);
-    glUniform4f(g_renderer->gradient_bottom_color_loc, r, g, b, a);
-    glUniformMatrix4fv(g_renderer->gradient_projection_loc, 1, GL_FALSE, target->projection);
+    glUniform4f(g_renderer->shaders.grad.bottom_color_loc, r, g, b, a);
+    glUniformMatrix4fv(g_renderer->shaders.grad.projection_loc, 1, GL_FALSE, target->projection);
 
     float quadVertices[QUAD_VERTICES_SIZE] = {0};
     create_quad_vertices(0, 0, w, h, quadVertices);
@@ -632,7 +662,7 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
 
 Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius) {
     if ( !source || blur_radius <= 0 || source->width <= 0 || source->height <= 0 ) {
-        error_abort("Fail at render_blur_texture_radius");
+        error_abort("render_blur_texture_radius: Invalid params");
     }
 
     const BlendMode_t saved_blend = g_renderer->blend_mode;
@@ -644,10 +674,10 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
     const float w = (float)source->width;
     const float h = (float)source->height;
 
-    set_shader_program(g_renderer->blur_shader);
-    glUniformMatrix4fv(g_renderer->blur_projection_loc, 1, GL_FALSE, first_target->projection);
-    glUniform1f(g_renderer->blur_size_loc, blur_radius);
-    glUniform2f(g_renderer->blur_direction_loc, 1.0f, 0.0f);
+    set_shader_program(g_renderer->shaders.blur.id);
+    glUniformMatrix4fv(g_renderer->shaders.blur.projection_loc, 1, GL_FALSE, first_target->projection);
+    glUniform1f(g_renderer->shaders.blur.size_loc, blur_radius);
+    glUniform2f(g_renderer->shaders.blur.direction_loc, 1.0f, 0.0f);
 
     glBindTexture(GL_TEXTURE_2D, source->id);
 
@@ -663,7 +693,7 @@ Texture_t *render_blur_texture(const Texture_t *source, const float blur_radius)
 
     const RenderTarget_t *second_target = render_make_texture_target(width, height);
 
-    glUniform2f(g_renderer->blur_direction_loc, 0.0f, 1.0f);
+    glUniform2f(g_renderer->shaders.blur.direction_loc, 0.0f, 1.0f);
 
     glBindTexture(GL_TEXTURE_2D, vertical_texture->id);
     glBindVertexArray(second_target->texture->vao);
@@ -705,9 +735,12 @@ void render_destroy_background(Background_t *background) {
         free(background);
 }
 
-static Texture_t *capture_screen_region(const Bounds_t *bounds) {
+static Texture_t *render_capture_screen_region(const Bounds_t *bounds) {
     const int32_t width = (int32_t)bounds->w;
     const int32_t height = (int32_t)bounds->h;
+    if ( width == 0 || height == 0 )
+        error_abort("render_capture_screen_region: width and/or height is 0");
+
     const int32_t x = (int32_t)bounds->x;
     // flip y
     const int32_t y = (int32_t)(g_renderer->viewport.h - bounds->y - height);
@@ -745,7 +778,7 @@ static Texture_t *capture_screen_region(const Bounds_t *bounds) {
 void render_draw_background(Background_t *background, const Bounds_t *bounds) {
     if ( background->blur ) {
         const float blur_radius = (float)(MIN(bounds->w, bounds->h) * 0.0025);
-        Texture_t *captured = capture_screen_region(bounds);
+        Texture_t *captured = render_capture_screen_region(bounds);
         Texture_t *blurred = render_blur_texture_replace(captured, blur_radius);
         const BlendMode_t saved_blend = render_get_blend_mode();
         render_set_blend_mode(BLEND_MODE_NONE);
@@ -829,17 +862,17 @@ void render_load_font(const unsigned char *data, const int data_size, const Font
 
     stbtt_fontinfo *info;
     if ( type == FONT_UI ) {
-        if ( g_renderer->ui_font_data ) {
-            free(g_renderer->ui_font_data);
+        if ( g_renderer->fonts.ui_font_data ) {
+            free(g_renderer->fonts.ui_font_data);
         }
-        info = &g_renderer->ui_font_info;
-        g_renderer->ui_font_data = data_copy;
+        info = &g_renderer->fonts.ui_font_info;
+        g_renderer->fonts.ui_font_data = data_copy;
     } else if ( type == FONT_LYRICS ) {
-        if ( g_renderer->lyrics_font_data ) {
-            free(g_renderer->lyrics_font_data);
+        if ( g_renderer->fonts.lyrics_font_data ) {
+            free(g_renderer->fonts.lyrics_font_data);
         }
-        info = &g_renderer->lyrics_font_info;
-        g_renderer->lyrics_font_data = data_copy;
+        info = &g_renderer->fonts.lyrics_font_info;
+        g_renderer->fonts.lyrics_font_data = data_copy;
     } else {
         error_abort("Invalid font kind");
     }
@@ -852,7 +885,7 @@ void render_load_font(const unsigned char *data, const int data_size, const Font
 void render_set_window_title(const char *title) { glfwSetWindowTitle(g_renderer->window, title); }
 
 void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w, int32_t *h, const FontType_t kind) {
-    const stbtt_fontinfo *font = kind == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+    const stbtt_fontinfo *font = kind == FONT_UI ? &g_renderer->fonts.ui_font_info : &g_renderer->fonts.lyrics_font_info;
 
     const float pixel_height = (float)pixels;
     const float scale = stbtt_ScaleForMappingEmToPixels(font, pixel_height);
@@ -907,7 +940,7 @@ int32_t render_measure_pt_from_em(const double em) {
 
 void render_measure_char_bounds(const int32_t c, const int32_t prev_c, const int32_t pixels, CharBounds_t *out_bounds,
                                 const FontType_t font) {
-    const stbtt_fontinfo *font_info = font == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+    const stbtt_fontinfo *font_info = font == FONT_UI ? &g_renderer->fonts.ui_font_info : &g_renderer->fonts.lyrics_font_info;
 
     const float scale = stbtt_ScaleForMappingEmToPixels(font_info, (float)pixels);
 
@@ -1238,7 +1271,7 @@ Texture_t *render_make_null(void) {
 }
 
 Texture_t *render_make_text(const char *text, const int32_t pixels_size, const Color_t *color, const FontType_t font_type) {
-    const stbtt_fontinfo *font = font_type == FONT_UI ? &g_renderer->ui_font_info : &g_renderer->lyrics_font_info;
+    const stbtt_fontinfo *font = font_type == FONT_UI ? &g_renderer->fonts.ui_font_info : &g_renderer->fonts.lyrics_font_info;
 
     if ( strlen(text) == 0 ) {
         error_abort("render_make_text: Text is empty");
@@ -1443,64 +1476,23 @@ Texture_t *render_make_dummy_image(const double border_radius_em) {
     return texture;
 }
 
-void render_push_scissor(const Bounds_t *bounds) {
-    const int x = (int)bounds->x;
-    const int h = (int)bounds->h;
-    const int y = (int)(g_renderer->viewport.h - bounds->y - h);
-    const int w = (int)bounds->w;
-
-    int final_x = x, final_y = y, final_w = w, final_h = h;
-
-    if ( g_renderer->scissor_stack_depth > 0 ) {
-        const ScissorEntry_t *prev = &g_renderer->scissor_stack[g_renderer->scissor_stack_depth - 1];
-        final_x = MAX(x, prev->x);
-        final_y = MAX(y, prev->y);
-        const int right = MIN(x + w, prev->x + prev->w);
-        const int top = MIN(y + h, prev->y + prev->h);
-        final_w = MAX(0, right - final_x);
-        final_h = MAX(0, top - final_y);
-    }
-
-    if ( g_renderer->scissor_stack_depth >= MAX_SCISSOR_STACK ) {
-        error_abort("render_push_scissor: scissor stack overflow");
-    }
-    g_renderer->scissor_stack[g_renderer->scissor_stack_depth++] = (ScissorEntry_t){final_x, final_y, final_w, final_h};
-
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(final_x, final_y, final_w, final_h);
-}
-
-void render_pop_scissor(void) {
-    if ( g_renderer->scissor_stack_depth <= 0 ) {
-        error_abort("render_pop_scissor: scissor stack underflow");
-    }
-    g_renderer->scissor_stack_depth--;
-
-    if ( g_renderer->scissor_stack_depth == 0 ) {
-        glDisable(GL_SCISSOR_TEST);
-    } else {
-        const ScissorEntry_t *prev = &g_renderer->scissor_stack[g_renderer->scissor_stack_depth - 1];
-        glScissor(prev->x, prev->y, prev->w, prev->h);
-    }
-}
-
 void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius) {
     if ( bounds->w <= 0 ) {
         return;
     }
 
-    set_shader_program(g_renderer->rect_shader);
+    set_shader_program(g_renderer->shaders.rect.id);
 
     if ( border_radius < 0.f )
         border_radius = (float)MIN(bounds->w, bounds->h) * 0.5f;
 
     float r, g, b, a;
     deconstruct_colors_opengl(color, &r, &g, &b, &a);
-    glUniform4f(g_renderer->rect_color_loc, r, g, b, a);
-    glUniform2f(g_renderer->rect_pos_loc, (float)bounds->x, (float)bounds->y);
-    glUniform2f(g_renderer->rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->rect_radius_loc, border_radius);
-    glUniformMatrix4fv(g_renderer->rect_projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform4f(g_renderer->shaders.rect.color_loc, r, g, b, a);
+    glUniform2f(g_renderer->shaders.rect.pos_loc, (float)bounds->x, (float)bounds->y);
+    glUniform2f(g_renderer->shaders.rect.size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(g_renderer->shaders.rect.radius_loc, border_radius);
+    glUniformMatrix4fv(g_renderer->shaders.rect.projection_loc, 1, GL_FALSE, get_projection_matrix());
 
     glBindVertexArray(null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, null_tex->vbo);
@@ -1554,7 +1546,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
 
     const float *projection = get_projection_matrix();
 
-    set_shader_program(g_renderer->texture_shader);
+    set_shader_program(g_renderer->shaders.tex.id);
 
     int num_draw_regions = 0;
     if ( opts->draw_regions != NULL ) {
@@ -1590,20 +1582,20 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     if ( border_radius < 0.f ) {
         border_radius = MIN(w, h) * 0.5f;
     }
-    glUniform1f(g_renderer->tex_border_radius_loc, border_radius);
-    glUniform1f(g_renderer->tex_alpha_loc, (float)opts->alpha_mod / 255.0f);
-    glUniform2f(g_renderer->tex_rect_size_loc, w, h);
-    glUniform1i(g_renderer->tex_use_bounds_loc, 1);
-    glUniform4f(g_renderer->tex_bounds_loc, (float)x, (float)y, w, h);
-    glUniformMatrix4fv(g_renderer->tex_projection_loc, 1, GL_FALSE, projection);
-    glUniform1f(g_renderer->tex_color_mod_loc, opts->color_mod);
-    glUniform1i(g_renderer->tex_num_regions_loc, num_draw_regions);
+    glUniform1f(g_renderer->shaders.tex.border_radius_loc, border_radius);
+    glUniform1f(g_renderer->shaders.tex.alpha_loc, (float)opts->alpha_mod / 255.0f);
+    glUniform2f(g_renderer->shaders.tex.rect_size_loc, w, h);
+    glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 1);
+    glUniform4f(g_renderer->shaders.tex.bounds_loc, (float)x, (float)y, w, h);
+    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, projection);
+    glUniform1f(g_renderer->shaders.tex.color_mod_loc, opts->color_mod);
+    glUniform1i(g_renderer->shaders.tex.num_regions_loc, num_draw_regions);
     if ( num_draw_regions > 0 ) {
-        glUniform4fv(g_renderer->tex_regions_loc, MAX_DRAW_SUB_REGIONS, &regions[0][0]);
+        glUniform4fv(g_renderer->shaders.tex.regions_loc, MAX_DRAW_SUB_REGIONS, &regions[0][0]);
     }
-    glUniform1i(g_renderer->tex_num_erase_regions_loc, num_erase_regions);
+    glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, num_erase_regions);
     if ( num_erase_regions > 0 ) {
-        glUniform4fv(g_renderer->tex_erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
+        glUniform4fv(g_renderer->shaders.tex.erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
     }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
