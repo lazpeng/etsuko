@@ -187,11 +187,12 @@ static UserSettings_t *read_settings_emscripten(void) {
     return settings;
 }
 
+// clang-format off
 EM_JS(void, settings_start_sync, (void), {
     if ( Module.etsukoSettingsSyncStarted )
         return;
     Module.etsukoSettingsSyncStarted = true;
-    if ( Module.etsukoSettingsSyncState == = undefined )
+    if ( typeof Module.etsukoSettingsSyncState == 'undefined' )
         Module.etsukoSettingsSyncState = 0;
     try {
         if ( !FS.analyzePath('/persist').exists ) {
@@ -204,7 +205,7 @@ EM_JS(void, settings_start_sync, (void), {
 })
 
 EM_JS(int, settings_sync_state, (void), {
-    if ( Module.etsukoSettingsSyncState == = undefined )
+    if ( typeof Module.etsukoSettingsSyncState == 'undefined' )
         return 0;
     return Module.etsukoSettingsSyncState;
 })
@@ -216,6 +217,7 @@ EM_JS(void, settings_flush_sync, (void), {
                 console.error(err);
         });
 })
+// clang-format on
 #else
 static UserSettings_t *read_settings_from_user_json(void) {
     FILE *file = fopen("./user.json", "rb");
