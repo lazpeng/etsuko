@@ -1071,27 +1071,31 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
     Bounds_t container_bounds = container->bounds;
     apply_container_animations(container, &container_bounds);
     base_bounds.x += container_bounds.x;
-    base_bounds.y += container_bounds.y - container->overflow_y.current_amount;
+    base_bounds.y += container_bounds.y;
+
+    const Bounds_t container_screen_bounds = {
+        .x = base_bounds.x,
+        .y = base_bounds.y,
+        .w = container_bounds.w,
+        .h = container_bounds.h,
+    };
 
     if ( container->background->type != BACKGROUND_NONE ) {
-        render_draw_background(container->background, &container_bounds);
+        render_draw_background(container->background, &container_screen_bounds);
     }
 
     if ( container->draw_debug_overlay ) {
-        Bounds_t con_bounds = container_bounds;
-        con_bounds.w = container->bounds.w;
-        con_bounds.h = container->bounds.h;
-
-        render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r = 255, .g = 100, .b = 100, .a = 50}, 0);
+        const Color_t color = {.r = 255, .g = 100, .b = 100, .a = 50};
+        render_draw_rounded_rect(ui->null_texture, &container_screen_bounds, &color, 0);
     }
-
-    base_bounds.x += container->align_content_offset_x;
-    base_bounds.y += container->align_content_offset_y;
 
     const bool clip = container->overflow_y.kind != OVERFLOW_NOTHING;
     if ( clip ) {
-        render_push_scissor(&container_bounds);
+        render_push_scissor(&container_screen_bounds);
     }
+
+    base_bounds.x += container->align_content_offset_x;
+    base_bounds.y += container->align_content_offset_y - container->overflow_y.current_amount;
 
     // Draw descendants of the current container at the same time, following the order of the z indices
     // vectors are already sorted at insertion time
