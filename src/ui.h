@@ -93,8 +93,9 @@ typedef enum ContainerFlags_t {
 } ContainerFlags_t;
 
 typedef enum OverflowKind_t {
-    OVERFLOW_NONE = 0,
+    OVERFLOW_CLIP = 0,
     OVERFLOW_SCROLL,
+    OVERFLOW_NOTHING,
 } OverflowKind_t;
 
 typedef enum ScrollBarKind_t {

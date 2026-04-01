@@ -1084,8 +1084,21 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
 
         render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r = 255, .g = 100, .b = 100, .a = 50}, 0);
     }
+
+    const Bounds_t container_screen_bounds = {
+        .x = base_bounds.x,
+        .y = base_bounds.y,
+        .w = container->bounds.w,
+        .h = container->bounds.h,
+    };
+
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y;
+
+    const bool clip = container->overflow_y.kind == OVERFLOW_CLIP;
+    if ( clip ) {
+        render_push_scissor(&container_screen_bounds);
+    }
 
     // Draw descendants of the current container at the same time, following the order of the z indices
     // vectors are already sorted at insertion time
@@ -1106,6 +1119,10 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
             draw_all_container(ui, container->child_containers->data[c_idx], base_bounds);
             c_idx += 1;
         }
+    }
+
+    if ( clip ) {
+        render_pop_scissor();
     }
 }
 
@@ -1240,6 +1257,8 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
         printf("Warning: ui_container_add_vertical_scrollbar: Already has scrollbar\n");
         return;
     }
+    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
+        error_abort("ui_container_add_vertical_scrollbar: Container not scrollable\n");
 
     container->overflow_y.scrollbar.kind = kind;
 

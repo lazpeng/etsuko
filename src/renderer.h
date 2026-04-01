@@ -404,6 +404,17 @@ Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
  */
 void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius);
 /**
+ * Pushes a scissor rectangle onto the scissor stack, clipping all subsequent draw calls to the
+ * intersection of this rectangle and any currently active scissor. Coordinates are in UI space (y=0 at top).
+ * Must be paired with a corresponding render_pop_scissor call.
+ */
+void render_push_scissor(const Bounds_t *bounds);
+/**
+ * Pops the most recently pushed scissor rectangle. Restores the previous scissor rect if one
+ * exists, or disables scissor testing entirely when the stack becomes empty.
+ */
+void render_pop_scissor(void);
+/**
  * Draws a texture to the currently active render target (which can be a texture render target, or the framebuffer itself), using the provided options.
  * Bounds specifies the location and size the texture is to be drawn to/as, and upon change in dimensions the pre-computed vertex array object and
  * buffer object can be reconfigured.

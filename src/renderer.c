@@ -42,6 +42,11 @@
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
 #define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
 #define PROJECTION_MATRIX_SIZE (16)
+#define MAX_SCISSOR_STACK (16)
+
+typedef struct ScissorEntry_t {
+    int x, y, w, h;
+} ScissorEntry_t;
 
 typedef struct Renderer_t {
     GLFWwindow *window;
@@ -116,6 +121,10 @@ typedef struct Renderer_t {
     GLint aml_bounds_loc;
     GLint aml_border_radius_loc;
     GLint aml_rect_size_loc;
+
+    // Scissor stack for OVERFLOW_CLIP containers
+    ScissorEntry_t scissor_stack[MAX_SCISSOR_STACK];
+    int scissor_stack_depth;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
@@ -1432,6 +1441,47 @@ Texture_t *render_make_dummy_image(const double border_radius_em) {
     }
 
     return texture;
+}
+
+void render_push_scissor(const Bounds_t *bounds) {
+    const int x = (int)bounds->x;
+    const int h = (int)bounds->h;
+    const int y = (int)(g_renderer->viewport.h - bounds->y - h);
+    const int w = (int)bounds->w;
+
+    int final_x = x, final_y = y, final_w = w, final_h = h;
+
+    if ( g_renderer->scissor_stack_depth > 0 ) {
+        const ScissorEntry_t *prev = &g_renderer->scissor_stack[g_renderer->scissor_stack_depth - 1];
+        final_x = MAX(x, prev->x);
+        final_y = MAX(y, prev->y);
+        const int right = MIN(x + w, prev->x + prev->w);
+        const int top = MIN(y + h, prev->y + prev->h);
+        final_w = MAX(0, right - final_x);
+        final_h = MAX(0, top - final_y);
+    }
+
+    if ( g_renderer->scissor_stack_depth >= MAX_SCISSOR_STACK ) {
+        error_abort("render_push_scissor: scissor stack overflow");
+    }
+    g_renderer->scissor_stack[g_renderer->scissor_stack_depth++] = (ScissorEntry_t){final_x, final_y, final_w, final_h};
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(final_x, final_y, final_w, final_h);
+}
+
+void render_pop_scissor(void) {
+    if ( g_renderer->scissor_stack_depth <= 0 ) {
+        error_abort("render_pop_scissor: scissor stack underflow");
+    }
+    g_renderer->scissor_stack_depth--;
+
+    if ( g_renderer->scissor_stack_depth == 0 ) {
+        glDisable(GL_SCISSOR_TEST);
+    } else {
+        const ScissorEntry_t *prev = &g_renderer->scissor_stack[g_renderer->scissor_stack_depth - 1];
+        glScissor(prev->x, prev->y, prev->w, prev->h);
+    }
 }
 
 void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius) {
