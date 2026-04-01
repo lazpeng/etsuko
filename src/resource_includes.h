@@ -65,6 +65,9 @@ static const unsigned char incbin_play_img[] = {
 static const unsigned char incbin_pause_img[] = {
 #embed "res/pause.png"
 };
+static const unsigned char incbin_close_img[] = {
+#embed "res/close.png"
+};
 
 #endif
 

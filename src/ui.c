@@ -2902,12 +2902,16 @@ static void button_widget_destroy(Ui_t *ui, void *widget_data) {
 static void button_widget_mouse_event(const UiEventOpts_t *opts, Drawable_t *bg_drawable, void *widget_data) {
     const ButtonWidget_t *widget = widget_data;
 
-    if ( widget->bg_show_type == BUTTON_BG_SHOW_ON_HOVER ) {
-        if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+        if ( widget->bg_show_type == BUTTON_BG_SHOW_ON_HOVER )
             ui_drawable_set_alpha(bg_drawable, widget->background_alpha);
-        } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        if ( widget->on_hover_callback != NULL )
+            widget->on_hover_callback(opts->ui, widget, UI_EVENT_MOUSE_HOVER_ENTERED);
+    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        if ( widget->bg_show_type == BUTTON_BG_SHOW_ON_HOVER )
             ui_drawable_set_alpha(bg_drawable, 0);
-        }
+        if ( widget->on_hover_callback != NULL )
+            widget->on_hover_callback(opts->ui, widget, UI_EVENT_MOUSE_HOVER_EXITED);
     }
 
     if ( opts->event == UI_EVENT_MOUSE_CLICK && widget->active )
@@ -2922,29 +2926,44 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
     widget->bg_show_type = opts->bg_show_type;
     widget->background_alpha = opts->bg_color.a;
 
-    const Drawable_TextData_t text_data = {
-        .text = (char *)opts->text,
-        .em = opts->text_em,
-        .color = opts->text_color,
-    };
-    const Layout_t text_layout = {
+    const Layout_t content_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_CENTER,
         .z_index = 1,
     };
-    widget->d_text = ui_make_text(ui, &text_data, parent, &text_layout);
-    ui_drawable_set_alpha_immediate(widget->d_text, opts->text_color.a);
+    Drawable_t *d_content;
+    if ( opts->content_type == BUTTON_CONTENT_IMAGE ) {
+        const Drawable_ImageData_t image_data = {.border_radius_em = 0.0, .draw_shadow = false};
+        const int size_flags = LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATION_INCLUDE_SIZE;
+        Layout_t image_layout = content_layout;
+        if ( layout->width != 0 || layout->height != 0 ) {
+            image_layout.flags |= (layout->flags & size_flags) | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO;
+            image_layout.width = layout->width;
+            image_layout.height = layout->height;
+        }
+        widget->d_image = ui_make_image(opts->image_bytes, opts->image_length, &image_data, parent, &image_layout);
+        d_content = widget->d_image;
+    } else {
+        const Drawable_TextData_t text_data = {
+            .text = (char *)opts->text,
+            .em = opts->text_em,
+            .color = opts->text_color,
+        };
+        widget->d_text = ui_make_text(ui, &text_data, parent, &content_layout);
+        ui_drawable_set_alpha_immediate(widget->d_text, opts->text_color.a);
+        d_content = widget->d_text;
+    }
 
     const Drawable_RectangleData_t rect_data = {.border_radius_em = BORDER_RADIUS_AUTO, .color = opts->bg_color};
     Layout_t rect_layout = *layout;
     rect_layout.flags |= LAYOUT_RELATIVE_TO_SIZE;
-    rect_layout.relative_to_size = widget->d_text;
+    rect_layout.relative_to_size = d_content;
     rect_layout.width = 1.5;
     rect_layout.height = 1.5;
 
     widget->d_background = ui_make_rectangle(ui, &rect_data, parent, &rect_layout);
-    widget->d_text->layout.relative_to = widget->d_background;
-    widget->d_text->layout.flags |= LAYOUT_PROPORTIONAL_POS_TO_RELATIVE;
-    ui_reposition_drawable(widget->d_text);
+    d_content->layout.relative_to = widget->d_background;
+    d_content->layout.flags |= LAYOUT_PROPORTIONAL_POS_TO_RELATIVE;
+    ui_reposition_drawable(d_content);
 
     widget->entry_id = ui_register_widget(parent, NULL, button_widget_destroy, widget);
 
@@ -2952,17 +2971,20 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
         ui_drawable_set_alpha_immediate(widget->d_background, 0);
         const Animation_FadeInOutData_t data = {.duration = 0.3, .ease_func = ANIM_EASE_NONE};
         ui_animate_fade(widget->d_background, &data);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_background, button_widget_mouse_event, widget);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_background, button_widget_mouse_event, widget);
     }
 
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_background, button_widget_mouse_event, widget);
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_background, button_widget_mouse_event, widget);
     ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, widget->d_background, button_widget_mouse_event, widget);
 
     return widget;
 }
 
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget) {
-    ui_destroy_drawable(ui, widget->d_text);
+    if ( widget->d_text )
+        ui_destroy_drawable(ui, widget->d_text);
+    if ( widget->d_image )
+        ui_destroy_drawable(ui, widget->d_image);
     ui_destroy_drawable(ui, widget->d_background);
     ui_unregister_widget(widget->parent, widget->entry_id);
     free(widget);
@@ -2970,7 +2992,16 @@ void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget) {
 
 void ui_widget_button_enabled(const ButtonWidget_t *widget, const bool enabled) {
     widget->d_background->enabled = enabled;
-    widget->d_text->enabled = enabled;
+    if ( widget->d_text )
+        widget->d_text->enabled = enabled;
+    if ( widget->d_image )
+        widget->d_image->enabled = enabled;
+}
+
+void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, const int length) {
+    if ( widget->d_image == NULL )
+        error_abort("ui_widget_button_set_image: button was not built with BUTTON_CONTENT_IMAGE");
+    ui_drawable_set_image(widget->d_image, bytes, length);
 }
 
 static void progress_bar_reconfigure(void *widget_data) {

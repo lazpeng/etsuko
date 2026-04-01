@@ -4,6 +4,9 @@
 #include "error.h"
 #include "ui.h"
 
+#define RESOURCE_INCLUDE_IMAGES
+#include "resource_includes.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -188,7 +191,7 @@ EM_JS(void, settings_start_sync, (void), {
     if ( Module.etsukoSettingsSyncStarted )
         return;
     Module.etsukoSettingsSyncStarted = true;
-    if ( Module.etsukoSettingsSyncState === undefined )
+    if ( Module.etsukoSettingsSyncState == = undefined )
         Module.etsukoSettingsSyncState = 0;
     try {
         if ( !FS.analyzePath('/persist').exists ) {
@@ -201,7 +204,7 @@ EM_JS(void, settings_start_sync, (void), {
 })
 
 EM_JS(int, settings_sync_state, (void), {
-    if ( Module.etsukoSettingsSyncState === undefined )
+    if ( Module.etsukoSettingsSyncState == = undefined )
         return 0;
     return Module.etsukoSettingsSyncState;
 })
@@ -343,7 +346,7 @@ static void on_volume_changed(Ui_t *, const ProgressBarWidget_t *, const double 
     ui_recompute_drawable(g_modal->ui, g_modal->volume_label);
 }
 
-static void on_close_settings(const UiEventOpts_t *, Drawable_t *, void *) {
+static void on_close_settings(Ui_t *, const ButtonWidget_t *) {
     g_modal->should_close = true;
     save_current_settings();
 }
@@ -378,14 +381,15 @@ static void create_exit_button(Ui_t *ui) {
         .offset_y = 0.02,
         .absolute = true,
     };
-    const Drawable_TextData_t close_data = {
-        .text = "X",
-        .font_type = FONT_UI,
-        .em = 1.0,
-        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
-    };
-    Drawable_t *close_btn = ui_make_text(ui, &close_data, g_modal->container, &close_layout);
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, close_btn, on_close_settings, NULL);
+    ButtonWidget_t *close_btn = ui_build_button_widget(ui, g_modal->container, &close_layout,
+                                                       &(ButtonWidgetOpts_t){
+                                                           .content_type = BUTTON_CONTENT_IMAGE,
+                                                           .image_bytes = incbin_close_img,
+                                                           .image_length = sizeof incbin_close_img,
+                                                           .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
+                                                           .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+                                                       });
+    close_btn->on_click_callback = on_close_settings;
 }
 
 static void create_settings_title(Ui_t *ui) {

@@ -368,8 +368,20 @@ typedef struct ToggleWidgetOpts_t {
     Color_t text_color, active_color, background_color;
 } ToggleWidgetOpts_t;
 
+typedef enum UiEvent_t {
+    UI_EVENT_NONE = 0,
+    UI_EVENT_MOUSE_MOVE,
+    UI_EVENT_MOUSE_STOPPED,
+    UI_EVENT_KEY_PRESSED,
+    UI_EVENT_MOUSE_HOVER_ENTERED,
+    UI_EVENT_MOUSE_HOVER_EXITED,
+    UI_EVENT_MOUSE_CLICK,
+    UI_EVENT_MOUSE_DRAG,
+} UiEvent_t;
+
 struct ButtonWidget_t;
 typedef void (*c_widget_button_on_click)(Ui_t *ui, const struct ButtonWidget_t *widget);
+typedef void (*c_widget_button_on_hover)(Ui_t *ui, const struct ButtonWidget_t *widget, UiEvent_t event);
 
 typedef enum ButtonWidgetBackgroundShowType_t {
     BUTTON_BG_DISABLED = 0,
@@ -377,21 +389,33 @@ typedef enum ButtonWidgetBackgroundShowType_t {
     BUTTON_BG_SHOW_ON_HOVER,
 } ButtonWidgetBackgroundShowType_t;
 
+typedef enum ButtonWidgetContentType_t {
+    BUTTON_CONTENT_TEXT = 0,
+    BUTTON_CONTENT_IMAGE,
+} ButtonWidgetContentType_t;
+
 typedef struct ButtonWidget_t {
     bool active;
     OWNING Drawable_t *d_text;
+    OWNING Drawable_t *d_image;
     OWNING Drawable_t *d_background;
     WEAK Container_t *parent;
     int entry_id;
     WEAK c_widget_button_on_click on_click_callback;
+    WEAK c_widget_button_on_hover on_hover_callback;
     ButtonWidgetBackgroundShowType_t bg_show_type;
     int background_alpha;
+    WEAK void *custom_data;
 } ButtonWidget_t;
 
 typedef struct ButtonWidgetOpts_t {
+    ButtonWidgetContentType_t content_type;
     WEAK const char *text;
     double text_em;
-    Color_t bg_color, text_color;
+    Color_t text_color;
+    WEAK const unsigned char *image_bytes;
+    int image_length;
+    Color_t bg_color;
     ButtonWidgetBackgroundShowType_t bg_show_type;
 } ButtonWidgetOpts_t;
 
@@ -422,17 +446,6 @@ typedef struct ProgressBarWidgetOpts_t {
     double border_radius;
     double initial_progress;
 } ProgressBarWidgetOpts_t;
-
-typedef enum UiEvent_t {
-    UI_EVENT_NONE = 0,
-    UI_EVENT_MOUSE_MOVE,
-    UI_EVENT_MOUSE_STOPPED,
-    UI_EVENT_KEY_PRESSED,
-    UI_EVENT_MOUSE_HOVER_ENTERED,
-    UI_EVENT_MOUSE_HOVER_EXITED,
-    UI_EVENT_MOUSE_CLICK,
-    UI_EVENT_MOUSE_DRAG,
-} UiEvent_t;
 
 typedef struct UiEventOpts_t {
     Ui_t *ui;
@@ -521,6 +534,7 @@ void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget);
 ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts);
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget);
 void ui_widget_button_enabled(const ButtonWidget_t *widget, bool enabled);
+void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, int length);
 ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ProgressBarWidgetOpts_t *opts);
 void ui_destroy_progress_bar_widget(Ui_t *ui, ProgressBarWidget_t *widget);
 void ui_widget_progress_bar_progress(ProgressBarWidget_t *widget, double progress);

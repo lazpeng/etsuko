@@ -25,8 +25,7 @@ struct Karaoke_t {
         Drawable_t *elapsed_time_text;
         Drawable_t *remaining_time_text;
         Drawable_t *album_image;
-        Drawable_t *play_button;
-        Drawable_t *pause_button;
+        ButtonWidget_t *play_button;
         Container_t *left_container;
         Container_t *right_container;
         Container_t *song_info_container;
@@ -306,8 +305,20 @@ static void toggle_pause(const Karaoke_t *state) {
     if ( audio_is_paused() ) {
         audio_resume();
         ui_ex_lyrics_view_scroll_to_active(state->drawables.lyrics_view);
-    } else
+    } else {
         audio_pause();
+    }
+
+    const unsigned char *data;
+    int data_len;
+    if ( audio_is_paused() ) {
+        data = incbin_play_img;
+        data_len = sizeof incbin_play_img;
+    } else {
+        data = incbin_pause_img;
+        data_len = sizeof incbin_pause_img;
+    }
+    ui_widget_button_set_image(state->drawables.play_button, data, data_len);
 }
 
 /**
@@ -378,16 +389,17 @@ static void on_key_pressed(const UiEventOpts_t *opts, Drawable_t *, void *custom
     }
 }
 
-static void on_mouse_play_button(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
-    Karaoke_t *state = custom_data;
+static void on_play_button_hover(Ui_t *, const ButtonWidget_t *widget, const UiEvent_t event) {
+    if ( widget->custom_data == NULL )
+        error_abort("on_play_button_hover: custom_data not set");
+    Karaoke_t *state = widget->custom_data;
+    state->hovering_controls = event == UI_EVENT_MOUSE_HOVER_ENTERED;
+}
 
-    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-        state->hovering_controls = true;
-    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        state->hovering_controls = false;
-    } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
-        toggle_pause(state);
-    }
+static void on_play_button_click(Ui_t *, const ButtonWidget_t *widget) {
+    if ( widget->custom_data == NULL )
+        error_abort("on_play_button_click: custom_data not set");
+    toggle_pause(widget->custom_data);
 }
 
 static void on_back_clicked(Ui_t *, const ButtonWidget_t *) {
@@ -397,8 +409,6 @@ static void on_back_clicked(Ui_t *, const ButtonWidget_t *) {
 
 static void on_progress_bar_changed(Ui_t *, const ProgressBarWidget_t *, const double distance) {
     audio_seek(audio_total_time() * distance);
-    // TODO: Reset viewport
-    // ui_ex_lyrics_view_scroll_to_active(state->drawables.lyrics_view);
 }
 
 static void setup_background(const Karaoke_t *state) {
@@ -572,25 +582,21 @@ void karaoke_setup(Karaoke_t *state) {
                                       .flags = LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_SIZE | LAYOUT_RELATIVE_TO_Y |
                                                LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y},
                           CONTAINER_NONE);
+    state->drawables.song_controls_container->overflow_y.kind = OVERFLOW_NOTHING;
 
-    // Play and pause buttons
-    const unsigned char *play_bytes = incbin_play_img;
-    const int play_bytes_len = sizeof incbin_play_img;
+    // Play button
     state->drawables.play_button =
-        ui_make_image(play_bytes, play_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
-                      &(Layout_t){.offset_x = 0,
-                                  .offset_y = 0,
-                                  .width = 0.05,
-                                  .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
-
-    const unsigned char *pause_bytes = incbin_pause_img;
-    const int pause_bytes_len = sizeof incbin_pause_img;
-    state->drawables.pause_button = ui_make_image(pause_bytes, pause_bytes_len, &(Drawable_ImageData_t){0}, state->drawables.song_controls_container,
-                      &(Layout_t){.offset_x = 0,
-                                  .offset_y = 0,
-                                  .width = 0.05,
-                                  .flags = LAYOUT_SPECIAL_KEEP_ASPECT_RATIO | LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W});
-    state->drawables.pause_button->enabled = false;
+        ui_build_button_widget(state->ui, state->drawables.song_controls_container,
+                               &(Layout_t){.flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_W, .width = 0.05},
+                               &(ButtonWidgetOpts_t){
+                                   .content_type = BUTTON_CONTENT_IMAGE,
+                                   .image_bytes = incbin_play_img,
+                                   .image_length = sizeof incbin_play_img,
+                                   .bg_show_type = BUTTON_BG_DISABLED,
+                               });
+    state->drawables.play_button->custom_data = state;
+    state->drawables.play_button->on_click_callback = on_play_button_click;
+    state->drawables.play_button->on_hover_callback = on_play_button_hover;
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
 
@@ -617,10 +623,6 @@ void karaoke_setup(Karaoke_t *state) {
     ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_MOVE, on_mouse_moved, state);
     ui_add_global_event_callback(state->ui, UI_EVENT_MOUSE_STOPPED, on_mouse_stopped, state);
     ui_add_global_event_callback(state->ui, UI_EVENT_KEY_PRESSED, on_key_pressed, state);
-    // Play button events
-    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_ENTERED, state->drawables.play_button, on_mouse_play_button, state);
-    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_HOVER_EXITED, state->drawables.play_button, on_mouse_play_button, state);
-    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.play_button, on_mouse_play_button, state);
 
     if ( settings_get()->auto_play == SET_AUTO_PLAY_ENABLED )
         audio_resume();
@@ -668,12 +670,6 @@ static void update_song_progressbar(const Karaoke_t *state) {
     }
 }
 
-static void update_play_pause_state(const Karaoke_t *state) {
-    const bool paused = audio_is_paused();
-    state->drawables.play_button->enabled = paused;
-    state->drawables.pause_button->enabled = !paused;
-}
-
 AppStatus_t karaoke_loop(const Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
@@ -685,7 +681,6 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     update_elapsed_text(state);
     update_remaining_text(state);
     update_song_progressbar(state);
-    update_play_pause_state(state);
     // Update the lyrics view
     if ( events_window_changed() )
         ui_ex_lyrics_view_on_screen_change(state->ui, state->drawables.lyrics_view);
