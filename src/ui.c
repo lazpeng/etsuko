@@ -1085,19 +1085,12 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         render_draw_rounded_rect(ui->null_texture, &con_bounds, &(Color_t){.r = 255, .g = 100, .b = 100, .a = 50}, 0);
     }
 
-    const Bounds_t container_screen_bounds = {
-        .x = base_bounds.x,
-        .y = base_bounds.y,
-        .w = container->bounds.w,
-        .h = container->bounds.h,
-    };
-
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y;
 
-    const bool clip = container->overflow_y.kind == OVERFLOW_CLIP;
+    const bool clip = container->overflow_y.kind != OVERFLOW_NOTHING;
     if ( clip ) {
-        render_push_scissor(&container_screen_bounds);
+        render_push_scissor(&container_bounds);
     }
 
     // Draw descendants of the current container at the same time, following the order of the z indices
