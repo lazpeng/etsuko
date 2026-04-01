@@ -51,6 +51,8 @@ static Config_t *get_default_config(void) {
         .draw_lyric_shadow = true,
         .show_loading_screen = true,
         .enlarge_active_line = false,
+        .position_hints_under_segment = false,
+        .blur_lyrics = true,
     };
     config->settings = (SettingsOpts_t) {
         .show_settings = true

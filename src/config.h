@@ -31,6 +31,10 @@ typedef struct KaraokeOpts_t {
     bool enable_pulse_effect;
     // Time in seconds to hide optional ui elements after elapsed
     double hide_ui_elements_delay_sec;
+    // Position reading hints under the corresponding lyric text
+    bool position_hints_under_segment;
+    // Blur lyric lines as they get farther away from the active line
+    bool blur_lyrics;
 } KaraokeOpts_t;
 
 typedef struct SettingsOpts_t {

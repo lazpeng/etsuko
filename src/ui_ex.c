@@ -69,6 +69,8 @@ typedef struct ReadingEntry_t {
 } ReadingEntry_t;
 
 static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
+    const bool place_hints_under_segment = config_get()->karaoke.position_hints_under_segment;
+    const double hint_padding = view->container->bounds.w * 0.005;
     for ( int32_t i = 0; i < (int32_t)view->line_read_hints->size; i++ ) {
         Drawable_t *hint = view->line_read_hints->data[i];
 
@@ -108,7 +110,11 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
 
                     // Place this hint below the segment it's supposed to hint at, but if the previous hint already
                     // overshoots the length of its segment, place it a few pixels to the right of wherever the last hint ended
-                    x = MAX(x + 5, character_x + ui_compute_relative_horizontal(0.01, view->container));
+
+                    const double x_padded = x + hint_padding;
+                    if ( place_hints_under_segment )
+                        x = MAX(x_padded, character_x + ui_compute_relative_horizontal(0.01, view->container));
+                    else x = x_padded;
 
                     ReadingEntry_t *entry = calloc(1, sizeof(*entry));
                     entry->texture = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
