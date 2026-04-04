@@ -637,11 +637,15 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
         ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         blur_hint_for_line(view, index);
-    } else if ( alpha != drawable->alpha_mod ) {
-        ui_drawable_set_alpha(drawable, alpha);
-        fade_hint_for_line(view, index);
-        ui_drawable_set_blur_radius(drawable, blur);
-        blur_hint_for_line(view, index);
+    } else {
+        if ( alpha != drawable->alpha_mod ) {
+            ui_drawable_set_alpha(drawable, alpha);
+            fade_hint_for_line(view, index);
+        }
+        if ( blur != drawable->blur_radius ) {
+            ui_drawable_set_blur_radius(drawable, blur);
+            blur_hint_for_line(view, index);
+        }
     }
 
     const LineState_t new_state = LINE_INACTIVE;
@@ -760,7 +764,7 @@ static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void ensure_read_hints_visibility_setting(LyricsView_t *view) {
+static void ensure_read_hints_visibility_setting(const LyricsView_t *view) {
     if ( view->line_read_hints->size <= 0 )
         return;
 
