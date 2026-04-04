@@ -229,6 +229,7 @@ typedef struct Background_t {
     Color_t colors[5];
     OWNING Texture_t *null_tex;
     OWNING Texture_t *blur_tex;
+    OWNING Texture_t *empty_tex;
     double border_radius_em;
     bool blur;
 } Background_t;

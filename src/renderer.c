@@ -934,20 +934,35 @@ Texture_t *render_make_empty(int32_t width, int32_t height) {
     return tex;
 }
 
-void render_draw_background(Background_t *background, const Bounds_t *bounds) {
+void render_draw_background(Background_t *background, const Bounds_t *at) {
+    if ( background->blur ) {
+        if ( background->empty_tex == NULL )
+            background->empty_tex = render_make_empty((int32_t)at->w, (int32_t)at->h);
+        if ( background->blur_tex == NULL ) {
+            background->blur_tex = render_make_empty((int32_t)at->w, (int32_t)at->h);
+        }
+        const float blur_radius = (float)(at->w + at->h) / 2 * 0.0025f;
+        render_blur_texture(background->blur_tex, background->empty_tex, at, blur_radius);
+
+        const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
+        const BlendMode_t blend_mode = render_get_blend_mode();
+        render_set_blend_mode(BLEND_MODE_NONE);
+        render_draw_texture(background->blur_tex, at, &opts);
+        render_set_blend_mode(blend_mode);
+    }
 
     switch ( background->type ) {
     case BACKGROUND_GRADIENT:
-        draw_gradient_bg(background, bounds);
+        draw_gradient_bg(background, at);
         break;
     case BACKGROUND_SANDS_GRADIENT:
-        draw_dynamic_gradient_bg(background, bounds);
+        draw_dynamic_gradient_bg(background, at);
         break;
     case BACKGROUND_RANDOM_GRADIENT:
-        draw_random_gradient_bg(background, bounds);
+        draw_random_gradient_bg(background, at);
         break;
     case BACKGROUND_AM_LIKE_GRADIENT:
-        draw_am_like_bg(background, bounds);
+        draw_am_like_bg(background, at);
         break;
     default:
         printf("Warning: Unrecognized background type\n");
