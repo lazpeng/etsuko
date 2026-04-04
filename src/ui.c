@@ -979,7 +979,6 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         render_destroy_texture(composite);
 
         DrawTextureOpts_t blur_draw_opts = opts;
-        blur_draw_opts.alpha_mod = drawable->alpha_mod;
         blur_draw_opts.draw_regions = NULL;
         blur_draw_opts.scale_regions = NULL;
         render_draw_texture(drawable->blur_texture, &display_rect, &blur_draw_opts);
