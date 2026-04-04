@@ -130,7 +130,7 @@ static void animation_destroy(Animation_t *animation, const bool recursive) {
             animation_draw_region_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_SCALE_REGION ) {
             animation_scale_region_data_destroy(animation->custom_data);
-        } else if ( animation->type == ANIM_BACKGROUND_COLOR ) {
+        } else if ( animation->type == ANIM_BACKGROUND_COLOR || animation->type == ANIM_BLUR_RADIUS ) {
             free(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
@@ -740,6 +740,19 @@ static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
     }
 }
 
+static void apply_blur_radius_animation(Animation_t *animation, float *final_radius) {
+    const Animation_BlurRadiusData_t *data = animation->custom_data;
+    double progress = animation->elapsed / animation->duration;
+    if ( progress < 1.0 ) {
+        progress = apply_ease_func(progress, animation->ease_func);
+        const float delta = data->to_radius - data->from_radius;
+        *final_radius = data->from_radius + (float)(delta * progress);
+    } else {
+        animation->target->blur_radius = data->to_radius;
+        animation->active = false;
+    }
+}
+
 static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds) {
     const Animation_ScaleData_t *data = animation->custom_data;
 
@@ -825,6 +838,7 @@ typedef struct AnimationDelta {
     float color_mod;
     DrawRegionOptSet_t draw_regions;
     ScaleRegionOptSet_t scale_regions;
+    float final_blur_radius;
 } AnimationDelta;
 
 static void apply_animations(const Drawable_t *drawable, AnimationDelta *animation_delta) {
@@ -842,6 +856,8 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
                 apply_draw_region_animation(animation, &animation_delta->draw_regions);
             } else if ( animation->type == ANIM_SCALE_REGION ) {
                 apply_scale_region_animation(animation, &animation_delta->scale_regions);
+            } else if ( animation->type == ANIM_BLUR_RADIUS ) {
+                apply_blur_radius_animation(animation, &animation_delta->final_blur_radius);
             }
         }
     }
@@ -855,7 +871,8 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
     AnimationDelta delta = {.final_bounds = drawable->bounds,
                             .final_alpha = drawable->alpha_mod,
                             .color_mod = drawable->color_mod,
-                            .draw_regions = {0}};
+                            .draw_regions = {0},
+                            .final_blur_radius = drawable->blur_radius};
     delta.draw_regions = drawable->draw_regions;
     apply_animations(drawable, &delta);
 
@@ -901,7 +918,7 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
     }
 
     Bounds_t int_rect = rect;
-    if ( drawable->blur_radius > 0.f ) {
+    if ( delta.final_blur_radius > 0.f ) {
         render_make_texture_target((int32_t)rect.w, (int32_t)rect.h);
         int_rect.x = int_rect.y = 0;
     }
@@ -914,7 +931,7 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
-    if ( drawable->blur_radius <= 0.f ) {
+    if ( delta.final_blur_radius <= 0.f ) {
         render_draw_texture(drawable->texture, &int_rect, &opts);
     } else {
         DrawTextureOpts_t capture_opts = opts;
@@ -927,7 +944,7 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         if ( drawable->blur_texture == NULL )
             drawable->blur_texture = render_make_empty((int32_t)rect.w, (int32_t)rect.h);
 
-        render_blur_texture(drawable->blur_texture, temp_texture, &rect, drawable->blur_radius);
+        render_blur_texture(drawable->blur_texture, temp_texture, &rect, delta.final_blur_radius);
 
         DrawTextureOpts_t blur_draw_opts = opts;
         blur_draw_opts.alpha_mod = drawable->alpha_mod;
@@ -2229,6 +2246,18 @@ static Animation_ScaleRegionData_t *dup_anim_scale_region_data(const Animation_S
     return result;
 }
 
+static Animation_BlurRadiusData_t *dup_anim_blur_radius_data(const Animation_BlurRadiusData_t *data) {
+    Animation_BlurRadiusData_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate blur radius animation data");
+    }
+    result->from_radius = data->from_radius;
+    result->to_radius = data->to_radius;
+    result->duration = data->duration;
+    result->ease_func = data->ease_func;
+    return result;
+}
+
 /**
  * Attempts to (re)apply the given animation to a certain drawable, applying the apply rule (with a possible override)
  */
@@ -2269,6 +2298,9 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
         break;
     case ANIM_SCALE_REGION:
         animation->custom_data = dup_anim_scale_region_data(base_anim->custom_data);
+        break;
+    case ANIM_BLUR_RADIUS:
+        animation->custom_data = dup_anim_blur_radius_data(base_anim->custom_data);
         break;
     case ANIM_BACKGROUND_COLOR:
         error_abort("reapply_animation: ANIM_COLOR_LERP is container-only and cannot be reapplied as a drawable animation");
@@ -2328,7 +2360,7 @@ void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
             data->from_scale = drawable->bounds.scale_mod;
@@ -2358,7 +2390,7 @@ void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double 
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
             data->from_scale = drawable->bounds.scale_mod;
@@ -2375,7 +2407,7 @@ void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t 
     double duration = 0.0;
     const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
         if ( animation != NULL ) {
             const Animation_DrawRegionData_t *data = animation->custom_data;
             duration = data->duration;
@@ -2403,7 +2435,7 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
 }
 
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const double duration) {
-    Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
+    const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
         // If it's the same, do nothing
         // TODO: Currently we only check for the x1 values
@@ -2467,7 +2499,7 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_FADE_IN_OUT);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
         if ( animation != NULL ) {
             Animation_FadeInOutData_t *data = animation->custom_data;
             data->from_alpha = drawable->alpha_mod;
@@ -2489,6 +2521,32 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) 
         fade_animation->active = false;
     }
     drawable->alpha_mod = alpha;
+}
+
+void ui_drawable_set_blur_radius(Drawable_t *drawable, const float radius) {
+    if ( radius == drawable->blur_radius )
+        return;
+    const Animation_t *base_anim = find_animation(drawable, ANIM_BLUR_RADIUS);
+    if ( base_anim != NULL ) {
+        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        if ( animation != NULL ) {
+            Animation_BlurRadiusData_t *data = animation->custom_data;
+            data->from_radius = drawable->blur_radius;
+            data->to_radius = radius;
+        }
+    }
+    drawable->blur_radius = radius;
+}
+
+void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, const float radius) {
+    if ( radius == drawable->blur_radius )
+        return;
+    Animation_t *anim = find_active_animation(drawable, ANIM_BLUR_RADIUS);
+    if ( anim != NULL ) {
+        anim->elapsed = anim->duration;
+        anim->active = false;
+    }
+    drawable->blur_radius = radius;
 }
 
 void ui_drawable_disable_draw_region(Drawable_t *drawable) {
@@ -2623,6 +2681,27 @@ void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData
     result->active = false;
     result->ease_func = data->ease_func;
     result->apply_type = data->default_apply;
+
+    vec_add(target->animations, result);
+}
+
+void ui_animate_blur(Drawable_t *target, const Animation_BlurRadiusData_t *data) {
+    if ( target == NULL ) {
+        error_abort("Target drawable is NULL");
+    }
+
+    Animation_t *result = calloc(1, sizeof(*result));
+    if ( result == NULL ) {
+        error_abort("Failed to allocate animation");
+    }
+
+    result->type = ANIM_BLUR_RADIUS;
+    result->custom_data = dup_anim_blur_radius_data(data);
+    result->target = target;
+    result->duration = data->duration;
+    result->active = false;
+    result->ease_func = data->ease_func;
+    result->apply_type = ANIM_APPLY_OVERRIDE;
 
     vec_add(target->animations, result);
 }

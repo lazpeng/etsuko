@@ -347,6 +347,8 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         view->line_states[i] = LINE_NONE;
         ui_animate_fade(prev,
                         &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_blur(prev,
+                        &(Animation_BlurRadiusData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
         ui_animate_draw_region(prev,
                                &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE});
@@ -582,7 +584,7 @@ static void set_line_active(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
     drawable->enabled = true;
-    drawable->blur_radius = 0.f;
+    ui_drawable_set_blur_radius_immediate(drawable, 0.f);
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
     ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
@@ -631,12 +633,12 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     // don't change the alpha if the user is hovering over the line
     if ( view->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
-        drawable->blur_radius = 0.f;
+        ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         blur_hint_for_line(view, index);
     } else if ( alpha != drawable->alpha_mod ) {
         ui_drawable_set_alpha(drawable, alpha);
         fade_hint_for_line(view, index);
-        drawable->blur_radius = blur;
+        ui_drawable_set_blur_radius(drawable, blur);
         blur_hint_for_line(view, index);
     }
 
@@ -730,10 +732,10 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         // Don't change the alpha if the user is hovering over the line
         if ( view->current_hovered_index == index ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
-            drawable->blur_radius = 0.f;
+            ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         } else {
             ui_drawable_set_alpha(drawable, calculate_alpha(distance));
-            drawable->blur_radius = calculate_blur(distance);
+            ui_drawable_set_blur_radius(drawable, calculate_blur(distance));
         }
         fade_hint_for_line(view, index);
         blur_hint_for_line(view, index);
