@@ -33,7 +33,7 @@ static const char *lyric_fill_to_string(const LyricFillSetting_t value) {
         return "fill";
     case SET_LYRIC_FILL_DISABLED:
         return "disabled";
-    case SET_LYRIC_FILL_WITH_PULSE:
+    case SET_LYRIC_FILL_WITH_EFFECT:
     default:
         return "pulse";
     }
@@ -61,7 +61,7 @@ static void lyric_fill_from_string(UserSettings_t *settings, const char *value) 
     } else if ( str_equals_right_sized(value, "disabled") ) {
         settings->lyric_fill = SET_LYRIC_FILL_DISABLED;
     } else if ( str_equals_right_sized(value, "pulse") ) {
-        settings->lyric_fill = SET_LYRIC_FILL_WITH_PULSE;
+        settings->lyric_fill = SET_LYRIC_FILL_WITH_EFFECT;
     }
 }
 
@@ -93,6 +93,18 @@ static void past_lyrics_visibility_from_string(UserSettings_t *settings, const c
     }
 }
 
+static const char *lyric_effect_to_string(const LyricEffectSetting_t value) {
+    return value == SET_LYRIC_EFFECT_PULSE ? "pulse" : "emphasize";
+}
+
+static void lyric_effect_from_string(UserSettings_t *settings, const char *value) {
+    if ( str_equals_right_sized(value, "pulse") ) {
+        settings->lyric_effect = SET_LYRIC_EFFECT_PULSE;
+    } else if ( str_equals_right_sized(value, "emphasize") ) {
+        settings->lyric_effect = SET_LYRIC_EFFECT_EMPHASIZE;
+    }
+}
+
 static UserSettings_t *read_settings_from_json_string(const char *src) {
     if ( str_is_empty(src) )
         return NULL;
@@ -112,19 +124,24 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     }
 
     settings->volume = 100;
+    settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
 
     const char *read_hints = json_get_string(json_obj_get(root_obj, "read_hints_visibility"));
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
+    const char *lyric_effect = json_get_string(json_obj_get(root_obj, "lyric_effect"));
     const char *lyric_language = json_get_string(json_obj_get(root_obj, "lyric_language"));
     const char *auto_play = json_get_string(json_obj_get(root_obj, "auto_play"));
     const char *past_lyrics_visibility = json_get_string(json_obj_get(root_obj, "past_lyrics_visibility"));
     const JsonField_t *volume_field = json_obj_get(root_obj, "volume");
     const JsonField_t *audio_offset_field = json_obj_get(root_obj, "global_audio_offset");
+    const JsonField_t *blur_lyrics_field = json_obj_get(root_obj, "blur_lyrics");
 
     if ( !str_is_empty(read_hints) )
         read_hints_from_string(settings, read_hints);
     if ( !str_is_empty(lyric_fill) )
         lyric_fill_from_string(settings, lyric_fill);
+    if ( !str_is_empty(lyric_effect) )
+        lyric_effect_from_string(settings, lyric_effect);
     if ( !str_is_empty(lyric_language) )
         lyric_language_from_string(settings, lyric_language);
     if ( !str_is_empty(auto_play) )
@@ -135,6 +152,8 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         settings->volume = (int)json_get_number(volume_field);
     if ( audio_offset_field != NULL )
         settings->global_audio_offset_ms = json_get_number(audio_offset_field);
+    if ( blur_lyrics_field != NULL )
+        settings->blur_lyrics = json_get_bool(blur_lyrics_field);
 
     json_obj_destroy(root_obj);
     json_ctx_destroy(ctx);
@@ -149,12 +168,14 @@ static StrBuffer_t *settings_to_json_string(const UserSettings_t *settings) {
     json_buf_begin_object(buf, &first);
     json_buf_add_string(buf, &first, "read_hints_visibility", read_hints_to_string(settings->read_hints_visibility));
     json_buf_add_string(buf, &first, "lyric_fill", lyric_fill_to_string(settings->lyric_fill));
+    json_buf_add_string(buf, &first, "lyric_effect", lyric_effect_to_string(settings->lyric_effect));
     json_buf_add_string(buf, &first, "lyric_language", lyric_language_to_string(settings->lyric_language));
     json_buf_add_string(buf, &first, "auto_play", auto_play_to_string(settings->auto_play));
     json_buf_add_string(buf, &first, "past_lyrics_visibility",
                         past_lyrics_visibility_to_string(settings->past_language_visibility));
     json_buf_add_number(buf, &first, "volume", settings->volume);
     json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset_ms);
+    json_buf_add_bool(buf, &first, "blur_lyrics", settings->blur_lyrics);
     json_buf_end_object(buf);
     return buf;
 }
@@ -291,6 +312,7 @@ bool settings_ensure_loaded(void) {
     if ( state < 0 ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
         return true;
@@ -299,6 +321,7 @@ bool settings_ensure_loaded(void) {
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
@@ -308,6 +331,7 @@ bool settings_ensure_loaded(void) {
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
+        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
@@ -464,7 +488,7 @@ static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) 
     UserSettings_t *settings = settings_get();
     switch ( selected ) {
     case 0:
-        settings->lyric_fill = SET_LYRIC_FILL_WITH_PULSE;
+        settings->lyric_fill = SET_LYRIC_FILL_WITH_EFFECT;
         break;
     case 1:
         settings->lyric_fill = SET_LYRIC_FILL_ONLY;
@@ -805,6 +829,7 @@ static void on_reset_clicked(Ui_t *, const ButtonWidget_t *) {
     UserSettings_t *settings = settings_get();
     *settings = (UserSettings_t){0};
     settings->volume = 100;
+    settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
     g_modal->should_rebuild = true;
 }
 

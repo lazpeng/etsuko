@@ -16,10 +16,15 @@ typedef enum ReadHintSetting_t {
 } ReadHintSetting_t;
 
 typedef enum LyricFillSetting_t {
-    SET_LYRIC_FILL_WITH_PULSE = 0,
+    SET_LYRIC_FILL_WITH_EFFECT = 0,
     SET_LYRIC_FILL_ONLY,
     SET_LYRIC_FILL_DISABLED
 } LyricFillSetting_t;
+
+typedef enum LyricEffectSetting_t {
+    SET_LYRIC_EFFECT_EMPHASIZE = 0,
+    SET_LYRIC_EFFECT_PULSE
+} LyricEffectSetting_t;
 
 typedef enum LyricLanguageSetting_t {
     SET_LYRIC_LANGUAGE_PREFER_ORIGINAL = 0,
@@ -39,11 +44,13 @@ typedef enum PastLyricsVisibility_t {
 typedef struct UserSettings_t {
     ReadHintSetting_t read_hints_visibility;
     LyricFillSetting_t lyric_fill;
+    LyricEffectSetting_t lyric_effect;
     LyricLanguageSetting_t lyric_language;
     AutoPlaySetting_t auto_play;
     PastLyricsVisibility_t past_language_visibility;
     double global_audio_offset_ms;
     int volume;
+    bool blur_lyrics;
 } UserSettings_t;
 
 UserSettings_t *settings_get(void);
