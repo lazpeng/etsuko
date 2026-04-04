@@ -23,6 +23,22 @@ static void free_list(Vector_t *list) {
     vec_destroy(list);
 }
 
+static void json_field_free(JsonField_t *field) {
+    if ( field == NULL )
+        return;
+    free((void *)field->name);
+    // String values are owned by ctx->string_pool, so don't touch them
+    if ( field->type == JSON_OBJECT ) {
+        json_obj_destroy(field->value.obj_value);
+    } else if ( field->type == JSON_LIST && field->value.list_value != NULL ) {
+        Vector_t *list = field->value.list_value;
+        for ( size_t i = 0; i < list->size; i++ )
+            json_field_free(list->data[i]);
+        vec_destroy(list);
+    }
+    free(field);
+}
+
 JsonContext_t *json_ctx_init() {
     JsonContext_t *ctx = calloc(1, sizeof(*ctx));
     if ( ctx == NULL ) {
@@ -43,6 +59,7 @@ void json_ctx_destroy(JsonContext_t *ctx) {
         if ( ctx->vector_pool != NULL ) {
             free_list(ctx->vector_pool);
         }
+        free(ctx);
     }
 }
 
@@ -89,10 +106,10 @@ static JsonTokenType_t peek(const char *src, const int32_t idx, const size_t siz
     if ( (c >= '0' && c <= '9') || c == '-' || c == '.' )
         return JSON_TOKEN_NUM;
 
-    if ( str_equals_sized(src + idx, "true", strlen("true")) || str_equals_sized(src + idx, "false", strlen("false")) ) {
+    if ( str_equals_sized(src + idx + *skip, "true", strlen("true")) || str_equals_sized(src + idx + *skip, "false", strlen("false")) ) {
         return JSON_TOKEN_BOOL;
     }
-    if ( str_equals_sized(src + idx, "null", strlen("null")) ) {
+    if ( str_equals_sized(src + idx + *skip, "null", strlen("null")) ) {
         return JSON_TOKEN_NULL;
     }
 
@@ -297,7 +314,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
 
         if ( token != JSON_TOKEN_COLON ) {
             fprintf(stderr, "Json: parse_field: Expected : at %d\n", *idx);
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         *idx += 1; // :
@@ -311,7 +328,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
     case JSON_TOKEN_QUOTE:
         const char *str_value = parse_string(src, idx, size);
         if ( str_value == NULL ) {
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         field->type = JSON_STRING;
@@ -322,7 +339,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
     case JSON_TOKEN_NUM:
         double result = 0;
         if ( !parse_number(src, idx, size, &result) ) {
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         field->type = JSON_NUMBER;
@@ -331,7 +348,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
     case JSON_TOKEN_BRACKET_OPEN:
         Vector_t *list = parse_list(src, idx, size, ctx);
         if ( list == NULL ) {
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         field->type = JSON_LIST;
@@ -340,7 +357,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
     case JSON_TOKEN_OBJ_OPEN:
         JsonObject_t *obj = parse_object(src, idx, size, ctx);
         if ( obj == NULL ) {
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         field->type = JSON_OBJECT;
@@ -356,7 +373,7 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
             *idx += strlen("false");
         } else {
             fprintf(stderr, "Json: parse_field: Invalid value for bool literal at %d\n", *idx);
-            free(field);
+            json_field_free(field);
             return NULL;
         }
         break;
@@ -399,6 +416,8 @@ static Vector_t *parse_list(const char *src, int32_t *idx, const size_t size, Js
         if ( list->size > 0 ) {
             if ( token != JSON_TOKEN_COMMA ) {
                 fprintf(stderr, "Json: parse_list: Expected a , at %d\n", *idx);
+                for ( size_t i = 0; i < list->size; i++ )
+                    json_field_free(list->data[i]);
                 vec_destroy(list);
                 return NULL;
             }
@@ -409,14 +428,18 @@ static Vector_t *parse_list(const char *src, int32_t *idx, const size_t size, Js
 
         JsonField_t *field = parse_field(src, idx, size, ctx, true);
         if ( field == NULL ) {
-            free_list(list);
+            for ( size_t i = 0; i < list->size; i++ )
+                json_field_free(list->data[i]);
+            vec_destroy(list);
             return NULL;
         }
 
         if ( list->size > 0 && field->type != list_type ) {
             fprintf(stderr, "Json: parse_list: Field at idx %d has different type from the other values.\n", *idx);
-            free(field);
-            free_list(list);
+            json_field_free(field);
+            for ( size_t i = 0; i < list->size; i++ )
+                json_field_free(list->data[i]);
+            vec_destroy(list);
             return NULL;
         }
 
@@ -490,7 +513,7 @@ JsonObject_t *parse_object(const char *src, int32_t *idx, const size_t size, Jso
 }
 
 JsonObject_t *json_parse(const char *src, JsonContext_t *ctx) {
-    const size_t size = (size_t)strlen(src);
+    const size_t size = strlen(src);
     int32_t idx = 0;
     return parse_object(src, &idx, size, ctx);
 }
@@ -498,6 +521,8 @@ JsonObject_t *json_parse(const char *src, JsonContext_t *ctx) {
 void json_obj_destroy(JsonObject_t *obj) {
     if ( obj != NULL ) {
         if ( obj->children != NULL ) {
+            for ( size_t i = 0; i < obj->children->size; i++ )
+                json_field_free(obj->children->data[i]);
             vec_destroy(obj->children);
         }
         free(obj);
