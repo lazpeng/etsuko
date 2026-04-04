@@ -920,10 +920,29 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         render_draw_texture(drawable->shadow->blur_tex, &shadow_bounds, &shadow_opts);
     }
 
+    // Below is a hack to properly apply blur to textures that have scale_mod in their bounds, since it samples from
+    // the fb at the target rect and does multiple draws using the same bounds
+    // this is not good
     Bounds_t int_rect = rect;
+    Bounds_t display_rect = rect;
     if ( delta.final_blur_radius > 0.f ) {
-        render_make_texture_target((int32_t)rect.w, (int32_t)rect.h);
+        const double blur_scale = MAX(0.0, 1.0 + rect.scale_mod);
+        const int32_t scaled_w = (int32_t)(rect.w * blur_scale);
+        const int32_t scaled_h = (int32_t)(rect.h * blur_scale);
+
+        display_rect.w = scaled_w;
+        display_rect.h = scaled_h;
+        display_rect.scale_mod = 0;
+        if ( blur_scale != 1.0 && drawable->center_on_scale ) {
+            display_rect.x -= (rect.w * blur_scale - rect.w) / 2.0;
+            display_rect.y -= (rect.h * blur_scale - rect.h) / 2.0;
+        }
+
+        render_make_texture_target(scaled_w, scaled_h);
         int_rect.x = int_rect.y = 0;
+        int_rect.w = scaled_w;
+        int_rect.h = scaled_h;
+        int_rect.scale_mod = 0;
     }
 
     opts.color_mod = delta.color_mod;
@@ -942,19 +961,29 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         capture_opts.draw_regions = NULL;
         render_draw_texture(drawable->texture, &int_rect, &capture_opts);
 
-        Texture_t *temp_texture = render_restore_texture_target();
+        Texture_t *composite = render_restore_texture_target();
+
+        if ( drawable->blur_texture != NULL ) {
+            const double b_w = drawable->blur_texture->width;
+            const double b_h = drawable->blur_texture->height;
+            if ( b_w != display_rect.w || b_h != display_rect.h ) {
+                render_destroy_texture(drawable->blur_texture);
+                drawable->blur_texture = NULL;
+            }
+        }
 
         if ( drawable->blur_texture == NULL )
-            drawable->blur_texture = render_make_empty((int32_t)rect.w, (int32_t)rect.h);
+            drawable->blur_texture = render_make_empty((int32_t)display_rect.w, (int32_t)display_rect.h);
 
-        render_blur_texture(drawable->blur_texture, temp_texture, &rect, delta.final_blur_radius);
+        render_blur_texture(drawable->blur_texture, composite, &display_rect, delta.final_blur_radius);
+        render_destroy_texture(composite);
 
         DrawTextureOpts_t blur_draw_opts = opts;
         blur_draw_opts.alpha_mod = drawable->alpha_mod;
         blur_draw_opts.draw_regions = NULL;
-        render_draw_texture(drawable->blur_texture, &rect, &blur_draw_opts);
+        blur_draw_opts.scale_regions = NULL;
+        render_draw_texture(drawable->blur_texture, &display_rect, &blur_draw_opts);
 
-        render_destroy_texture(temp_texture);
     }
 }
 
@@ -2093,6 +2122,11 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         drawable->pending_recompute = true;
     } else {
         error_abort("Invalid drawable type");
+    }
+
+    if ( drawable->blur_texture != NULL ) {
+        render_destroy_texture(drawable->blur_texture);
+        drawable->blur_texture = NULL;
     }
 }
 
