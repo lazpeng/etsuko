@@ -13,10 +13,12 @@
 #include "json.h"
 #include "str_utils.h"
 
-#define MODAL_SETTING_INITIAL_VERTICAL_OFFSET (0.1)
+#define MODAL_SETTING_INITIAL_VERTICAL_OFFSET (0.075)
 #define MODAL_SETTING_VERTICAL_OFFSET (0.075)
+#define MODAL_SETTING_BAR_VERTICAL_OFFSET (0.05)
 #define MODAL_SETTING_LABEL_X_POS (0.475)
 #define MODAL_SETTING_VALUE_X_POS (0.525)
+#define MODAL_SETTING_LABEL_EM (0.9)
 
 struct SettingsModal_t;
 
@@ -458,7 +460,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     const Drawable_TextData_t text_data = {
         .text = "Reading hints visibility:",
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -472,7 +474,7 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
         .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
         .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
@@ -482,23 +484,6 @@ static Drawable_t *create_hints_setting(Ui_t *ui) {
     toggle->on_change_callback = on_hints_changed;
 
     return text;
-}
-
-static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
-    UserSettings_t *settings = settings_get();
-    switch ( selected ) {
-    case 0:
-        settings->lyric_fill = SET_LYRIC_FILL_WITH_EFFECT;
-        break;
-    case 1:
-        settings->lyric_fill = SET_LYRIC_FILL_ONLY;
-        break;
-    case 2:
-        settings->lyric_fill = SET_LYRIC_FILL_DISABLED;
-        break;
-    default:
-        break;
-    }
 }
 
 static void on_past_lyrics_visibility_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
@@ -526,7 +511,7 @@ static Drawable_t *create_past_lyrics_setting(Ui_t *ui, Drawable_t *prev) {
     const Drawable_TextData_t text_data = {
         .text = "Past lyrics visibility:",
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -541,7 +526,7 @@ static Drawable_t *create_past_lyrics_setting(Ui_t *ui, Drawable_t *prev) {
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
         .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
         .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
@@ -551,6 +536,23 @@ static Drawable_t *create_past_lyrics_setting(Ui_t *ui, Drawable_t *prev) {
     widget->on_change_callback = on_past_lyrics_visibility_changed;
 
     return text;
+}
+
+static void on_fill_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch ( selected ) {
+    case 0:
+        settings->lyric_fill = SET_LYRIC_FILL_WITH_EFFECT;
+        break;
+    case 1:
+        settings->lyric_fill = SET_LYRIC_FILL_ONLY;
+        break;
+    case 2:
+        settings->lyric_fill = SET_LYRIC_FILL_DISABLED;
+        break;
+    default:
+        break;
+    }
 }
 
 static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
@@ -564,7 +566,7 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     const Drawable_TextData_t text_data = {
         .text = "Dynamic lyric fill:",
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -575,11 +577,11 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
         .offset_x = MODAL_SETTING_VALUE_X_POS,
         .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
-    const char *opts[] = {"Fill + Pulse", "Fill Only", "Disabled"};
+    const char *opts[] = {"Fill + Effect", "Fill Only", "Disabled"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
         .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
         .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
@@ -587,6 +589,58 @@ static Drawable_t *create_fill_setting(Ui_t *ui, Drawable_t *prev) {
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
     widget->on_change_callback = on_fill_changed;
+
+    return text;
+}
+
+static void on_effect_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    switch ( selected ) {
+    case 0:
+        settings->lyric_effect = SET_LYRIC_EFFECT_EMPHASIZE;
+        break;
+    case 1:
+        settings->lyric_effect = SET_LYRIC_EFFECT_PULSE;
+        break;
+    default:
+        break;
+    }
+}
+
+static Drawable_t *create_effect_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Effect type:",
+        .font_type = FONT_UI,
+        .em = MODAL_SETTING_LABEL_EM,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const char *opts[] = {"Emphasize", "Pulse"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof(opts) / sizeof(const char *),
+        .text_em = MODAL_SETTING_LABEL_EM,
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
+        .active_index = settings->lyric_effect == SET_LYRIC_EFFECT_EMPHASIZE ? 0 : 1,
+    };
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_effect_changed;
 
     return text;
 }
@@ -616,7 +670,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     const Drawable_TextData_t text_data = {
         .text = "Default lyric language:",
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -631,7 +685,7 @@ static Drawable_t *create_language_setting(Ui_t *ui, Drawable_t *prev) {
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
         .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
         .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
@@ -668,7 +722,7 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     const Drawable_TextData_t text_data = {
         .text = "Auto-play:",
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -683,7 +737,7 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
         .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
         .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
@@ -691,6 +745,49 @@ static Drawable_t *create_auto_play_setting(Ui_t *ui, Drawable_t *prev) {
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
     widget->on_change_callback = on_auto_play_changed;
+
+    return text;
+}
+
+static void on_blur_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    settings->blur_lyrics = selected == 0;
+}
+
+static Drawable_t *create_blur_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Blur lyrics:",
+        .font_type = FONT_UI,
+        .em = MODAL_SETTING_LABEL_EM,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const char *opts[] = {"Enabled", "Disabled"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof(opts) / sizeof(const char *),
+        .text_em = MODAL_SETTING_LABEL_EM,
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
+        .active_index = settings->blur_lyrics ? 0 : 1,
+    };
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_blur_changed;
 
     return text;
 }
@@ -707,7 +804,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     const Drawable_TextData_t text_data = {
         .text = audio_delay_label,
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -716,7 +813,7 @@ static Drawable_t *create_audio_delay_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t bar_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
         .relative_to = text,
-        .offset_y = 0.075,
+        .offset_y = MODAL_SETTING_BAR_VERTICAL_OFFSET,
         .width = 0.5,
         .height = 0.025,
     };
@@ -768,12 +865,12 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t text_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y,
         .relative_to = prev,
-        .offset_y = 0.1,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
     const Drawable_TextData_t text_data = {
         .text = volume_label,
         .font_type = FONT_UI,
-        .em = 1.0,
+        .em = MODAL_SETTING_LABEL_EM,
         .color = {.r = 255, .g = 255, .b = 255, .a = 255},
     };
     Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
@@ -782,7 +879,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
     const Layout_t bar_layout = {
         .flags = LAYOUT_CENTER_X | LAYOUT_RELATIVE_TO_Y | LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE,
         .relative_to = text,
-        .offset_y = 0.075,
+        .offset_y = MODAL_SETTING_BAR_VERTICAL_OFFSET,
         .width = 0.5,
         .height = 0.025,
     };
@@ -844,7 +941,7 @@ static void create_reset_button(Ui_t *ui) {
         .text = "Reset",
         .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
-        .text_em = 1.0,
+        .text_em = MODAL_SETTING_LABEL_EM,
     };
     ButtonWidget_t *button = ui_build_button_widget(ui, g_modal->container, &layout, &opts);
     button->on_click_callback = on_reset_clicked;
@@ -863,8 +960,10 @@ void settings_show(Ui_t *ui) {
     Drawable_t *prev = create_hints_setting(ui);
     prev = create_past_lyrics_setting(ui, prev);
     prev = create_fill_setting(ui, prev);
+    prev = create_effect_setting(ui, prev);
     prev = create_language_setting(ui, prev);
     prev = create_auto_play_setting(ui, prev);
+    prev = create_blur_setting(ui, prev);
     prev = create_audio_delay_setting(ui, prev);
     create_volume_setting(ui, prev);
     create_reset_button(ui);
