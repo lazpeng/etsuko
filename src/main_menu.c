@@ -36,7 +36,7 @@ typedef struct GridLayoutInfo_t {
 
 struct MainMenu_t {
     OWNING Ui_t *ui;
-    OWNING HashMap_t *menu_artists; // of song.h MenuArtist_t
+    OWNING Vector_t *menu_songs; // of song.h MenuSong_t
     OWNING Resource_t *load_ui_font, *load_song_list, *load_no_album_art;
     OWNING HashMap_t *album_arts;          // of AlbumArtData_t
     OWNING HashMap_t *album_art_drawables; // of SongEntryDrawables_t
@@ -86,17 +86,19 @@ static void album_art_loaded(const Resource_t *res) {
     data->menu->album_data_dirty = true;
 }
 
-static void iterate_albums(const char *key, void *value, void *userdata) {
-    MenuAlbum_t *album = value;
-    if ( album == NULL ) {
-        printf("Warning: album for key %s is null.\n", key);
-        return;
-    }
+static void song_list_loaded(const Resource_t *res) {
+    StrBuffer_t *buffer = str_buf_init();
+    str_buf_append_len(buffer, (const char *)res->buffer->data, (int)res->buffer->downloaded_bytes);
 
-    MainMenu_t *menu = userdata;
+    MainMenu_t *menu = res->custom_data;
+    menu->menu_songs = menu_songs_parse(buffer->data);
+    str_buf_destroy(buffer);
 
-    for ( size_t i = 0; i < album->songs->size; i++ ) {
-        MenuSong_t *song = album->songs->data[i];
+    if ( menu->menu_songs == NULL )
+        error_abort("Failed to load song list");
+
+    for ( size_t i = 0; i < menu->menu_songs->size; i++ ) {
+        const MenuSong_t *song = menu->menu_songs->data[i];
         if ( str_is_empty(song->album_art_path) )
             continue;
         AlbumArtData_t *data = calloc(1, sizeof(*data));
@@ -106,35 +108,8 @@ static void iterate_albums(const char *key, void *value, void *userdata) {
 
         const LoadRequest_t request = {
             .custom_data = data, .on_resource_loaded = album_art_loaded, .absolute_path = song->album_art_path};
-
-        // Enqueue
         vec_add(menu->album_art_loads, repo_load_resource(&request));
     }
-}
-
-static void iterate_artists(const char *key, void *value, void *userdata) {
-    const MenuArtist_t *artist = value;
-    if ( artist == NULL ) {
-        printf("Warning: artist for key %s is null.\n", key);
-        return;
-    }
-
-    map_iterate(artist->albums, iterate_albums, userdata);
-}
-
-static void song_list_loaded(const Resource_t *res) {
-    StrBuffer_t *buffer = str_buf_init();
-    str_buf_append_len(buffer, (const char *)res->buffer->data, (int)res->buffer->downloaded_bytes);
-
-    MainMenu_t *menu = res->custom_data;
-    menu->menu_artists = menu_songs_parse(buffer->data, (int)buffer->len);
-    str_buf_destroy(buffer);
-
-    if ( menu->menu_artists == NULL )
-        error_abort("Failed to load song list");
-
-    // Set up load requests for all the album arts
-    map_iterate(menu->menu_artists, iterate_artists, menu);
 }
 
 MainMenu_t *menu_init() {
@@ -144,7 +119,7 @@ MainMenu_t *menu_init() {
     menu->ui = ui_init();
     menu->album_art_loads = vec_init();
     menu->album_arts = map_init();
-    menu->menu_artists = map_init();
+    menu->menu_songs = vec_init();
     menu->album_art_drawables = map_init();
 
     render_set_window_title("etsuko");
@@ -361,79 +336,6 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
     return text;
 }
 
-static void setup_album(const char *_, const void *value, void *userdata) {
-    const MenuAlbum_t *album = value;
-    MainMenu_t *menu = userdata;
-    GridLayoutInfo_t *grid = &menu->grid_layout_info;
-
-    for ( size_t i = 0; i < album->songs->size; i++ ) {
-        const MenuSong_t *song = album->songs->data[i];
-        Layout_t layout = {.flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS |
-                                    LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-                           .width = 0.15};
-        bool set_first = false;
-        if ( grid->row_count == MAX_SONGS_PER_ROW || grid->first_in_row == NULL ) {
-            grid->row_count = 0;
-            layout.offset_x = 0.0;
-            layout.offset_y = 0.15;
-            layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-            layout.relative_to = grid->first_in_row;
-            set_first = true;
-        } else {
-            layout.offset_x = 0.05;
-            layout.offset_y = 0;
-            layout.flags |= LAYOUT_RELATION_X_INCLUDE_WIDTH;
-            layout.relative_to = grid->last_in_row;
-        }
-
-        const Drawable_ImageData_t data = {.border_radius_em = 1};
-        const AlbumArtData_t *no_data = map_get(menu->album_arts, NO_ART_KEY);
-        if ( no_data == NULL ) {
-            error_abort("Fatal error: Couldn't load the default album image");
-        }
-
-        Drawable_t *image =
-            ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
-        grid->last_in_row = image;
-        if ( set_first ) {
-            grid->first_in_row = image;
-        }
-        grid->row_count += 1;
-
-        const Animation_ScaleData_t scale_data = {
-            .duration = ALBUM_SCALE_DURATION,
-        };
-        image->center_on_scale = true;
-        ui_animate_scale(image, &scale_data);
-
-        SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
-        Drawable_t *title_text = setup_song_title(menu, song, image);
-        Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
-
-        entry->menu = menu;
-        entry->key = song->id;
-        entry->image = image;
-        entry->title = title_text;
-        entry->album = album_text;
-        entry->pills_container = setup_tag_pills(menu, song, entry);
-
-        // Setup events
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_ENTERED, image, on_album_art_event, entry);
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_EXITED, image, on_album_art_event, entry);
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, image, on_album_art_event, entry);
-
-        grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
-
-        map_put(menu->album_art_drawables, song->id, entry);
-    }
-}
-
-static void setup_artist(const char *_, const void *value, void *userdata) {
-    const MenuArtist_t *artist = value;
-
-    map_iterate_const(artist->albums, setup_album, userdata);
-}
-
 static void update_background(const MainMenu_t *menu) {
     if ( str_is_empty(menu->selected_song) )
         return;
@@ -468,9 +370,7 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
     destroy_resource_load(&menu->load_no_album_art);
 }
 
-static void on_settings_click(Ui_t *ui, const ButtonWidget_t *) {
-    settings_show(ui);
-}
+static void on_settings_click(Ui_t *ui, const ButtonWidget_t *) { settings_show(ui); }
 
 void menu_setup(MainMenu_t *menu) {
     ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_NONE);
@@ -484,28 +384,77 @@ void menu_setup(MainMenu_t *menu) {
             .offset_x = 0.02,
             .offset_y = -0.02,
         };
-        const ButtonWidgetOpts_t opts = {
-            .text = "Settings",
-            .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
-            .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
-            .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
-            .text_em = 0.8
-        };
+        const ButtonWidgetOpts_t opts = {.text = "Settings",
+                                         .bg_show_type = BUTTON_BG_SHOW_ALWAYS,
+                                         .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+                                         .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+                                         .text_em = 0.8};
         ButtonWidget_t *button = ui_build_button_widget(menu->ui, ui_root_container(menu->ui), &layout, &opts);
         button->on_click_callback = on_settings_click;
     }
 
-    const Layout_t layout = {
+    const Layout_t container_layout = {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
-    menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
-    menu->container->overflow_y = (ContainerOverflow_t){
-        .kind = OVERFLOW_SCROLL,
-        .relative_end_padding = 0.15
-    };
+    menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &container_layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
+    menu->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.15};
     ui_container_add_vertical_scrollbar(menu->ui, menu->container, SCROLL_BAR_ALWAYS);
     ui_container_animate_scroll_y(menu->container, 0.1, ANIM_EASE_OUT_CUBIC);
 
-    map_iterate_const(menu->menu_artists, setup_artist, menu);
+    GridLayoutInfo_t *grid = &menu->grid_layout_info;
+    const AlbumArtData_t *no_data = map_get(menu->album_arts, NO_ART_KEY);
+    if ( no_data == NULL )
+        error_abort("Fatal error: Couldn't load the default album image");
+
+    for ( size_t i = 0; i < menu->menu_songs->size; i++ ) {
+        const MenuSong_t *song = menu->menu_songs->data[i];
+        Layout_t layout = {.flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS |
+                                    LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
+                           .width = 0.15};
+        bool set_first = false;
+        if ( grid->row_count == MAX_SONGS_PER_ROW || grid->first_in_row == NULL ) {
+            grid->row_count = 0;
+            layout.offset_x = 0.0;
+            layout.offset_y = 0.15;
+            layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+            layout.relative_to = grid->first_in_row;
+            set_first = true;
+        } else {
+            layout.offset_x = 0.05;
+            layout.offset_y = 0;
+            layout.flags |= LAYOUT_RELATION_X_INCLUDE_WIDTH;
+            layout.relative_to = grid->last_in_row;
+        }
+
+        const Drawable_ImageData_t data = {.border_radius_em = 1};
+        Drawable_t *image = ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
+        grid->last_in_row = image;
+        if ( set_first )
+            grid->first_in_row = image;
+        grid->row_count += 1;
+
+        const Animation_ScaleData_t scale_data = {.duration = ALBUM_SCALE_DURATION};
+        image->center_on_scale = true;
+        ui_animate_scale(image, &scale_data);
+
+        SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
+        Drawable_t *title_text = setup_song_title(menu, song, image);
+        Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
+
+        entry->menu = menu;
+        entry->key = song->id;
+        entry->image = image;
+        entry->title = title_text;
+        entry->album = album_text;
+        entry->pills_container = setup_tag_pills(menu, song, entry);
+
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_ENTERED, image, on_album_art_event, entry);
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_EXITED, image, on_album_art_event, entry);
+        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, image, on_album_art_event, entry);
+
+        grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
+
+        map_put(menu->album_art_drawables, song->id, entry);
+    }
 
     free_setup_resource_loads(menu);
 }
@@ -563,8 +512,8 @@ static void cleanup_drawables_map(const char *key, void *value, void *_) {
 void menu_finish(const MainMenu_t *menu) {
     ui_finish(menu->ui);
 
-    if ( menu->menu_artists )
-        menu_songs_destroy(menu->menu_artists);
+    if ( menu->menu_songs )
+        menu_songs_destroy(menu->menu_songs);
 
     if ( menu->album_art_loads ) {
         for ( size_t i = 0; i < menu->album_art_loads->size; i++ ) {

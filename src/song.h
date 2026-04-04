@@ -105,21 +105,10 @@ typedef struct MenuSong_t {
     int year;
 } MenuSong_t;
 
-typedef struct MenuAlbum_t {
-    OWNING char *name;
-    OWNING Vector_t *songs; // of MenuSong_t
-} MenuAlbum_t;
-
-typedef struct MenuArtist_t {
-    OWNING char *name;
-    OWNING HashMap_t *albums; // of MenuAlbum_t
-} MenuArtist_t;
-
 /**
- * Parses a json string with a list of songs to be displayed on the main menu and returns a hashmap with an entry
- * for every artist. The key is the artist name and the value is a MenuArtist_t
+ * Parses a json string with a list of songs to be displayed on the main menu and returns a flat vector of MenuSong_t
  */
-HashMap_t *menu_songs_parse(const char *src, int src_size);
-void menu_songs_destroy(HashMap_t *map);
+Vector_t *menu_songs_parse(const char *src);
+void menu_songs_destroy(Vector_t *songs);
 
 #endif // ETSUKO_SONG_H

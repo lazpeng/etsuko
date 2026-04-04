@@ -483,7 +483,7 @@ void song_destroy(void) {
     g_song = NULL;
 }
 
-HashMap_t *menu_songs_parse(const char *src, int src_size) {
+Vector_t *menu_songs_parse(const char *src) {
     JsonContext_t *ctx = json_ctx_init();
     JsonObject_t *root_obj = json_parse(src, ctx);
 
@@ -502,7 +502,7 @@ HashMap_t *menu_songs_parse(const char *src, int src_size) {
         return NULL;
     }
 
-    HashMap_t *artists_map = map_init();
+    Vector_t *songs = vec_init();
 
     for ( size_t i = 0; i < songs_list->size; i++ ) {
         const JsonField_t *song_field = songs_list->data[i];
@@ -511,34 +511,13 @@ HashMap_t *menu_songs_parse(const char *src, int src_size) {
 
         JsonObject_t *song_obj = song_field->value.obj_value;
 
-        // Extract fields
         const char *name = json_get_string(json_obj_get(song_obj, "name"));
         const char *artist = json_get_string(json_obj_get(song_obj, "artist"));
         const char *album = json_get_string(json_obj_get(song_obj, "album"));
 
-        if ( str_is_empty(name) || str_is_empty(artist) || str_is_empty(album) ) {
+        if ( str_is_empty(name) || str_is_empty(artist) || str_is_empty(album) )
             continue;
-        }
 
-        // Find or create artist
-        MenuArtist_t *menu_artist = map_get(artists_map, artist);
-        if ( menu_artist == NULL ) {
-            menu_artist = calloc(1, sizeof(MenuArtist_t));
-            menu_artist->name = strdup(artist);
-            menu_artist->albums = map_init();
-            map_put(artists_map, artist, menu_artist);
-        }
-
-        // Find or create album
-        MenuAlbum_t *menu_album = map_get(menu_artist->albums, album);
-        if ( menu_album == NULL ) {
-            menu_album = calloc(1, sizeof(MenuAlbum_t));
-            menu_album->name = strdup(album);
-            menu_album->songs = vec_init();
-            map_put(menu_artist->albums, album, menu_album);
-        }
-
-        // Create song
         MenuSong_t *menu_song = calloc(1, sizeof(MenuSong_t));
         menu_song->name = strdup(name);
         menu_song->artist = strdup(artist);
@@ -562,13 +541,13 @@ HashMap_t *menu_songs_parse(const char *src, int src_size) {
 
         menu_song->year = (int)json_get_number(json_obj_get(song_obj, "year"));
 
-        vec_add(menu_album->songs, menu_song);
+        vec_add(songs, menu_song);
     }
 
     json_obj_destroy(root_obj);
     json_ctx_destroy(ctx);
 
-    return artists_map;
+    return songs;
 }
 
 static void free_menu_song(MenuSong_t *song) {
@@ -591,37 +570,10 @@ static void free_menu_song(MenuSong_t *song) {
     free(song);
 }
 
-static void cb_free_album(const char *key, void *value, void *user_data) {
-    MenuAlbum_t *album = (MenuAlbum_t *)value;
-    if ( !album )
+void menu_songs_destroy(Vector_t *songs) {
+    if ( !songs )
         return;
-    if ( album->name )
-        free(album->name);
-    if ( album->songs ) {
-        for ( size_t i = 0; i < album->songs->size; i++ ) {
-            free_menu_song((MenuSong_t *)album->songs->data[i]);
-        }
-        vec_destroy(album->songs);
-    }
-    free(album);
-}
-
-static void cb_free_artist(const char *key, void *value, void *user_data) {
-    MenuArtist_t *artist = (MenuArtist_t *)value;
-    if ( !artist )
-        return;
-    if ( artist->name )
-        free(artist->name);
-    if ( artist->albums ) {
-        map_iterate(artist->albums, cb_free_album, NULL);
-        map_destroy(artist->albums);
-    }
-    free(artist);
-}
-
-void menu_songs_destroy(HashMap_t *map) {
-    if ( !map )
-        return;
-    map_iterate(map, cb_free_artist, NULL);
-    map_destroy(map);
+    for ( size_t i = 0; i < songs->size; i++ )
+        free_menu_song(songs->data[i]);
+    vec_destroy(songs);
 }
