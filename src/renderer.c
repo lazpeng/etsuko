@@ -1298,7 +1298,7 @@ void render_set_blend_mode(const BlendMode_t mode) {
     switch ( mode ) {
     case BLEND_MODE_BLEND:
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         break;
     case BLEND_MODE_ADD:
         glEnable(GL_BLEND);
