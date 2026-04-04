@@ -68,6 +68,10 @@ typedef struct AlbumArtData_t {
 } AlbumArtData_t;
 
 static void album_art_loaded(const Resource_t *res) {
+    // The user may click on a song before all the albums have finished loading, so if we already changed modes
+    // (and all the state for the main menu is gone), don't do anything
+    if ( global_active_mode() != APP_MODE_MENU )
+        return;
     AlbumArtData_t *data = res->custom_data;
 
     data->image_data = res->buffer->data;
