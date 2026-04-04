@@ -314,7 +314,7 @@ static void handle_mouse_input(Ui_t *ui) {
             const int next_index = cur->prev->index;
             for ( size_t oi = 0; oi < ui->opaque_containers->size; oi++ ) {
                 const Container_t *oc = ui->opaque_containers->data[oi];
-                if ( oc->layout.z_index <= next_index )
+                if ( oc->z_layer_index <= next_index )
                     continue;
                 double cx, cy;
                 ui_get_container_canon_pos(oc, &cx, &cy, false);
@@ -1076,11 +1076,11 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
 }
 
 static void vec_add_sorted_drawable(Vector_t *vec, Drawable_t *drawable) {
-    const int32_t z = drawable->layout.z_index;
+    const int32_t z = drawable->z_layer_index;
     size_t insert_at = vec->size;
     for ( size_t i = 0; i < vec->size; i++ ) {
         const Drawable_t *current = vec->data[i];
-        if ( current->layout.z_index > z ) {
+        if ( current->z_layer_index > z ) {
             insert_at = i;
             break;
         }
@@ -1092,11 +1092,11 @@ static void vec_add_sorted_drawable(Vector_t *vec, Drawable_t *drawable) {
 }
 
 static void vec_add_sorted_container(Vector_t *vec, Container_t *container) {
-    const int32_t z = container->layout.z_index;
+    const int32_t z = container->z_layer_index;
     size_t insert_at = vec->size;
     for ( size_t i = 0; i < vec->size; i++ ) {
         const Container_t *current = vec->data[i];
-        if ( current->layout.z_index > z ) {
+        if ( current->z_layer_index > z ) {
             insert_at = i;
             break;
         }
@@ -1150,10 +1150,10 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
     size_t d_idx = 0, c_idx = 0;
     while ( d_idx < container->child_drawables->size || c_idx < container->child_containers->size ) {
         const int32_t dz = d_idx < container->child_drawables->size
-                               ? ((Drawable_t *)container->child_drawables->data[d_idx])->layout.z_index
+                               ? ((Drawable_t *)container->child_drawables->data[d_idx])->z_layer_index
                                : INT32_MAX;
         const int32_t cz = c_idx < container->child_containers->size
-                               ? ((Container_t *)container->child_containers->data[c_idx])->layout.z_index
+                               ? ((Container_t *)container->child_containers->data[c_idx])->z_layer_index
                                : INT32_MAX;
         // In case they're equal, favor drawables
         if ( dz <= cz ) {
@@ -1176,7 +1176,7 @@ void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *tar
     if ( callback == NULL )
         error_abort("ui_add_event_callback: callback is NULL");
 
-    const int layer_idx = target->layout.z_index;
+    const int layer_idx = target->z_layer_index;
     const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_idx);
 
     for ( size_t i = 0; i < target->events->size; i++ ) {
@@ -1799,7 +1799,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
     result->custom_data = data;
     result->texture = final_texture;
     result->layout = *layout;
-    result->layout.z_index += container->layout.z_index;
+    result->z_layer_index = layout->z_index + container->z_layer_index;
     ui_reposition_drawable(result);
 
     if ( data->draw_shadow ) {
@@ -1838,7 +1838,7 @@ Drawable_t *ui_make_image(const unsigned char *bytes, const int length, const Dr
     result->custom_data = data;
     result->texture = texture;
     result->layout = *layout;
-    result->layout.z_index += container->layout.z_index;
+    result->z_layer_index = layout->z_index + container->z_layer_index;
 
     ui_reposition_drawable(result);
 
@@ -1855,7 +1855,7 @@ Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Co
     result->texture = render_make_null();
     result->custom_data = dup_rectangle_data(data);
     result->layout = *layout;
-    result->layout.z_index += container->layout.z_index;
+    result->z_layer_index = layout->z_index + container->z_layer_index;
     result->alpha_mod = data->color.a;
 
     ui_reposition_drawable(result);
@@ -1869,7 +1869,7 @@ Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *lay
     result->texture = render_make_null();
     result->custom_data = NULL;
     result->layout = *layout;
-    result->layout.z_index += container->layout.z_index;
+    result->z_layer_index = layout->z_index + container->z_layer_index;
     result->pending_recompute = true;
 
     ui_reposition_drawable(result);
@@ -1925,13 +1925,14 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     }
     // Find the drawable in the z layers
     if ( has_events ) {
-        const int layer_index = drawable->layout.z_index;
+        const int layer_index = drawable->z_layer_index;
         // guaranteed (maybe?) to not allocate since it should have been already allocated when the drawable
         //  was added to the z layers when an event was attached to it
         const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_index);
         for ( size_t i = 0; i < layer->nodes->size; i++ ) {
             if ( layer->nodes->data[i] == drawable ) {
                 vec_remove(layer->nodes, i);
+                break;
             }
         }
     }
@@ -1958,8 +1959,7 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
     result->parent = parent;
     // Make a copy of the layout
     result->layout = *layout;
-    if ( parent != NULL )
-        result->layout.z_index += parent->layout.z_index;
+    result->z_layer_index = layout->z_index + (parent != NULL ? parent->z_layer_index : 0);
     result->child_drawables = vec_init();
     result->child_containers = vec_init();
     result->animations = vec_init();
@@ -1972,7 +1972,7 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
         measure_layout(layout, parent, &result->bounds);
         position_layout(layout, parent, &result->bounds);
         vec_add_sorted_container(parent->child_containers, result);
-        if ( result->layout.z_index > 0 )
+        if ( result->z_layer_index > 0 )
             vec_add(ui->opaque_containers, result);
     }
 
@@ -2127,6 +2127,18 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
         const WidgetEntry_t *cb = container->widgets->data[i];
         if ( cb->configure_callback != NULL )
             cb->configure_callback(cb->widget_data);
+    }
+
+    if ( container->background != NULL ) {
+        if ( container->background->blur_tex != NULL ) {
+            render_destroy_texture(container->background->blur_tex);
+            container->background->blur_tex = NULL;
+        }
+
+        if ( container->background->empty_tex != NULL ) {
+            render_destroy_texture(container->background->empty_tex);
+            container->background->empty_tex = NULL;
+        }
     }
 }
 

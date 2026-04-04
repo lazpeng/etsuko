@@ -136,6 +136,7 @@ typedef struct Container_t {
     OWNING Vector_t *widgets;          // of WidgetEntry_t*
     OWNING Background_t *background;
     Layout_t layout;
+    int32_t z_layer_index;
     bool enabled;
     ContainerFlags_t flags;
     double align_content_offset_y, align_content_offset_x;
@@ -154,6 +155,7 @@ typedef struct Drawable_t {
     WEAK Container_t *parent;
     bool enabled, dynamic;
     Layout_t layout;
+    int32_t z_layer_index;
     uint8_t alpha_mod;
     OWNING Vector_t *animations;        // of Animation_t*
     OWNING Vector_t *active_animations; // of Animation_t*
