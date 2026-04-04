@@ -111,6 +111,8 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         return NULL;
     }
 
+    settings->volume = 100;
+
     const char *read_hints = json_get_string(json_obj_get(root_obj, "read_hints_visibility"));
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
     const char *lyric_language = json_get_string(json_obj_get(root_obj, "lyric_language"));

@@ -48,7 +48,7 @@ typedef struct {
     int saved_volume;
 } audio_state_t;
 
-static audio_state_t g_audio = {0};
+static audio_state_t g_audio = {.saved_volume = -1};
 
 static void check_al_error(const char *msg) {
     const ALenum error = alGetError();
