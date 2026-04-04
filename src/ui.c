@@ -908,13 +908,16 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
+
+        DrawTextureOpts_t shadow_opts = opts;
         const int32_t max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
         const uint8_t alpha = MIN(max_alpha, drawable->alpha_mod);
-        opts.alpha_mod = alpha;
+        shadow_opts.alpha_mod = alpha;
+        shadow_opts.scale_regions = NULL;
 
         const float blur_radius = (float)drawable->shadow->offset / 2.f;
         render_blur_texture(drawable->shadow->blur_tex, drawable->shadow->texture, NULL, blur_radius);
-        render_draw_texture(drawable->shadow->blur_tex, &shadow_bounds, &opts);
+        render_draw_texture(drawable->shadow->blur_tex, &shadow_bounds, &shadow_opts);
     }
 
     Bounds_t int_rect = rect;
