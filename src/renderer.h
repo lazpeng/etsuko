@@ -71,6 +71,7 @@ typedef struct Bounds_t {
 typedef struct Shadow_t {
     // Texture of the shadow itself
     OWNING Texture_t *texture;
+    OWNING Texture_t *blur_tex;
     // Bounds of the generated texture. It's likely larger than the texture itself
     Bounds_t bounds;
     // Offset relative to the parent texture. Must be applied manually before rendering the shadow.
@@ -227,6 +228,7 @@ typedef struct Background_t {
     BackgroundType_t type;
     Color_t colors[5];
     OWNING Texture_t *null_tex;
+    OWNING Texture_t *blur_tex;
     double border_radius_em;
     bool blur;
 } Background_t;
@@ -261,7 +263,7 @@ void render_destroy_background(Background_t *background);
 /**
  * Draws a background based on a dynamic type and provided colors, using the provided bounds (e.g. a container's)
  */
-void render_draw_background(Background_t *background, const Bounds_t *bounds);
+void render_draw_background(Background_t *background, const Bounds_t *at);
 /**
  * Swaps framebuffers replacing the image being shown in the screen with the one that has been drawn to so far, essentially
  * presenting the image to the screen.
@@ -335,6 +337,10 @@ void render_measure_char_bounds(int32_t c, int32_t prev_c, int32_t pixels, CharB
  */
 Texture_t *render_make_null(void);
 /**
+ * Creates an empty texture with the given dimensions. It is fully initialized and exists in video memory
+ */
+Texture_t *render_make_empty(int32_t width, int32_t height);
+/**
  * Creates a texture of the given text string using the provided font, font size and color.
  * The resulting texture is exactly the size it needs to contain the final bitmap and no centering, alignment or wrapping is performed
  * in the renderer.
@@ -361,7 +367,7 @@ Texture_t *render_make_dummy_image(double border_radius_em);
  * The texture itself is not modified but render_draw_texture needs a non-const pointer to the texture because it may need to reconfigure
  * the cached attributes inside the texture (see Texture_t and render_draw_texture for more information).
  */
-Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, float blur_radius, int32_t offset);
+Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, int32_t offset);
 /**
  * Frees all resources associated with a shadow. Does not affect the original texture
  */
@@ -388,14 +394,13 @@ const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
  */
 Texture_t *render_restore_texture_target(void);
 /**
- * Creates a new texture with blur applied to the given texture, using the blur_radius parameter.
+ * Creates a blurred version of source written into target (a persistent cache texture).
+ * If bounds is non-NULL, the framebuffer region at that screen position is composited with source
+ * before blurring, producing a frosted-glass effect.
+ * If bounds is NULL, source is blurred directly — useful for softening shadows or other textures
+ * that already carry the correct alpha shape and need no framebuffer compositing.
  */
-Texture_t *render_blur_texture(const Texture_t *source, float blur_radius);
-/**
- * Creates a new texture with blur applied to the given texture, using the blur_radius parameter.
- * The old texture is destroyed so that this virtually "replaces" a texture with is blurred variant without the caller needing to explicitly do so.
- */
-Texture_t *render_blur_texture_replace(Texture_t *source, float blur_radius);
+Texture_t *render_blur_texture(Texture_t *target, const Texture_t *source, const Bounds_t *bounds, float blur_radius);
 /**
  * Draws a rounded rect to the screen, using the bounds parameter as both location and dimension parameters, using the given color and border radius.
  * A null texture (created using render_make_null) is needed because a vertex array object and buffer object are pre-computed for the given dimensions

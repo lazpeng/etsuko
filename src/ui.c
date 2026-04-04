@@ -847,7 +847,7 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
     }
 }
 
-static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds) {
+static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *base_bounds) {
     if ( !drawable->enabled || drawable->pending_recompute ) {
         return;
     }
@@ -866,6 +866,12 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
     if ( drawable->layout.absolute ) {
         rect.x -= drawable->parent->align_content_offset_x;
         rect.y -= drawable->parent->align_content_offset_y - drawable->parent->overflow_y.current_amount;
+    }
+
+    const Bounds_t *root_bounds = &ui_root_container(ui)->bounds;
+
+    if ( rect.x + rect.w < 0 || rect.x > root_bounds->w || rect.y + rect.h < 0 || rect.y > root_bounds->h ) {
+        return;
     }
 
     if ( drawable->dynamic ) {
@@ -888,19 +894,48 @@ static void perform_draw(const Drawable_t *drawable, const Bounds_t *base_bounds
         const int32_t max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
         const uint8_t alpha = MIN(max_alpha, drawable->alpha_mod);
         opts.alpha_mod = alpha;
-        opts.color_mod = 0.f;
-        render_draw_texture(drawable->shadow->texture, &shadow_bounds, &opts);
+
+        const float blur_radius = (float)drawable->shadow->offset / 2.f;
+        render_blur_texture(drawable->shadow->blur_tex, drawable->shadow->texture, NULL, blur_radius);
+        render_draw_texture(drawable->shadow->blur_tex, &shadow_bounds, &opts);
+    }
+
+    Bounds_t int_rect = rect;
+    if ( drawable->blur_radius > 0.f ) {
+        render_make_texture_target((int32_t)rect.w, (int32_t)rect.h);
+        int_rect.x = int_rect.y = 0;
     }
 
     opts.color_mod = delta.color_mod;
     if ( drawable->draw_underlay ) {
         opts.alpha_mod = drawable->underlay_alpha;
-        render_draw_texture(drawable->texture, &rect, &opts);
+        render_draw_texture(drawable->texture, &int_rect, &opts);
     }
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
-    render_draw_texture(drawable->texture, &rect, &opts);
+    if ( drawable->blur_radius <= 0.f ) {
+        render_draw_texture(drawable->texture, &int_rect, &opts);
+    } else {
+        DrawTextureOpts_t capture_opts = opts;
+        capture_opts.alpha_mod = 255;
+        capture_opts.draw_regions = NULL;
+        render_draw_texture(drawable->texture, &int_rect, &capture_opts);
+
+        Texture_t *temp_texture = render_restore_texture_target();
+
+        if ( drawable->blur_texture == NULL )
+            drawable->blur_texture = render_make_empty((int32_t)rect.w, (int32_t)rect.h);
+
+        render_blur_texture(drawable->blur_texture, temp_texture, &rect, drawable->blur_radius);
+
+        DrawTextureOpts_t blur_draw_opts = opts;
+        blur_draw_opts.alpha_mod = drawable->alpha_mod;
+        blur_draw_opts.draw_regions = NULL;
+        render_draw_texture(drawable->blur_texture, &rect, &blur_draw_opts);
+
+        render_destroy_texture(temp_texture);
+    }
 }
 
 static void apply_container_animations(const Container_t *container, Bounds_t *bounds) {
@@ -1105,7 +1140,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
                                : INT32_MAX;
         // In case they're equal, favor drawables
         if ( dz <= cz ) {
-            perform_draw(container->child_drawables->data[d_idx], &base_bounds);
+            perform_draw(ui, container->child_drawables->data[d_idx], &base_bounds);
             d_idx += 1;
         } else {
             draw_all_container(ui, container->child_containers->data[c_idx], base_bounds);
@@ -1753,8 +1788,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
     if ( data->draw_shadow ) {
         const int32_t text_pixels = render_measure_pixels_from_em(data->em);
         const int32_t offset = (int32_t)MAX(1.f, MIN(10.f, text_pixels * 0.1f));
-        const float blur_radius = (float)data->em; // Make blur radius relative to text size in a shitty way
-        result->shadow = render_make_shadow(result->texture, &result->bounds, blur_radius, offset);
+        result->shadow = render_make_shadow(result->texture, &result->bounds, offset);
     }
 
     return result;
@@ -1772,7 +1806,7 @@ static void apply_shadow_to_image(Drawable_t *drawable) {
         render_destroy_shadow(drawable->shadow);
     }
     const int32_t offset = MAX(1, drawable->bounds.w * 0.01f);
-    drawable->shadow = render_make_shadow(drawable->texture, &drawable->bounds, 1.f, offset);
+    drawable->shadow = render_make_shadow(drawable->texture, &drawable->bounds, offset);
 }
 
 Drawable_t *ui_make_image(const unsigned char *bytes, const int length, const Drawable_ImageData_t *weak_data,

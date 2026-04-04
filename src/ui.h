@@ -148,6 +148,7 @@ typedef struct Container_t {
 typedef struct Drawable_t {
     DrawableType_t type;
     OWNING Texture_t *texture;
+    OWNING Texture_t *blur_texture;
     Bounds_t bounds;
     OWNING void *custom_data;
     WEAK Container_t *parent;
@@ -164,6 +165,7 @@ typedef struct Drawable_t {
     bool pending_recompute;
     bool center_on_scale;
     OWNING Vector_t *events; // of EventDef_t*
+    float blur_radius;
 } Drawable_t;
 
 typedef enum AnimationType_t {

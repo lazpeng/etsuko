@@ -34,20 +34,21 @@
 #define SCALE_REGION_DOWN_MIN_DURATION (0.2)
 #define SCALE_REGION_TARGET_SCALE (0.1)
 #define FILL_ANIM_MIN_DURATION (0.2)
+#define LINE_BLUR_FACTOR (1.f)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
     return str_is_empty(line->full_text) && line->base_duration > 5;
 }
 
-static void reposition_hint_for_line(Ui_t *ui, const LyricsView_t *view, int32_t index) {
+static void reposition_hint_for_line(const LyricsView_t *view, const int32_t index) {
     if ( index < (int32_t)view->line_read_hints->size ) {
         Drawable_t *hint = view->line_read_hints->data[index];
         ui_reposition_drawable(hint);
     }
 }
 
-static void scale_hint_for_line(const LyricsView_t *view, int32_t index) {
+static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
     if ( index < (int32_t)view->line_read_hints->size ) {
         const Drawable_t *drawable = view->line_drawables->data[index];
         Drawable_t *hint = view->line_read_hints->data[index];
@@ -55,11 +56,19 @@ static void scale_hint_for_line(const LyricsView_t *view, int32_t index) {
     }
 }
 
-static void fade_hint_for_line(const LyricsView_t *view, int32_t index) {
+static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
     if ( index < (int32_t)view->line_read_hints->size ) {
         const Drawable_t *drawable = view->line_drawables->data[index];
         Drawable_t *hint = view->line_read_hints->data[index];
         ui_drawable_set_alpha(hint, drawable->alpha_mod);
+    }
+}
+
+static void blur_hint_for_line(const LyricsView_t *view, const int32_t index) {
+    if ( index < (int32_t)view->line_read_hints->size ) {
+        const Drawable_t *drawable = view->line_drawables->data[index];
+        Drawable_t *hint = view->line_read_hints->data[index];
+        hint->blur_radius = drawable->blur_radius;
     }
 }
 
@@ -158,9 +167,11 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
             }
             vec_destroy(entries);
 
-            reposition_hint_for_line(ui, view, i);
+            reposition_hint_for_line(view, i);
 
             hint->pending_recompute = false;
+            hint->bounds.w = hint->texture->width;
+            hint->bounds.h = hint->texture->height;
         }
     }
 }
@@ -178,6 +189,12 @@ static float get_inactive_line_scale() {
 static int32_t calculate_alpha(const int32_t distance) {
     const int32_t dec = ALPHA_DISTANCE_BASE_CALC / LINE_FADE_MAX_DISTANCE * MIN(distance, LINE_FADE_MAX_DISTANCE);
     return MAX(ALPHA_DISTANCE_MIN_VALUE, ALPHA_DISTANCE_BASE_CALC - dec);
+}
+
+static float calculate_blur(const int32_t distance) {
+    if ( !config_get()->karaoke.blur_lyrics )
+        return 0.f;
+    return LINE_BLUR_FACTOR * MIN(3, (1.f + (float)distance));
 }
 
 // this function name sounds like a concert that is broadcasted over the internet
@@ -565,11 +582,13 @@ static void set_line_active(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
     drawable->enabled = true;
+    drawable->blur_radius = 0.f;
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
     ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
+    blur_hint_for_line(view, index);
 
     const Song_Line_t *line = view->song->lyrics_lines->data[index];
 
@@ -597,6 +616,7 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     Drawable_t *drawable = view->line_drawables->data[index];
 
     int32_t alpha = 200;
+    float blur = 0.f;
     if ( prev_active >= 0 && prev_active != (int32_t)index ) {
         int32_t distance = calculate_distance(view, index, prev_active);
 
@@ -605,14 +625,19 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
             distance = LINE_FADE_MAX_DISTANCE;
         }
         alpha = calculate_alpha(distance);
+        blur = calculate_blur(distance);
     }
 
     // don't change the alpha if the user is hovering over the line
     if ( view->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
+        drawable->blur_radius = 0.f;
+        blur_hint_for_line(view, index);
     } else if ( alpha != drawable->alpha_mod ) {
         ui_drawable_set_alpha(drawable, alpha);
         fade_hint_for_line(view, index);
+        drawable->blur_radius = blur;
+        blur_hint_for_line(view, index);
     }
 
     const LineState_t new_state = LINE_INACTIVE;
@@ -705,10 +730,13 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         // Don't change the alpha if the user is hovering over the line
         if ( view->current_hovered_index == index ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
+            drawable->blur_radius = 0.f;
         } else {
             ui_drawable_set_alpha(drawable, calculate_alpha(distance));
+            drawable->blur_radius = calculate_blur(distance);
         }
         fade_hint_for_line(view, index);
+        blur_hint_for_line(view, index);
     }
 }
 
