@@ -677,32 +677,6 @@ static double get_lyric_line_scroll_position(const LyricsView_t *view, const int
     return 0;
 }
 
-/**
- * returns the next (going upwards) index for a line drawable that can be used as a comparison point to
- * calculate when to show the past lines considering the user scrolled up more than the automatic scroll by the state machine
- */
-static int get_past_hidden_line_index(const LyricsView_t *view) {
-    const int32_t idx = view->current_first_active_index;
-    if ( idx == 0 )
-        return -1;
-
-    int32_t comp_idx = idx - 1;
-    while ( comp_idx >= 0 ) {
-        // Return the first line that is not empty
-        // (is_intermission is not suitable because it also checks the total duration of the line. the main issue here is when
-        // the lines are _not_ intermissions, but they should be skipped either way, probably)
-        const Song_Line_t *line = view->song->lyrics_lines->data[comp_idx];
-        // Even if the line is empty, in case it's the first one and the song starts with an intermission, use that
-        if ( str_is_empty(line->full_text) && comp_idx != 0 ) {
-            comp_idx -= 1;
-            continue;
-        }
-        return comp_idx;
-    }
-
-    return -1;
-}
-
 static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->line_drawables->data[index];
 
@@ -717,9 +691,9 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     }
 
     const bool should_hide_past = settings_get()->past_language_visibility == SET_PAST_LYRICS_HIDE;
-    const int32_t comp_idx = get_past_hidden_line_index(view);
+    const int32_t comp_idx = view->current_first_active_index;
     const double prev_scroll_pos = get_lyric_line_scroll_position(view, comp_idx);
-    const double current_scroll_pos = view->container->overflow_y.current_amount;
+    const double current_scroll_pos = view->container->overflow_y.set_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( should_hide_past && current_scroll_pos >= prev_scroll_pos ) {
         if ( view->current_hovered_index == index ) {

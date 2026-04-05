@@ -982,11 +982,10 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         blur_draw_opts.draw_regions = NULL;
         blur_draw_opts.scale_regions = NULL;
         render_draw_texture(drawable->blur_texture, &display_rect, &blur_draw_opts);
-
     }
 }
 
-static void apply_container_animations(const Container_t *container, Bounds_t *bounds) {
+static void apply_container_animations(Container_t *container, Bounds_t *bounds) {
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *animation = container->animations->data[i];
 
@@ -1017,8 +1016,8 @@ static void apply_container_animations(const Container_t *container, Bounds_t *b
             if ( animation->type == ANIM_SCROLL_Y ) {
                 const Animation_ScrollYData_t *data = animation->custom_data;
                 const double eased = apply_ease_func(progress, animation->ease_func);
-                ((Container_t *)container)->overflow_y.current_amount =
-                    data->from_amount + (data->to_amount - data->from_amount) * eased;
+                const double delta = data->to_amount - data->from_amount;
+                container->overflow_y.current_amount = data->from_amount + delta * eased;
             }
 
             if ( progress >= 1.0 )
@@ -1370,6 +1369,7 @@ void ui_container_scroll_y_by(Container_t *container, const double amount) {
     const double current_amount = container->overflow_y.current_amount;
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
     const double target = MAX(area.min_content_y, MIN(area.max_content_y, current_amount - amount));
+    container->overflow_y.set_amount = target;
 
     ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
     if ( scroll_anim != NULL ) {
@@ -1391,6 +1391,7 @@ void ui_container_scroll_y_to(Container_t *container, const double position) {
 
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
     const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
+    container->overflow_y.set_amount = target;
 
     ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
     if ( scroll_anim != NULL ) {
@@ -1412,6 +1413,7 @@ void ui_container_scroll_y_to_dur(Container_t *container, const double position,
 
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
     const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
+    container->overflow_y.set_amount = target;
 
     ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
     if ( scroll_anim != NULL ) {

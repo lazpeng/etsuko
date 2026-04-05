@@ -114,7 +114,7 @@ typedef struct ScrollBar_t {
 typedef struct ContainerOverflow_t {
     OverflowKind_t kind;
     double relative_start_padding, relative_end_padding;
-    double current_amount;
+    double current_amount, set_amount;
     ScrollBar_t scrollbar;
 } ContainerOverflow_t;
 
