@@ -149,7 +149,6 @@ typedef struct Container_t {
 typedef struct Drawable_t {
     DrawableType_t type;
     OWNING Texture_t *texture;
-    OWNING Texture_t *blur_texture;
     Bounds_t bounds;
     OWNING void *custom_data;
     WEAK Container_t *parent;

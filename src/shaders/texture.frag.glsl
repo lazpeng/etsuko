@@ -12,14 +12,25 @@ uniform vec4 u_regions[4];
 uniform int u_num_erase_regions;
 uniform vec4 u_erase_regions[20];
 
+uniform float u_blurRadius;
+uniform sampler2D u_fb_tex;
+uniform bool u_useFbTex;
+uniform vec2 u_viewportSize;
+
+vec4 sample_blurred(vec2 uv) {
+    if (u_useFbTex) {
+        vec4 fb = texture(u_fb_tex, gl_FragCoord.xy / u_viewportSize);
+        vec4 src = texture(u_tex, uv);
+        return mix(fb, src, src.a);
+    }
+    return texture(u_tex, uv);
+}
+
 void main() {
-    vec4 texColor = texture(u_tex, TexCoord);
     float finalAlpha = u_alpha;
     if (u_borderRadius > 0.0) {
-        // Distance from edges
         vec2 halfSize = u_rectSize * 0.5;
         vec2 pos = FragPos - halfSize;
-        // Distance to nearest corner (only outside the inner rectangle)
         vec2 cornerDist = max(vec2(0.0), abs(pos) - (halfSize - u_borderRadius));
         float dist = length(cornerDist);
         if (dist > u_borderRadius) {
@@ -56,6 +67,23 @@ void main() {
 
     if (!in_region) {
         discard;
+    }
+
+    vec4 texColor;
+    if (u_blurRadius > 0.0) {
+        const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+        vec2 tex_offset = u_blurRadius / vec2(textureSize(u_tex, 0));
+        vec4 result = sample_blurred(TexCoord) * weights[0] * weights[0];
+        for (int i = -4; i <= 4; i++) {
+            for (int j = -4; j <= 4; j++) {
+                if (i == 0 && j == 0) continue;
+                float w = weights[abs(i)] * weights[abs(j)];
+                result += sample_blurred(TexCoord + vec2(float(i), float(j)) * tex_offset) * w;
+            }
+        }
+        texColor = result;
+    } else {
+        texColor = texture(u_tex, TexCoord);
     }
 
     FragColor = vec4(texColor.rgb * u_colorModFactor, texColor.a * finalAlpha);

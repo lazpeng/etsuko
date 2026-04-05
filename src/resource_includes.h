@@ -27,20 +27,12 @@ static const char incbin_rect_frag_shader[] = {
 #embed "shaders/rect.frag.glsl"
     ,'\0'
 };
-static const char incbin_copy_frag_shader[] = {
-#embed "shaders/copy.frag.glsl"
-    ,'\0'
-};
 static const char incbin_gradient_frag_shader[] = {
 #embed "shaders/gradient.frag.glsl"
     ,'\0'
 };
 static const char incbin_dyn_gradient_frag_shader[] = {
 #embed "shaders/dynamic gradient.frag.glsl"
-    ,'\0'
-};
-static const char incbin_blur_frag_shader[] = {
-#embed "shaders/blur.frag.glsl"
     ,'\0'
 };
 static const char incbin_rand_gradient_frag_shader[] = {

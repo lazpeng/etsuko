@@ -62,6 +62,10 @@ typedef struct TextureShaderData_t {
     GLint regions_loc;
     GLint num_erase_regions_loc;
     GLint erase_regions_loc;
+    GLint blur_radius_loc;
+    GLint fb_tex_loc;
+    GLint use_fb_tex_loc;
+    GLint viewport_size_loc;
 } TextureShaderData_t;
 
 typedef struct RectShaderData_t {
@@ -79,14 +83,6 @@ typedef struct SimpleGradientShaderData_t {
     GLint bottom_color_loc;
     GLint projection_loc;
 } SimpleGradientShaderData_t;
-
-typedef struct BlurShaderData_t {
-    GLuint id;
-    GLint texture_loc;
-    GLint direction_loc;
-    GLint size_loc;
-    GLint projection_loc;
-} BlurShaderData_t;
 
 typedef struct RandomGradientShaderData_t {
     GLuint id;
@@ -124,21 +120,14 @@ typedef struct AmLikeShaderData_t {
     GLint rect_size_loc;
 } AmLikeShaderData_t;
 
-typedef struct CopyShaderData_t {
-    GLuint id;
-    GLint projection_loc;
-} CopyShaderData_t;
-
 typedef struct ShaderData_t {
     GLuint active_shader_program;
     TextureShaderData_t tex;
     RectShaderData_t rect;
     SimpleGradientShaderData_t grad;
-    BlurShaderData_t blur;
     RandomGradientShaderData_t rand_grad;
     DynamicGradientShaderData_t dyn_grad;
     AmLikeShaderData_t am_like;
-    CopyShaderData_t copy;
 } ShaderData_t;
 
 #define FB_GRID_COLS 20
@@ -381,8 +370,6 @@ void render_init(void) {
         create_shader_program(buffer, incbin_default_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
     g_renderer->shaders.rand_grad.id =
         create_shader_program(buffer, incbin_default_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
-    g_renderer->shaders.blur.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_blur_frag_shader, "blur");
-    g_renderer->shaders.copy.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_copy_frag_shader, "copy");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
@@ -397,6 +384,10 @@ void render_init(void) {
     g_renderer->shaders.tex.regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_regions");
     g_renderer->shaders.tex.num_erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_erase_regions");
     g_renderer->shaders.tex.erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_erase_regions");
+    g_renderer->shaders.tex.blur_radius_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_blurRadius");
+    g_renderer->shaders.tex.fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fb_tex");
+    g_renderer->shaders.tex.use_fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_useFbTex");
+    g_renderer->shaders.tex.viewport_size_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_viewportSize");
 
     // Get uniform locations for rect shader
     g_renderer->shaders.rect.projection_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_projection");
@@ -430,12 +421,6 @@ void render_init(void) {
     g_renderer->shaders.dyn_grad.border_radius_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_borderRadius");
     g_renderer->shaders.dyn_grad.rect_size_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_rectSize");
 
-    // Get uniform locations for blur shader
-    g_renderer->shaders.blur.texture_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_texture");
-    g_renderer->shaders.blur.direction_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_direction");
-    g_renderer->shaders.blur.size_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_blur_size");
-    g_renderer->shaders.blur.projection_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_projection");
-
     // Get uniform locations for the AM-like shader
     g_renderer->shaders.am_like.resolution_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iResolution");
     g_renderer->shaders.am_like.time_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iTime");
@@ -445,9 +430,6 @@ void render_init(void) {
     g_renderer->shaders.am_like.bounds_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_bounds");
     g_renderer->shaders.am_like.border_radius_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_borderRadius");
     g_renderer->shaders.am_like.rect_size_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_rectSize");
-
-    // Get uniform locations for copy shader
-    g_renderer->shaders.copy.projection_loc = glGetUniformLocation(g_renderer->shaders.copy.id, "u_projection");
 }
 
 void render_finish(void) {
@@ -467,7 +449,6 @@ void render_finish(void) {
     glDeleteProgram(g_renderer->shaders.grad.id);
     glDeleteProgram(g_renderer->shaders.dyn_grad.id);
     glDeleteProgram(g_renderer->shaders.rand_grad.id);
-    glDeleteProgram(g_renderer->shaders.blur.id);
     glDeleteProgram(g_renderer->shaders.am_like.id);
 
     // Destroy GL context (GLFW destroys context with window)
@@ -675,7 +656,11 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
     return texture;
 }
 
-static void invalidate_cached_fb_portion(const Bounds_t *at) {
+typedef struct GridRange_t {
+    int col_min, col_max, row_min, row_max;
+} GridRange_t;
+
+static GridRange_t bounds_to_grid_range(const Bounds_t *at) {
     const double vp_w = g_renderer->viewport.w;
     const double vp_h = g_renderer->viewport.h;
 
@@ -689,29 +674,22 @@ static void invalidate_cached_fb_portion(const Bounds_t *at) {
     row_min = row_min < 0 ? 0 : row_min >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_min;
     row_max = row_max < 0 ? 0 : row_max >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_max;
 
-    for ( int c = col_min; c <= col_max; c++ ) {
-        for ( int r = row_min; r <= row_max; r++ ) {
+    return (GridRange_t){col_min, col_max, row_min, row_max};
+}
+
+static void invalidate_cached_fb_portion(const Bounds_t *at) {
+    const GridRange_t gr = bounds_to_grid_range(at);
+    for ( int c = gr.col_min; c <= gr.col_max; c++ ) {
+        for ( int r = gr.row_min; r <= gr.row_max; r++ ) {
             g_renderer->blur_data.fb_grid_invalid[c][r] = true;
         }
     }
 }
 
 static bool is_cached_fb_invalid_for_portion(const Bounds_t *at) {
-    const double vp_w = g_renderer->viewport.w;
-    const double vp_h = g_renderer->viewport.h;
-
-    int col_min = (int)(at->x * FB_GRID_COLS / vp_w);
-    int col_max = (int)((at->x + at->w) * FB_GRID_COLS / vp_w);
-    int row_min = (int)(at->y * FB_GRID_ROWS / vp_h);
-    int row_max = (int)((at->y + at->h) * FB_GRID_ROWS / vp_h);
-
-    col_min = col_min < 0 ? 0 : col_min >= FB_GRID_COLS ? FB_GRID_COLS - 1 : col_min;
-    col_max = col_max < 0 ? 0 : col_max >= FB_GRID_COLS ? FB_GRID_COLS - 1 : col_max;
-    row_min = row_min < 0 ? 0 : row_min >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_min;
-    row_max = row_max < 0 ? 0 : row_max >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_max;
-
-    for ( int c = col_min; c <= col_max; c++ ) {
-        for ( int r = row_min; r <= row_max; r++ ) {
+    const GridRange_t gr = bounds_to_grid_range(at);
+    for ( int c = gr.col_min; c <= gr.col_max; c++ ) {
+        for ( int r = gr.row_min; r <= gr.row_max; r++ ) {
             if ( g_renderer->blur_data.fb_grid_invalid[c][r] ) {
                 return true;
             }
@@ -720,49 +698,23 @@ static bool is_cached_fb_invalid_for_portion(const Bounds_t *at) {
     return false;
 }
 
-static bool clear_cached_fb_grid(void) {
-    memset(g_renderer->blur_data.fb_grid_invalid, 0, sizeof(g_renderer->blur_data.fb_grid_invalid));
-    return true;
-}
-
-static void draw_portion_of_fb(const Bounds_t *at) {
-    const float vp_w = (float)g_renderer->viewport.w;
-    const float vp_h = (float)g_renderer->viewport.h;
-    const int32_t ivp_w = (int32_t)vp_w;
-    const int32_t ivp_h = (int32_t)vp_h;
+static void ensure_fb_snapshot(const Bounds_t *at) {
+    const int32_t ivp_w = (int32_t)g_renderer->viewport.w;
+    const int32_t ivp_h = (int32_t)g_renderer->viewport.h;
 
     if ( g_renderer->blur_data.fb_texture == NULL ) {
         g_renderer->blur_data.fb_texture = render_make_empty(ivp_w, ivp_h);
         memset(g_renderer->blur_data.fb_grid_invalid, 1, sizeof(g_renderer->blur_data.fb_grid_invalid));
     }
 
-    const Texture_t *fb_tex = g_renderer->blur_data.fb_texture;
     if ( is_cached_fb_invalid_for_portion(at) ) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, fb_tex->id);
+        glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, ivp_w, ivp_h);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, g_renderer->blur_data.fbo);
-        clear_cached_fb_grid();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        memset(g_renderer->blur_data.fb_grid_invalid, 0, sizeof(g_renderer->blur_data.fb_grid_invalid));
     }
-
-    const float u0 = (float)at->x / vp_w;
-    const float u1 = (float)(at->x + at->w) / vp_w;
-    const float v_screen_top = (vp_h - (float)at->y) / vp_h;
-    const float v_screen_bot = (vp_h - (float)(at->y + at->h)) / vp_h;
-
-    const float dst_w = (float)at->w, dst_h = (float)at->h;
-    const float vertices[QUAD_VERTICES_SIZE] = {
-        0.f, dst_h, u0, v_screen_bot, 0.f,   0.f, u0, v_screen_top, dst_w, 0.f,   u1, v_screen_top,
-        0.f, dst_h, u0, v_screen_bot, dst_w, 0.f, u1, v_screen_top, dst_w, dst_h, u1, v_screen_bot,
-    };
-
-    set_shader_program(g_renderer->shaders.copy.id);
-    glUniformMatrix4fv(g_renderer->shaders.copy.projection_loc, 1, GL_FALSE, g_renderer->render_target->projection);
-    glBindTexture(GL_TEXTURE_2D, fb_tex->id);
-    glBindVertexArray(fb_tex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, fb_tex->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 static const RenderTarget_t *set_render_target(GLuint fbo, Texture_t *target_texture) {
@@ -807,83 +759,6 @@ const RenderTarget_t *render_make_texture_target(const int32_t width, const int3
     return target;
 }
 
-Texture_t *render_blur_texture(Texture_t *target, const Texture_t *source, const Bounds_t *bounds, const float blur_radius) {
-    if ( !source || blur_radius <= 0 || source->width <= 0 || source->height <= 0 ) {
-        error_abort("render_blur_texture_radius: Invalid params");
-    }
-
-    const BlendMode_t saved_blend = g_renderer->blend_mode;
-    render_set_blend_mode(BLEND_MODE_NONE);
-
-    const int32_t width = source->width, height = source->height;
-    float vertices[QUAD_VERTICES_SIZE] = {0};
-    create_quad_vertices(0, 0, (float)width, (float)height, vertices);
-
-    const Texture_t *blur_source = source;
-    Texture_t *composite_texture = NULL;
-
-    if ( bounds != NULL ) {
-        const RenderTarget_t *composite_target = render_make_texture_target(width, height);
-        draw_portion_of_fb(bounds);
-
-        render_set_blend_mode(BLEND_MODE_BLEND);
-        set_shader_program(g_renderer->shaders.tex.id);
-        glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, composite_target->projection);
-        glUniform1f(g_renderer->shaders.tex.alpha_loc, 1.0f);
-        glUniform2f(g_renderer->shaders.tex.rect_size_loc, (float)width, (float)height);
-        glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 0);
-        glUniform1f(g_renderer->shaders.tex.border_radius_loc, 0.0f);
-        glUniform1f(g_renderer->shaders.tex.color_mod_loc, 1.0f);
-        glUniform1i(g_renderer->shaders.tex.num_regions_loc, 0);
-        glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, 0);
-        glBindTexture(GL_TEXTURE_2D, source->id);
-        glBindVertexArray(composite_target->texture->vao);
-        glBindBuffer(GL_ARRAY_BUFFER, composite_target->texture->vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        composite_texture = render_restore_texture_target();
-        blur_source = composite_texture;
-    }
-
-    // TODO: Avoid creating a new texture every time here
-    render_set_blend_mode(BLEND_MODE_NONE);
-    const RenderTarget_t *h_blur_target = render_make_texture_target(width, height);
-
-    set_shader_program(g_renderer->shaders.blur.id);
-    glUniformMatrix4fv(g_renderer->shaders.blur.projection_loc, 1, GL_FALSE, h_blur_target->projection);
-    glUniform1f(g_renderer->shaders.blur.size_loc, blur_radius);
-    glUniform2f(g_renderer->shaders.blur.direction_loc, 1.0f, 0.0f);
-
-    glBindTexture(GL_TEXTURE_2D, blur_source->id);
-    glBindVertexArray(h_blur_target->texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, h_blur_target->texture->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    Texture_t *h_blurred_texture = render_restore_texture_target();
-    if ( composite_texture != NULL )
-        render_destroy_texture(composite_texture);
-
-    GLuint temp_fbo;
-    glGenFramebuffers(1, &temp_fbo);
-    set_render_target(temp_fbo, target);
-
-    glUniform2f(g_renderer->shaders.blur.direction_loc, 0.0f, 1.0f);
-    glBindTexture(GL_TEXTURE_2D, h_blurred_texture->id);
-    glBindVertexArray(h_blurred_texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, h_blurred_texture->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    Texture_t *result = render_restore_texture_target();
-    result->border_radius = source->border_radius;
-    render_destroy_texture(h_blurred_texture);
-
-    render_set_blend_mode(saved_blend);
-    return result;
-}
-
 void render_clear(void) {
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -916,11 +791,15 @@ static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {
                                                                            : (float)background->border_radius_em;
     const BlendMode_t blend_mode = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_BLEND);
+    if ( background->blur ) {
+        opts.blur_radius = (float)(bounds->w + bounds->h) / 2 * 0.0025f;
+        opts.blur_with_bg = true;
+    }
     render_draw_texture(background->null_tex, bounds, &opts);
     render_set_blend_mode(blend_mode);
 }
 
-Texture_t *render_make_empty(int32_t width, int32_t height) {
+Texture_t *render_make_empty(const int32_t width, const int32_t height) {
     Texture_t *tex = render_make_null();
     glGenTextures(1, &tex->id);
     glBindTexture(GL_TEXTURE_2D, tex->id);
@@ -935,22 +814,6 @@ Texture_t *render_make_empty(int32_t width, int32_t height) {
 }
 
 void render_draw_background(Background_t *background, const Bounds_t *at) {
-    if ( background->blur ) {
-        if ( background->empty_tex == NULL )
-            background->empty_tex = render_make_empty((int32_t)at->w, (int32_t)at->h);
-        if ( background->blur_tex == NULL ) {
-            background->blur_tex = render_make_empty((int32_t)at->w, (int32_t)at->h);
-        }
-        const float blur_radius = (float)(at->w + at->h) / 2 * 0.0025f;
-        render_blur_texture(background->blur_tex, background->empty_tex, at, blur_radius);
-
-        const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
-        const BlendMode_t blend_mode = render_get_blend_mode();
-        render_set_blend_mode(BLEND_MODE_NONE);
-        render_draw_texture(background->blur_tex, at, &opts);
-        render_set_blend_mode(blend_mode);
-    }
-
     switch ( background->type ) {
     case BACKGROUND_GRADIENT:
         draw_gradient_bg(background, at);
@@ -1676,6 +1539,20 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         glUniform4fv(g_renderer->shaders.tex.erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
     }
 
+    const float blur_radius = opts->blur_radius;
+    glUniform1f(g_renderer->shaders.tex.blur_radius_loc, blur_radius);
+    const bool use_fb_tex = blur_radius > 0.f && opts->blur_with_bg;
+    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, use_fb_tex);
+    if ( use_fb_tex ) {
+        const Bounds_t fb_bounds = {.x = x, .y = y, .w = (int32_t)w, .h = (int32_t)h};
+        ensure_fb_snapshot(&fb_bounds);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
+        glUniform1i(g_renderer->shaders.tex.fb_tex_loc, 1);
+        glUniform2f(g_renderer->shaders.tex.viewport_size_loc, (float)g_renderer->viewport.w, (float)g_renderer->viewport.h);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
     glBindTexture(GL_TEXTURE_2D, texture->id);
 
     glBindVertexArray(texture->vao);
@@ -1696,7 +1573,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindTexture(GL_TEXTURE_2D, 0);
 
     const bool is_default_framebuffer = g_renderer->render_target == NULL;
-    if ( is_default_framebuffer ) {
+    if ( is_default_framebuffer && !opts->skip_fb_invalidation ) {
         invalidate_cached_fb_portion(&final_bounds);
     }
 
@@ -1743,9 +1620,6 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
 void render_destroy_shadow(Shadow_t *shadow) {
     if ( shadow->texture )
         render_destroy_texture(shadow->texture);
-
-    if ( shadow->blur_tex )
-        render_destroy_texture(shadow->blur_tex);
     free(shadow);
 }
 
@@ -1775,7 +1649,6 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     shadow->offset = offset;
     shadow->texture = result;
     shadow->bounds = (Bounds_t){.w = width, .h = height};
-    shadow->blur_tex = render_make_empty(width, height);
 
     return shadow;
 }
