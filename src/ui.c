@@ -400,6 +400,22 @@ static void handle_container_scroll(const Ui_t *ui) {
         return;
 
     ui_container_scroll_y_by(scrollable, amount);
+
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+    for ( size_t i = 0; i < ui->global_events->size; i++ ) {
+        const EventDef_t *def = ui->global_events->data[i];
+        if ( def->type == UI_EVENT_MOUSE_SCROLL ) {
+            const UiEventOpts_t opts = {.event = def->type,
+                                        .mouse = {.x = mouse_x,
+                                                  .y = mouse_y,
+                                                  .scroll = amount,
+                                                  .scroll_info = {
+                                                      .container = scrollable,
+                                                  }}};
+            def->callback(&opts, NULL, def->custom_data);
+        }
+    }
 }
 
 static void handle_user_input(Ui_t *ui) {
@@ -419,7 +435,7 @@ void ui_begin_loop(Ui_t *ui) {
     update_animations(ui, events_get_delta_time());
 }
 
-static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds) {
+static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds, int32_t alpha) {
     const Drawable_RectangleData_t *data = drawable->custom_data;
 
     float border_radius = (float)data->border_radius_em;
@@ -427,7 +443,7 @@ static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *b
         border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
 
     Color_t color = data->color;
-    color.a = drawable->alpha_mod;
+    color.a = (uint8_t)alpha;
     render_draw_rounded_rect(drawable->texture, bounds, &color, border_radius);
 }
 
@@ -893,7 +909,7 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
 
     if ( drawable->dynamic ) {
         if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
-            draw_dynamic_rectangle(drawable, &rect);
+            draw_dynamic_rectangle(drawable, &rect, delta.final_alpha);
         } else {
             error_abort("Unrecognized dynamic drawable");
         }
@@ -1157,6 +1173,17 @@ void ui_add_event_callback(Ui_t *ui, const UiEvent_t event_type, Drawable_t *tar
     if ( callback == NULL )
         error_abort("ui_add_event_callback: callback is NULL");
 
+    switch ( event_type ) {
+    case UI_EVENT_MOUSE_MOVE:
+    case UI_EVENT_MOUSE_STOPPED:
+    case UI_EVENT_MOUSE_SCROLL:
+    case UI_EVENT_KEY_PRESSED:
+        printf("Warning: Global event passed to ui_add_event_callback: nothing will happen\n");
+        return;
+    default:
+        break;
+    }
+
     const int layer_idx = target->z_layer_index;
     const ZLayer_t *layer = append_z_layer(&ui->z_layers_head, layer_idx);
 
@@ -1188,10 +1215,11 @@ void ui_add_global_event_callback(const Ui_t *ui, const UiEvent_t event_type, co
     switch ( event_type ) {
     case UI_EVENT_MOUSE_MOVE:
     case UI_EVENT_MOUSE_STOPPED:
+    case UI_EVENT_MOUSE_SCROLL:
     case UI_EVENT_KEY_PRESSED:
         break;
     default:
-        printf("Non-global event passed to ui_add_global_event_callback: nothing will happen\n");
+        printf("Warning: Non-global event passed to ui_add_global_event_callback: nothing will happen\n");
         return;
     }
 
@@ -1273,6 +1301,41 @@ static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t 
     ui_container_scroll_y_to_dur(container, pos, 0.5);
 }
 
+static void on_hover_scrollbar(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
+    const Container_t *container = custom;
+
+    Drawable_t *bg = container->overflow_y.scrollbar.background;
+    Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    const int32_t bg_alpha = container->overflow_y.scrollbar.background_color.a;
+    const int32_t handle_alpha = container->overflow_y.scrollbar.handle_color.a;
+    const double fade_duration = 0.2;
+    if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
+        ui_drawable_set_alpha_dur(bg, bg_alpha, fade_duration, ANIM_APPLY_OVERRIDE);
+        ui_drawable_set_alpha_dur(handle, handle_alpha, fade_duration, ANIM_APPLY_OVERRIDE);
+    } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
+        ui_drawable_set_alpha_dur(bg, 0, fade_duration, ANIM_APPLY_OVERRIDE);
+        ui_drawable_set_alpha_dur(handle, 0, fade_duration, ANIM_APPLY_OVERRIDE);
+    }
+}
+
+static void on_container_scroll(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
+    const Container_t *container = custom;
+
+    if ( container != opts->mouse.scroll_info.container )
+        return;
+
+    Drawable_t *bg = container->overflow_y.scrollbar.background;
+    Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    const int32_t bg_alpha = container->overflow_y.scrollbar.background_color.a;
+    const int32_t handle_alpha = container->overflow_y.scrollbar.handle_color.a;
+    // Show immediately, then fade out. Using OVERRIDE for fade-out means repeated scroll events
+    // just reset the timer rather than chaining additional animations.
+    ui_drawable_set_alpha_immediate(bg, bg_alpha);
+    ui_drawable_set_alpha_immediate(handle, handle_alpha);
+    ui_drawable_set_alpha_dur(bg, 0, 1.0, ANIM_APPLY_OVERRIDE);
+    ui_drawable_set_alpha_dur(handle, 0, 1.0, ANIM_APPLY_OVERRIDE);
+}
+
 void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const ScrollBarKind_t kind) {
     if ( container->overflow_y.scrollbar.handle != NULL ) {
         printf("Warning: ui_container_add_vertical_scrollbar: Already has scrollbar\n");
@@ -1308,6 +1371,22 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
 
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
     ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, handle, on_drag_scrollbar_handle, container);
+
+    if ( kind == SCROLL_BAR_AUTO_HIDE ) {
+        const Animation_FadeInOutData_t fade_data = {.duration = 5.0, .ease_func = ANIM_EASE_NONE};
+        ui_animate_fade(background, &fade_data);
+        ui_animate_fade(handle, &fade_data);
+
+        ui_drawable_set_alpha_immediate(background, 0);
+        ui_drawable_set_alpha_immediate(handle, 0);
+
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, background, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, background, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, handle, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, handle, on_hover_scrollbar, container);
+
+        ui_add_global_event_callback(ui, UI_EVENT_MOUSE_SCROLL, on_container_scroll, container);
+    }
 
     container->content_size_dirty = true;
     recompute_vertical_scroll_bar_bounds(container);
@@ -2075,7 +2154,6 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
     } else {
         error_abort("Invalid drawable type");
     }
-
 }
 
 void ui_recompute_container(Ui_t *ui, Container_t *container) {
@@ -2489,6 +2567,24 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
             Animation_FadeInOutData_t *data = animation->custom_data;
             data->from_alpha = drawable->alpha_mod;
             data->to_alpha = alpha;
+        }
+    }
+    drawable->alpha_mod = alpha;
+}
+
+void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, double duration, AnimationApplyType_t apply_type) {
+    if ( alpha == drawable->alpha_mod ) {
+        return;
+    }
+
+    const Animation_t *base_anim = find_animation(drawable, ANIM_FADE_IN_OUT);
+    if ( base_anim != NULL ) {
+        Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
+        if ( animation != NULL ) {
+            Animation_FadeInOutData_t *data = animation->custom_data;
+            data->from_alpha = drawable->alpha_mod;
+            data->to_alpha = alpha;
+            animation->duration = duration;
         }
     }
     drawable->alpha_mod = alpha;

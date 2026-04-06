@@ -79,12 +79,7 @@ typedef struct Layout_t {
     bool absolute;
 } Layout_t;
 
-typedef enum DrawableType_t {
-    DRAW_TYPE_TEXT = 0,
-    DRAW_TYPE_IMAGE,
-    DRAW_TYPE_RECTANGLE,
-    DRAW_TYPE_CUSTOM_TEXTURE
-} DrawableType_t;
+typedef enum DrawableType_t { DRAW_TYPE_TEXT = 0, DRAW_TYPE_IMAGE, DRAW_TYPE_RECTANGLE, DRAW_TYPE_CUSTOM_TEXTURE } DrawableType_t;
 
 typedef enum ContainerFlags_t {
     CONTAINER_NONE = 0,
@@ -387,6 +382,7 @@ typedef enum UiEvent_t {
     UI_EVENT_MOUSE_HOVER_EXITED,
     UI_EVENT_MOUSE_CLICK,
     UI_EVENT_MOUSE_DRAG,
+    UI_EVENT_MOUSE_SCROLL,
 } UiEvent_t;
 
 struct ButtonWidget_t;
@@ -467,6 +463,9 @@ typedef struct UiEventOpts_t {
         double scroll;
         double dx, dy;
         double grab_offset_x, grab_offset_y;
+        struct {
+            Container_t *container;
+        } scroll_info;
     } mouse;
     struct {
         Key_t key;
@@ -507,6 +506,7 @@ double ui_compute_relative_horizontal(double value, const Container_t *parent);
 void ui_drawable_set_image(Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
+void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, double duration, AnimationApplyType_t apply_type);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
@@ -548,7 +548,8 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget);
 void ui_widget_button_enabled(const ButtonWidget_t *widget, bool enabled);
 void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, int length);
-ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ProgressBarWidgetOpts_t *opts);
+ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout,
+                                                  const ProgressBarWidgetOpts_t *opts);
 void ui_destroy_progress_bar_widget(Ui_t *ui, ProgressBarWidget_t *widget);
 void ui_widget_progress_bar_progress(ProgressBarWidget_t *widget, double progress);
 
