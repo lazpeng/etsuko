@@ -241,6 +241,13 @@ static void create_quad_vertices(const float x, const float y, const float w, co
     memcpy(dest_vertices, vertices, sizeof(vertices));
 }
 
+static void create_quad_vertices_with_uv(const float x, const float y, const float w, const float h, const float u0,
+                                         const float v0, const float u1, const float v1, float *dest_vertices) {
+    const float vertices[] = {x, y + h, u0, v1, x,     y, u0, v0, x + w, y,     u1, v0,
+                              x, y + h, u0, v1, x + w, y, u1, v0, x + w, y + h, u1, v1};
+    memcpy(dest_vertices, vertices, sizeof(vertices));
+}
+
 static void update_projection_matrix(void) {
     const float w = (float)g_renderer->viewport.w;
     const float h = (float)g_renderer->viewport.h;
@@ -253,6 +260,49 @@ static void set_shader_program(const GLuint program) {
         glUseProgram(program);
         g_renderer->shaders.active_shader_program = program;
     }
+}
+
+static void draw_blurred_bg_at(const Bounds_t *bounds, const float blur_radius) {
+    const Texture_t *fb_tex = g_renderer->blur_data.fb_texture;
+    if ( fb_tex == NULL )
+        return;
+
+    const float vp_w = (float)g_renderer->viewport.w;
+    const float vp_h = (float)g_renderer->viewport.h;
+    const float x = (float)bounds->x, y = (float)bounds->y;
+    const float w = (float)bounds->w, h = (float)bounds->h;
+
+    const float u0 = x / vp_w;
+    const float u1 = (x + w) / vp_w;
+    const float v0 = 1.f - y / vp_h;
+    const float v1 = 1.f - (y + h) / vp_h;
+
+    set_shader_program(g_renderer->shaders.tex.id);
+    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1f(g_renderer->shaders.tex.border_radius_loc, 0.f);
+    glUniform1f(g_renderer->shaders.tex.alpha_loc, 1.f);
+    glUniform2f(g_renderer->shaders.tex.rect_size_loc, w, h);
+    glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 0);
+    glUniform1f(g_renderer->shaders.tex.color_mod_loc, 1.f);
+    glUniform1i(g_renderer->shaders.tex.num_regions_loc, 0);
+    glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, 0);
+    glUniform1f(g_renderer->shaders.tex.blur_radius_loc, blur_radius);
+    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, fb_tex->id);
+    glBindVertexArray(fb_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, fb_tex->vbo);
+
+    float vertices[QUAD_VERTICES_SIZE] = {0};
+    create_quad_vertices_with_uv(x, y, w, h, u0, v0, u1, v1, vertices);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static float resolve_background_border_radius(const Background_t *background, const Bounds_t *bounds) {
@@ -786,15 +836,18 @@ static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {
             render_destroy_texture(background->null_tex);
         background->null_tex = internal_create_gradient_background_texture(background, bounds);
     }
-    static DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
     background->null_tex->border_radius = background->border_radius_em > 0 ? resolve_background_border_radius(background, bounds)
                                                                            : (float)background->border_radius_em;
     const BlendMode_t blend_mode = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_BLEND);
     if ( background->blur ) {
-        opts.blur_radius = (float)(bounds->w + bounds->h) / 2 * 0.0025f;
-        opts.blur_with_bg = true;
+        const Bounds_t fb_bounds = {
+            .x = (int32_t)bounds->x, .y = (int32_t)bounds->y, .w = (int32_t)bounds->w, .h = (int32_t)bounds->h};
+        ensure_fb_snapshot(&fb_bounds);
+        const float blur_radius = (float)(bounds->w + bounds->h) / 2 * 0.0025f;
+        draw_blurred_bg_at(bounds, blur_radius);
     }
+    static const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
     render_draw_texture(background->null_tex, bounds, &opts);
     render_set_blend_mode(blend_mode);
 }
