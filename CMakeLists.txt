@@ -80,16 +80,22 @@ if (EMSCRIPTEN)
 else ()
     message(STATUS "Configuring regular desktop build")
 
-    target_sources(etsuko PRIVATE src/remote_repository.c)
+    option(DISABLE_REMOTE_FETCH "Disable remote repository fetching and OpenSSL dependency" OFF)
+
+    if (DISABLE_REMOTE_FETCH)
+        message(STATUS "Remote fetch disabled (DISABLE_REMOTE_FETCH=ON)")
+        target_compile_definitions(etsuko PRIVATE DISABLE_REMOTE_FETCH)
+    else ()
+        target_sources(etsuko PRIVATE src/remote_repository.c)
+        find_package(OpenSSL REQUIRED)
+        target_link_libraries(etsuko PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif ()
 
     find_package(glfw3 REQUIRED)
     target_link_libraries(etsuko PRIVATE glfw)
 
     find_package(Threads REQUIRED)
     target_link_libraries(etsuko PRIVATE Threads::Threads)
-
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(etsuko PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
     find_package(OpenAL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenAL::OpenAL)

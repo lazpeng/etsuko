@@ -5,7 +5,9 @@
 #include <string.h>
 
 #include "error.h"
+#ifndef DISABLE_REMOTE_FETCH
 #include "remote_repository.h"
+#endif
 #include "secret.h" // defines CDN_BASE_PATH
 #include "str_utils.h"
 
@@ -143,10 +145,12 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     emscripten_fetch(&attr, path_buf->data);
 #else
 
+#ifndef DISABLE_REMOTE_FETCH
     if ( request->force_remote_fetch ) {
         remote_load_resource(path_buf->data, resource);
         return resource;
     }
+#endif
 
     StrBuffer_t *local_path_buf = str_buf_init();
     str_buf_append(local_path_buf, "assets/", NULL);
@@ -165,9 +169,12 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
         if ( resource->on_resource_loaded != NULL ) {
             resource->on_resource_loaded(resource);
         }
-    } else {
+    }
+#ifndef DISABLE_REMOTE_FETCH
+    else {
         remote_load_resource(path_buf->data, resource);
     }
+#endif
 #endif
     str_buf_destroy(path_buf);
 
