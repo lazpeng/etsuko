@@ -168,7 +168,7 @@ static void container_update_animations(const Container_t *container, const doub
                 }
             }
 
-            if ( anim->elapsed < anim->duration ) {
+            if ( anim->elapsed < anim->duration + anim->delay ) {
                 anim->elapsed += delta_time;
             }
         }
@@ -176,7 +176,7 @@ static void container_update_animations(const Container_t *container, const doub
 
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *anim = container->animations->data[i];
-        if ( anim->elapsed < anim->duration ) {
+        if ( anim->elapsed < anim->duration + anim->delay ) {
             anim->elapsed += delta_time;
         }
     }
@@ -726,7 +726,11 @@ static double apply_ease_func(const double progress, const AnimationEaseType_t e
 static void apply_translation_animation(Animation_t *animation, Bounds_t *final_bounds) {
     const Animation_EaseTranslationData_t *data = animation->custom_data;
 
-    double progress = animation->elapsed / animation->duration;
+    if ( animation->elapsed <= animation->delay ) {
+        final_bounds->y = data->from_y;
+        return;
+    }
+    double progress = (animation->elapsed - animation->delay) / animation->duration;
 
     // TODO: Animate the x axis too
     if ( progress < 1.0 ) {
@@ -743,7 +747,11 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
 static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
     const Animation_FadeInOutData_t *data = animation->custom_data;
 
-    double progress = animation->elapsed / animation->duration;
+    if ( animation->elapsed <= animation->delay ) {
+        *final_alpha = data->from_alpha;
+        return;
+    }
+    double progress = (animation->elapsed - animation->delay) / animation->duration;
 
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
@@ -758,7 +766,11 @@ static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
 
 static void apply_blur_radius_animation(Animation_t *animation, float *final_radius) {
     const Animation_BlurRadiusData_t *data = animation->custom_data;
-    double progress = animation->elapsed / animation->duration;
+    if ( animation->elapsed <= animation->delay ) {
+        *final_radius = data->from_radius;
+        return;
+    }
+    double progress = (animation->elapsed - animation->delay) / animation->duration;
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
         const float delta = data->to_radius - data->from_radius;
@@ -772,7 +784,11 @@ static void apply_blur_radius_animation(Animation_t *animation, float *final_rad
 static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds) {
     const Animation_ScaleData_t *data = animation->custom_data;
 
-    const double progress = animation->elapsed / animation->duration;
+    if ( animation->elapsed <= animation->delay ) {
+        final_bounds->scale_mod = data->from_scale;
+        return;
+    }
+    const double progress = (animation->elapsed - animation->delay) / animation->duration;
     if ( progress < 1.0 ) {
         const double scale_delta = data->to_scale - data->from_scale;
         final_bounds->scale_mod = data->from_scale + scale_delta * progress;
@@ -783,7 +799,12 @@ static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds
 
 static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet_t *regions) {
     const Animation_DrawRegionData_t *data = animation->custom_data;
-    double progress = animation->elapsed / animation->duration;
+    if ( animation->elapsed <= animation->delay ) {
+        for ( int i = 0; i < regions->num_regions; i++ )
+            regions->regions[i].x1_perc = data->draw_regions.regions[i].x1_perc;
+        return;
+    }
+    double progress = (animation->elapsed - animation->delay) / animation->duration;
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
         for ( int i = 0; i < regions->num_regions; i++ ) {
@@ -801,7 +822,10 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
 
 static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptSet_t *regions) {
     const Animation_ScaleRegionData_t *data = animation->custom_data;
-    double progress = animation->elapsed / animation->duration;
+
+    if ( animation->elapsed <= animation->delay )
+        return;
+    double progress = (animation->elapsed - animation->delay) / animation->duration;
 
     if ( progress >= 1.0 ) {
         progress = 1.0;
@@ -957,7 +981,9 @@ static void apply_container_animations(Container_t *container, Bounds_t *bounds)
         ContainerAnimation_t *animation = container->animations->data[i];
 
         if ( animation->active ) {
-            const double progress = MIN(1.0, animation->elapsed / animation->duration);
+            if ( animation->elapsed <= animation->delay )
+                continue;
+            const double progress = MIN(1.0, (animation->elapsed - animation->delay) / animation->duration);
 
             if ( animation->type == ANIM_EASE_TRANSLATION ) {
                 const Animation_EaseTranslationData_t *data = animation->custom_data;
@@ -1298,7 +1324,7 @@ static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t 
 
     const double progress = MAX(0.0, MIN(1.0, (opts->mouse.y - bg_top) / drawable->bounds.h));
     const double pos = container->scrollable_area.min_content_y + total_height * progress;
-    ui_container_scroll_y_to_dur(container, pos, 0.5);
+    ui_container_scroll_y_to_dur(container, pos, (AnimatedSetOpts_t){.duration = 0.5});
 }
 
 static void on_hover_scrollbar(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
@@ -1310,11 +1336,13 @@ static void on_hover_scrollbar(const UiEventOpts_t *opts, Drawable_t *, void *cu
     const int32_t handle_alpha = container->overflow_y.scrollbar.handle_color.a;
     const double fade_duration = 0.2;
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-        ui_drawable_set_alpha_dur(bg, bg_alpha, fade_duration, ANIM_APPLY_OVERRIDE);
-        ui_drawable_set_alpha_dur(handle, handle_alpha, fade_duration, ANIM_APPLY_OVERRIDE);
+        const AnimatedSetOpts_t anim_opts = {.duration = fade_duration, .apply_type = ANIM_APPLY_OVERRIDE};
+        ui_drawable_set_alpha_dur(bg, bg_alpha, anim_opts);
+        ui_drawable_set_alpha_dur(handle, handle_alpha, anim_opts);
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        ui_drawable_set_alpha_dur(bg, 0, fade_duration, ANIM_APPLY_OVERRIDE);
-        ui_drawable_set_alpha_dur(handle, 0, fade_duration, ANIM_APPLY_OVERRIDE);
+        const AnimatedSetOpts_t anim_opts = {.duration = fade_duration, .delay = 0.5, .apply_type = ANIM_APPLY_OVERRIDE};
+        ui_drawable_set_alpha_dur(bg, 0, anim_opts);
+        ui_drawable_set_alpha_dur(handle, 0, anim_opts);
     }
 }
 
@@ -1332,8 +1360,9 @@ static void on_container_scroll(const UiEventOpts_t *opts, Drawable_t *, void *c
     // just reset the timer rather than chaining additional animations.
     ui_drawable_set_alpha_immediate(bg, bg_alpha);
     ui_drawable_set_alpha_immediate(handle, handle_alpha);
-    ui_drawable_set_alpha_dur(bg, 0, 1.0, ANIM_APPLY_OVERRIDE);
-    ui_drawable_set_alpha_dur(handle, 0, 1.0, ANIM_APPLY_OVERRIDE);
+    const AnimatedSetOpts_t anim_opts = {.duration = 1.0, .delay = 0.5, .apply_type = ANIM_APPLY_OVERRIDE};
+    ui_drawable_set_alpha_dur(bg, 0, anim_opts);
+    ui_drawable_set_alpha_dur(handle, 0, anim_opts);
 }
 
 void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const ScrollBarKind_t kind) {
@@ -1437,7 +1466,7 @@ void ui_container_scroll_y_to(Container_t *container, const double position) {
     }
 }
 
-void ui_container_scroll_y_to_dur(Container_t *container, const double position, const double duration) {
+void ui_container_scroll_y_to_dur(Container_t *container, const double position, const AnimatedSetOpts_t opts) {
     if ( container->overflow_y.kind != OVERFLOW_SCROLL )
         error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
 
@@ -1452,7 +1481,8 @@ void ui_container_scroll_y_to_dur(Container_t *container, const double position,
         data->to_amount = target;
         scroll_anim->elapsed = 0.0;
         scroll_anim->active = true;
-        scroll_anim->duration = duration;
+        scroll_anim->duration = opts.duration;
+        scroll_anim->delay = opts.delay;
         scroll_anim->ease_func = data->ease_func;
     } else {
         printf("Warning: ui_container_scroll_y_to_dur: no scroll y animation set, no duration is applied.\n");
@@ -2343,6 +2373,7 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     // copy everything from the base anim
     memcpy(animation, base_anim, sizeof(*animation));
     animation->elapsed = 0.0;
+    animation->delay = 0.0;
     animation->active = true;
     // then duplicate the data
     animation->custom_data = NULL;
@@ -2446,19 +2477,20 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
     drawable->bounds.scale_mod = scale_mod;
 }
 
-void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double duration) {
+void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, AnimatedSetOpts_t opts) {
     const float scale_mod = scale - 1.f;
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
     if ( base_anim != NULL ) {
-        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
             data->from_scale = drawable->bounds.scale_mod;
             data->to_scale = scale_mod;
-            data->duration = duration;
+            data->duration = opts.duration;
+            animation->delay = opts.delay;
         }
     }
     drawable->bounds.scale_mod = scale_mod;
@@ -2477,7 +2509,7 @@ void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t 
         }
     }
 
-    ui_drawable_set_draw_region_dur(drawable, draw_regions, duration);
+    ui_drawable_set_draw_region_dur(drawable, draw_regions, (AnimatedSetOpts_t){.duration = duration});
 }
 
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
@@ -2497,7 +2529,7 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
     drawable->draw_regions.num_regions = draw_regions->num_regions;
 }
 
-void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const double duration) {
+void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, AnimatedSetOpts_t opts) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
         // If it's the same, do nothing
@@ -2520,7 +2552,8 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
                 data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
             }
             data->draw_regions.num_regions = draw_regions->num_regions;
-            animation->duration = duration;
+            animation->duration = opts.duration;
+            animation->delay = opts.delay;
 
             // TODO: Refactor this piece of code is duplicated
             // Copy the real values to the drawable
@@ -2572,19 +2605,20 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
     drawable->alpha_mod = alpha;
 }
 
-void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, double duration, AnimationApplyType_t apply_type) {
+void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, AnimatedSetOpts_t opts) {
     if ( alpha == drawable->alpha_mod ) {
         return;
     }
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_FADE_IN_OUT);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
+        Animation_t *animation = reapply_animation(drawable, base_anim, opts.apply_type);
         if ( animation != NULL ) {
             Animation_FadeInOutData_t *data = animation->custom_data;
             data->from_alpha = drawable->alpha_mod;
             data->to_alpha = alpha;
-            animation->duration = duration;
+            animation->duration = opts.duration;
+            animation->delay = opts.delay;
         }
     }
     drawable->alpha_mod = alpha;
@@ -2646,18 +2680,19 @@ void ui_drawable_set_draw_underlay(Drawable_t *drawable, const bool draw, const 
     drawable->underlay_alpha = alpha;
 }
 
-void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, const double duration,
-                                      AnimationApplyType_t apply_type) {
+void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, AnimatedSetOpts_t opts) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE_REGION);
     // TODO: This function doesn't do anything if there's no animation attached
     if ( base_anim != NULL ) {
+        AnimationApplyType_t apply_type = opts.apply_type;
         if ( apply_type == ANIM_APPLY_DEFAULT )
             apply_type = base_anim->apply_type;
         Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
         if ( animation != NULL ) {
             Animation_ScaleRegionData_t *data = animation->custom_data;
             data->scale_region = *region;
-            animation->duration = duration;
+            animation->duration = opts.duration;
+            animation->delay = opts.delay;
         }
     }
 }

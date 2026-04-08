@@ -195,9 +195,10 @@ static void on_album_art_event(const UiEventOpts_t *opts, Drawable_t *, void *cu
         // Update background
         menu->album_data_dirty = true;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        ui_drawable_set_scale_factor_dur(entry->image, 1.f, ALBUM_SCALE_DOWN_DURATION);
-        ui_drawable_set_scale_factor_dur(entry->title, 1.f, ALBUM_SCALE_DOWN_DURATION);
-        ui_drawable_set_scale_factor_dur(entry->album, 1.f, ALBUM_SCALE_DOWN_DURATION);
+        const AnimatedSetOpts_t anim_opts = {.duration = ALBUM_SCALE_DOWN_DURATION};
+        ui_drawable_set_scale_factor_dur(entry->image, 1.f, anim_opts);
+        ui_drawable_set_scale_factor_dur(entry->title, 1.f, anim_opts);
+        ui_drawable_set_scale_factor_dur(entry->album, 1.f, anim_opts);
 
         entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
         ui_reposition_drawable(entry->title);
@@ -395,7 +396,9 @@ void menu_setup(MainMenu_t *menu) {
 
     const Layout_t container_layout = {
         .flags = LAYOUT_PROPORTIONAL_Y | LAYOUT_PROPORTIONAL_SIZE, .offset_y = 0.0, .width = 1.0, .height = 1.0};
-    menu->container = ui_make_container(menu->ui, ui_root_container(menu->ui), &container_layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
+    Container_t *root_container = ui_root_container(menu->ui);
+    const ContainerFlags_t flags = CONTAINER_HORIZONTAL_ALIGN_CONTENT;
+    menu->container = ui_make_container(menu->ui, root_container, &container_layout, flags);
     menu->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.15};
     ui_container_add_vertical_scrollbar(menu->ui, menu->container, SCROLL_BAR_ALWAYS);
     ui_container_animate_scroll_y(menu->container, 0.1, ANIM_EASE_OUT_CUBIC);

@@ -226,7 +226,7 @@ typedef enum AnimationEaseType_t {
 } AnimationEaseType_t;
 
 typedef struct Animation_t {
-    double duration, elapsed;
+    double duration, elapsed, delay;
     AnimationType_t type;
     OWNING void *custom_data;
     WEAK Drawable_t *target;
@@ -241,13 +241,19 @@ typedef struct Animation_t {
 } Animation_t;
 
 typedef struct ContainerAnimation_t {
-    double duration, elapsed;
+    double duration, elapsed, delay;
     AnimationType_t type;
     OWNING void *custom_data;
     WEAK Container_t *target;
     bool active;
     AnimationEaseType_t ease_func;
 } ContainerAnimation_t;
+
+typedef struct AnimatedSetOpts_t {
+    double duration;
+    double delay;
+    AnimationApplyType_t apply_type;
+} AnimatedSetOpts_t;
 
 // Options and custom data
 typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } DrawableAlignment_t;
@@ -486,7 +492,7 @@ void ui_add_global_event_callback(const Ui_t *ui, UiEvent_t event_type, c_ui_eve
 void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, ScrollBarKind_t kind);
 void ui_container_scroll_y_by(Container_t *container, double amount);
 void ui_container_scroll_y_to(Container_t *container, double position);
-void ui_container_scroll_y_to_dur(Container_t *container, double position, double duration);
+void ui_container_scroll_y_to_dur(Container_t *container, double position, AnimatedSetOpts_t opts);
 // Meta helpers
 void ui_set_window_title(const char *title);
 void ui_on_window_changed(Ui_t *ui);
@@ -506,19 +512,18 @@ double ui_compute_relative_horizontal(double value, const Container_t *parent);
 void ui_drawable_set_image(Drawable_t *drawable, const unsigned char *bytes, int length);
 // Change drawable properties
 void ui_drawable_set_alpha(Drawable_t *drawable, int32_t alpha);
-void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, double duration, AnimationApplyType_t apply_type);
+void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, AnimatedSetOpts_t opts);
 void ui_drawable_set_alpha_immediate(Drawable_t *drawable, int32_t alpha);
 void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
-void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, double duration);
+void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, AnimatedSetOpts_t opts);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
-void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, double duration);
+void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, AnimatedSetOpts_t opts);
 void ui_drawable_disable_draw_region(Drawable_t *drawable);
 void ui_drawable_set_draw_underlay(Drawable_t *drawable, bool draw, uint8_t alpha);
-void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, double duration,
-                                      AnimationApplyType_t apply_type);
+void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, AnimatedSetOpts_t opts);
 // Containers
 Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout_t *layout, ContainerFlags_t flags);
 void ui_recompute_container(Ui_t *ui, Container_t *container);

@@ -123,7 +123,8 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
                     const double x_padded = x + hint_padding;
                     if ( place_hints_under_segment )
                         x = MAX(x_padded, character_x + ui_compute_relative_horizontal(0.01, view->container));
-                    else x = x_padded;
+                    else
+                        x = x_padded;
 
                     ReadingEntry_t *entry = calloc(1, sizeof(*entry));
                     entry->texture = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
@@ -550,7 +551,8 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                     .from_scale = 0.f,
                     .to_scale = SCALE_REGION_TARGET_SCALE,
                 };
-                ui_drawable_add_scale_region_dur(drawable, &region, SCALE_REGION_UP_DURATION, ANIM_APPLY_DEFAULT);
+                static AnimatedSetOpts_t up_anim_opts = {.duration = SCALE_REGION_UP_DURATION, .apply_type = ANIM_APPLY_DEFAULT};
+                ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
                 // Then do another scale anim for scaling back down for the duration of the segment (minus the up duration)
                 region.from_scale = SCALE_REGION_TARGET_SCALE;
                 region.to_scale = 0.f;
@@ -560,7 +562,8 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                 // what) and the application is single threaded, so no other code could be pushing animations to the queue between
                 // the call to ui_drawable_add_scale_region_dur and the line below
                 const double down_duration = MAX(duration - SCALE_REGION_UP_DURATION, SCALE_REGION_DOWN_MIN_DURATION);
-                ui_drawable_add_scale_region_dur(drawable, &region, down_duration, ANIM_APPLY_SEQUENTIAL);
+                const AnimatedSetOpts_t down_anim_opts = {.duration = down_duration, .apply_type = ANIM_APPLY_SEQUENTIAL};
+                ui_drawable_add_scale_region_dur(drawable, &region, down_anim_opts);
                 view->active_line_segment_visited[s] |= (1 << i);
             }
 
@@ -579,7 +582,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     }
     const double min_duration = is_last_segment_single_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
     const double fill_duration = MAX(min_duration, last_segment_remaining);
-    ui_drawable_set_draw_region_dur(drawable, &draw_regions, fill_duration);
+    ui_drawable_set_draw_region_dur(drawable, &draw_regions, (AnimatedSetOpts_t){.duration = fill_duration});
 }
 
 static void set_line_active(LyricsView_t *view, const int32_t index) {
@@ -661,7 +664,8 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
             // the initial loading
             ui_drawable_set_scale_factor_immediate(drawable, get_inactive_line_scale());
         } else {
-            ui_drawable_set_scale_factor_dur(drawable, get_inactive_line_scale(), LINE_SCALE_FACTOR_INACTIVE_DURATION);
+            static AnimatedSetOpts_t anim_opts = {.duration = LINE_SCALE_FACTOR_INACTIVE_DURATION};
+            ui_drawable_set_scale_factor_dur(drawable, get_inactive_line_scale(), anim_opts);
         }
         scale_hint_for_line(view, index);
         fade_hint_for_line(view, index);
@@ -815,5 +819,5 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
 
 void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
     const double position = get_lyric_line_scroll_position(view, view->current_first_active_index);
-    ui_container_scroll_y_to_dur(view->container, position, SCROLL_ANIMATION_DURATION);
+    ui_container_scroll_y_to_dur(view->container, position, (AnimatedSetOpts_t){.duration = SCROLL_ANIMATION_DURATION});
 }
