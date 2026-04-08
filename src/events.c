@@ -5,11 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef __EMSCRIPTEN__
 #define SCROLL_MODIFIER (50)
-#else
-#define SCROLL_MODIFIER (10)
-#endif
 
 struct Events_t {
     struct {
