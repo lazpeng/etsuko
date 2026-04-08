@@ -166,7 +166,7 @@ AppStatus_t menu_load_loop(MainMenu_t *menu) {
     }
 
     const bool loaded = menu->load_ui_font->status == LOAD_DONE && menu->load_song_list->status == LOAD_DONE &&
-                        menu->load_no_album_art->status == LOAD_DONE && !str_is_empty(menu->selected_song);
+                        menu->load_no_album_art->status == LOAD_DONE;
     if ( loaded )
         return APP_STATUS_OK;
     return APP_STATUS_LOADING;
@@ -374,6 +374,61 @@ static void free_setup_resource_loads(MainMenu_t *menu) {
 
 static void on_settings_click(Ui_t *ui, const ButtonWidget_t *) { settings_show(ui); }
 
+static void setup_song(MainMenu_t *menu, const MenuSong_t *song) {
+    GridLayoutInfo_t *grid = &menu->grid_layout_info;
+    Layout_t layout = {.flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS |
+                                LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
+                       .width = 0.15};
+    bool set_first = false;
+    if ( grid->row_count == MAX_SONGS_PER_ROW || grid->first_in_row == NULL ) {
+        grid->row_count = 0;
+        layout.offset_x = 0.0;
+        layout.offset_y = 0.15;
+        layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+        layout.relative_to = grid->first_in_row;
+        set_first = true;
+    } else {
+        layout.offset_x = 0.05;
+        layout.offset_y = 0;
+        layout.flags |= LAYOUT_RELATION_X_INCLUDE_WIDTH;
+        layout.relative_to = grid->last_in_row;
+    }
+
+    const AlbumArtData_t *no_data = map_get(menu->album_arts, NO_ART_KEY);
+    if ( no_data == NULL )
+        error_abort("Fatal error: Couldn't load the default album image");
+
+    const Drawable_ImageData_t data = {.border_radius_em = 1};
+    Drawable_t *image = ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
+    grid->last_in_row = image;
+    if ( set_first )
+        grid->first_in_row = image;
+    grid->row_count += 1;
+
+    const Animation_ScaleData_t scale_data = {.duration = ALBUM_SCALE_DURATION};
+    image->center_on_scale = true;
+    ui_animate_scale(image, &scale_data);
+
+    SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
+    Drawable_t *title_text = setup_song_title(menu, song, image);
+    Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
+
+    entry->menu = menu;
+    entry->key = song->id;
+    entry->image = image;
+    entry->title = title_text;
+    entry->album = album_text;
+    entry->pills_container = setup_tag_pills(menu, song, entry);
+
+    ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_ENTERED, image, on_album_art_event, entry);
+    ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_EXITED, image, on_album_art_event, entry);
+    ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, image, on_album_art_event, entry);
+
+    grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
+
+    map_put(menu->album_art_drawables, song->id, entry);
+}
+
 void menu_setup(MainMenu_t *menu) {
     ui_container_animate_color_lerp(ui_root_container(menu->ui), 0.5, ANIM_EASE_NONE);
     // Set the initial background to the first album art loaded
@@ -400,64 +455,21 @@ void menu_setup(MainMenu_t *menu) {
     Container_t *root_container = ui_root_container(menu->ui);
     const ContainerFlags_t flags = CONTAINER_HORIZONTAL_ALIGN_CONTENT;
     menu->container = ui_make_container(menu->ui, root_container, &container_layout, flags);
-    menu->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.15};
-    ui_container_add_vertical_scrollbar(menu->ui, menu->container, SCROLL_BAR_ALWAYS);
-    ui_container_animate_scroll_y(menu->container, 0.1, ANIM_EASE_OUT_CUBIC);
-
-    GridLayoutInfo_t *grid = &menu->grid_layout_info;
-    const AlbumArtData_t *no_data = map_get(menu->album_arts, NO_ART_KEY);
-    if ( no_data == NULL )
-        error_abort("Fatal error: Couldn't load the default album image");
 
     for ( size_t i = 0; i < menu->menu_songs->size; i++ ) {
         const MenuSong_t *song = menu->menu_songs->data[i];
-        Layout_t layout = {.flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS |
-                                    LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-                           .width = 0.15};
-        bool set_first = false;
-        if ( grid->row_count == MAX_SONGS_PER_ROW || grid->first_in_row == NULL ) {
-            grid->row_count = 0;
-            layout.offset_x = 0.0;
-            layout.offset_y = 0.15;
-            layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
-            layout.relative_to = grid->first_in_row;
-            set_first = true;
-        } else {
-            layout.offset_x = 0.05;
-            layout.offset_y = 0;
-            layout.flags |= LAYOUT_RELATION_X_INCLUDE_WIDTH;
-            layout.relative_to = grid->last_in_row;
-        }
+        setup_song(menu, song);
+    }
 
-        const Drawable_ImageData_t data = {.border_radius_em = 1};
-        Drawable_t *image = ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
-        grid->last_in_row = image;
-        if ( set_first )
-            grid->first_in_row = image;
-        grid->row_count += 1;
-
-        const Animation_ScaleData_t scale_data = {.duration = ALBUM_SCALE_DURATION};
-        image->center_on_scale = true;
-        ui_animate_scale(image, &scale_data);
-
-        SongEntryDrawables_t *entry = calloc(1, sizeof(*entry));
-        Drawable_t *title_text = setup_song_title(menu, song, image);
-        Drawable_t *album_text = setup_song_album_text(menu, song, title_text);
-
-        entry->menu = menu;
-        entry->key = song->id;
-        entry->image = image;
-        entry->title = title_text;
-        entry->album = album_text;
-        entry->pills_container = setup_tag_pills(menu, song, entry);
-
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_ENTERED, image, on_album_art_event, entry);
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_HOVER_EXITED, image, on_album_art_event, entry);
-        ui_add_event_callback(menu->ui, UI_EVENT_MOUSE_CLICK, image, on_album_art_event, entry);
-
-        grid->max_y = MAX(grid->max_y, album_text->bounds.y + album_text->bounds.h);
-
-        map_put(menu->album_art_drawables, song->id, entry);
+    if ( menu->menu_songs->size == 0 ) {
+        const Layout_t layout = {.flags = LAYOUT_CENTER};
+        const Drawable_TextData_t text_data = {
+            .em = 2.0, .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .font_type = FONT_UI, .text = "No songs to show"};
+        ui_make_text(menu->ui, &text_data, root_container, &layout);
+    } else {
+        menu->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.15};
+        ui_container_add_vertical_scrollbar(menu->ui, menu->container, SCROLL_BAR_ALWAYS);
+        ui_container_animate_scroll_y(menu->container, 0.1, ANIM_EASE_OUT_CUBIC);
     }
 
     free_setup_resource_loads(menu);
