@@ -105,10 +105,5 @@ typedef struct MenuSong_t {
     int year;
 } MenuSong_t;
 
-/**
- * Parses a json string with a list of songs to be displayed on the main menu and returns a flat vector of MenuSong_t
- */
-Vector_t *menu_songs_parse(const char *src);
-void menu_songs_destroy(Vector_t *songs);
 
 #endif // ETSUKO_SONG_H

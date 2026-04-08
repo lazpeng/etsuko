@@ -7,6 +7,7 @@
 #include "repository.h"
 #include "secret.h"
 #include "song.h"
+#include "song_list.h"
 #include "str_utils.h"
 #include "ui.h"
 #include "user_settings.h"

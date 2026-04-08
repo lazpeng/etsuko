@@ -17,6 +17,8 @@ add_executable(etsuko src/main.c
         src/ui.h
         src/ui.c
         src/song.c
+        src/song_list.h
+        src/song_list.c
         src/str_utils.h
         src/str_utils.c
         src/container_utils.h
