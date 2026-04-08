@@ -696,11 +696,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     const double current_scroll_pos = view->container->overflow_y.set_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
     if ( should_hide_past && current_scroll_pos >= prev_scroll_pos ) {
-        if ( view->current_hovered_index == index ) {
-            ui_drawable_set_alpha(drawable, calculate_alpha(0));
-        } else {
-            ui_drawable_set_alpha(drawable, 0);
-        }
+        ui_drawable_set_alpha(drawable, 0);
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
