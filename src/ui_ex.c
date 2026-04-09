@@ -831,6 +831,8 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
 }
 
 void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
+    if ( !view->song->has_timings )
+        return;
     const double position = get_lyric_line_scroll_position(view, view->current_first_active_index);
     ui_container_scroll_y_to_dur(view->container, position, (AnimatedSetOpts_t){.duration = SCROLL_ANIMATION_DURATION});
 }
