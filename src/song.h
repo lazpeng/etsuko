@@ -79,6 +79,8 @@ typedef struct Song_t {
     // Override of a font file to be used for the lyrics in particular
     OWNING char *font_override;
     Song_BgType_t bg_type;
+    // Whether the song has timed lyrics at all
+    bool has_timings;
     // Whether the song has segment timings (parts of the same line)
     bool has_sub_timings;
     // Whether the song has reading hints

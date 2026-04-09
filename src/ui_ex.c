@@ -321,10 +321,11 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
             }
         }
 
+        const double lyrics_em = song->has_timings ? 2.5 : 1.5;
         const double line_padding = should_generate_reading_hints ? TEXT_LINE_PADDING_WITH_READINGS : 0;
         Drawable_TextData_t data = {.text = line_text,
                                     .font_type = FONT_LYRICS,
-                                    .em = 2.5,
+                                    .em = lyrics_em,
                                     .wrap_enabled = true,
                                     .wrap_width_threshold = 0.85,
                                     .color = color,
@@ -341,23 +342,32 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         };
         prev = ui_make_text(ui, &data, parent, &layout);
         vec_add(view->line_drawables, prev);
+        view->line_states[i] = LINE_NONE;
 
         // Set events
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, prev, on_line_event, view);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, prev, on_line_event, view);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
+        if ( song->has_timings ) {
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, prev, on_line_event, view);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, prev, on_line_event, view);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
 
-        view->line_states[i] = LINE_NONE;
-        ui_animate_fade(prev,
-                        &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_blur(prev,
-                        &(Animation_BlurRadiusData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_scale(prev, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
-        ui_animate_draw_region(prev,
-                               &(Animation_DrawRegionData_t){.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE});
-        ui_animate_scale_region(prev, &(Animation_ScaleRegionData_t){.duration = SCALE_REGION_UP_DURATION,
-                                                                     .ease_func = ANIM_EASE_OUT_CUBIC,
-                                                                     .default_apply = ANIM_APPLY_CONCURRENT});
+            Animation_FadeInOutData_t fade_data = {.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC};
+            ui_animate_fade(prev, &fade_data);
+
+            Animation_BlurRadiusData_t blur_data = {.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC};
+            ui_animate_blur(prev, &blur_data);
+
+            Animation_ScaleData_t scale_data = {.duration = SCALE_ANIMATION_DURATION};
+            ui_animate_scale(prev, &scale_data);
+
+            Animation_DrawRegionData_t draw_region_data = {.duration = REGION_ANIMATION_DURATION, .ease_func = ANIM_EASE_NONE};
+            ui_animate_draw_region(prev, &draw_region_data);
+
+            Animation_ScaleRegionData_t scale_region_data = {
+                .duration = SCALE_REGION_UP_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC, .default_apply = ANIM_APPLY_CONCURRENT};
+            ui_animate_scale_region(prev, &scale_region_data);
+        } else {
+            ui_drawable_set_alpha_immediate(prev, calculate_alpha(0));
+        }
 
         if ( should_generate_reading_hints ) {
             Drawable_t *hint = ui_make_custom(
@@ -760,6 +770,9 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     if ( view->container->enabled == false )
         return;
     ensure_read_hints_visibility_setting(view);
+
+    if ( !view->song->has_timings )
+        return;
 
     int32_t prev_active = -1;
     int32_t first_active = -1;
