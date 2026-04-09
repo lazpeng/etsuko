@@ -105,6 +105,44 @@ typedef struct {
     WEAK Resource_t *resource;
 } FetchContext;
 
+static void decode_chunked_body(ResourceBuffer_t *buffer) {
+    unsigned char *data = buffer->data;
+    uint64_t src_len = buffer->downloaded_bytes;
+    uint64_t pos = 0;
+    uint64_t dst_len = 0;
+
+    while ( pos < src_len ) {
+        // Find end of chunk-size line
+        uint64_t line_start = pos;
+        while ( pos < src_len && !(data[pos] == '\r' && pos + 1 < src_len && data[pos + 1] == '\n') )
+            pos++;
+        if ( pos >= src_len )
+            break;
+
+        char hex_buf[32];
+        uint64_t hex_len = pos - line_start;
+        if ( hex_len == 0 || hex_len >= sizeof(hex_buf) )
+            break;
+        memcpy(hex_buf, data + line_start, hex_len);
+        hex_buf[hex_len] = '\0';
+
+        unsigned long chunk_size = strtoul(hex_buf, NULL, 16);
+        pos += 2; // skip \r\n after size
+
+        if ( chunk_size == 0 )
+            break; // last chunk
+
+        if ( pos + chunk_size > src_len )
+            break; // malformed
+
+        memmove(data + dst_len, data + pos, chunk_size);
+        dst_len += chunk_size;
+        pos += chunk_size + 2; // skip chunk data and trailing \r\n
+    }
+
+    buffer->downloaded_bytes = dst_len;
+}
+
 static void *fetch_thread_func(void *arg) {
     FetchContext *ctx = (FetchContext *)arg;
     Resource_t *resource = ctx->resource;
@@ -215,6 +253,7 @@ static void *fetch_thread_func(void *arg) {
     char buffer[BUFFER_SIZE];
     int bytes_received;
     int header_ended = 0;
+    int is_chunked = 0;
 
     char *header_accum = NULL;
     size_t header_accum_size = 0;
@@ -262,6 +301,7 @@ static void *fetch_thread_func(void *arg) {
                             }
                         }
 
+                        is_chunked = (strcasestr(header_accum, "Transfer-Encoding: chunked") != NULL);
                         header_ended = 1;
                         size_t header_len = i + 4;
                         size_t body_len = header_accum_size - header_len;
@@ -291,6 +331,8 @@ static void *fetch_thread_func(void *arg) {
     close(sockfd);
 
     if ( resource->status != LOAD_ERROR ) {
+        if ( is_chunked )
+            decode_chunked_body(resource->buffer);
         resource->status = LOAD_DONE;
         if ( resource->on_resource_loaded ) {
             resource->on_resource_loaded(resource);
