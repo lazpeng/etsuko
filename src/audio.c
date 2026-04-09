@@ -8,6 +8,8 @@
 #include <string.h>
 
 #ifdef __APPLE__
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>
 #else
