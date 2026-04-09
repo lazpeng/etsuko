@@ -8,6 +8,7 @@
 #include "remote_repository.h"
 #include "repository.h"
 
+#include <ctype.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -143,6 +144,33 @@ static void decode_chunked_body(ResourceBuffer_t *buffer) {
     buffer->downloaded_bytes = dst_len;
 }
 
+static void url_encode_path(const char *src, char *dst, size_t dst_size) {
+    static const char safe[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789"
+        "-._~!$&'()*+,;=:@/";
+
+    size_t i = 0;
+    while ( *src && i + 4 < dst_size ) {
+        unsigned char c = (unsigned char)*src;
+        if ( c == '%' && isxdigit((unsigned char)src[1]) && isxdigit((unsigned char)src[2]) ) {
+            // Pass through already-encoded sequences
+            dst[i++] = *src++;
+            dst[i++] = *src++;
+            dst[i++] = *src++;
+        } else if ( strchr(safe, c) ) {
+            dst[i++] = *src++;
+        } else {
+            dst[i++] = '%';
+            dst[i++] = "0123456789ABCDEF"[c >> 4];
+            dst[i++] = "0123456789ABCDEF"[c & 0xF];
+            src++;
+        }
+    }
+    dst[i] = '\0';
+}
+
 static void *fetch_thread_func(void *arg) {
     FetchContext *ctx = (FetchContext *)arg;
     Resource_t *resource = ctx->resource;
@@ -223,13 +251,16 @@ static void *fetch_thread_func(void *arg) {
         }
     }
 
-    char request[MAX_URL_LEN + 512];
+    char encoded_path[MAX_URL_LEN * 3];
+    url_encode_path(components.path, encoded_path, sizeof(encoded_path));
+
+    char request[MAX_URL_LEN * 3 + 512];
     snprintf(request, sizeof(request),
              "GET %s HTTP/1.1\r\n"
              "Host: %s\r\n"
              "Connection: close\r\n"
              "\r\n",
-             components.path, components.host);
+             encoded_path, components.host);
 
     int sent_bytes = 0;
     if ( is_https ) {
