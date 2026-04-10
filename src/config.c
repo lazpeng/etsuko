@@ -46,7 +46,7 @@ static Config_t *get_default_config(void) {
         .enable_dynamic_fill = true,
         .enable_reading_hints = true,
         .enable_pulse_effect = true,
-        .hide_past_lyrics = true,
+        .hide_past_lyrics = false,
         .draw_album_art_shadow = true,
         .draw_lyric_shadow = true,
         .show_loading_screen = true,
