@@ -364,7 +364,8 @@ typedef void (*c_widget_toggle_on_change)(Ui_t *ui, const struct ToggleWidget_t 
 
 typedef struct ToggleWidget_t {
     int active_index;
-    OWNING Vector_t *text_drawables;
+    OWNING Vector_t *text_drawables; // of Drawable_t*
+    OWNING Vector_t *option_hitboxes; // of Drawable_t*
     OWNING Drawable_t *d_anchor, *d_background, *d_foreground;
     bool editable;
     int entry_id;

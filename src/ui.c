@@ -2949,8 +2949,17 @@ static void toggle_widget_reconfigure(void *widget_data) {
     for ( size_t i = 0; i < result->text_drawables->size; i++ ) {
         Drawable_t *text = result->text_drawables->data[i];
         if ( i > 0 )
-            text->layout.offset_x = text->bounds.h * 1.5;
+            text->layout.offset_x = text->bounds.h;
         ui_reposition_drawable(text);
+        if ( i < result->option_hitboxes->size ) {
+            const double height = text->bounds.h;
+            const double padding = height * 0.5;
+            Drawable_t *hitbox = result->option_hitboxes->data[i];
+            hitbox->layout.offset_y = -padding / 2.0;
+            hitbox->layout.offset_x = -padding;
+            hitbox->layout.padding_w = height;
+            ui_reposition_drawable(hitbox);
+        }
     }
 
     const double start_x = result->d_anchor->bounds.x;
@@ -3011,9 +3020,9 @@ static void toggle_widget_on_click(const UiEventOpts_t *opts, Drawable_t *target
         return;
 
     int index = -1;
-    for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
-        const Drawable_t *text = widget->text_drawables->data[i];
-        if ( text == target ) {
+    for ( size_t i = 0; i < widget->option_hitboxes->size; i++ ) {
+        const Drawable_t *hitbox = widget->option_hitboxes->data[i];
+        if ( hitbox == target ) {
             index = (int32_t)i;
             break;
         }
@@ -3077,6 +3086,7 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
     widget->editable = true;
     widget->active_index = opts->active_index;
     widget->text_drawables = vec_init();
+    widget->option_hitboxes = vec_init();
 
     Drawable_t *prev = widget->d_anchor;
     for ( int i = 0; i < opts->num_opts; i++ ) {
@@ -3094,8 +3104,21 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
 
         prev = ui_make_text(ui, &data, parent, &text_layout);
         vec_add(widget->text_drawables, prev);
-        // TODO: Maybe create a similar rectangle but hidden for every text and use that as the event callback target
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, toggle_widget_on_click, widget);
+
+        const Layout_t hitbox_layout = {
+            .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE,
+            .relative_to = prev,
+            .relative_to_size = prev,
+            .height = 1.5,
+            .width = 1.0,
+        };
+        const Drawable_RectangleData_t hitbox_data = {
+            .border_radius_em = BORDER_RADIUS_AUTO,
+            .color = {.r = 0, .g = 0, .b = 0, .a = 0},
+        };
+        Drawable_t *hitbox = ui_make_rectangle(ui, &hitbox_data, parent, &hitbox_layout);
+        vec_add(widget->option_hitboxes, hitbox);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, hitbox, toggle_widget_on_click, widget);
     }
 
     const Drawable_RectangleData_t bg_data = {.color = opts->background_color, .border_radius_em = BORDER_RADIUS_AUTO};
