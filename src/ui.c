@@ -432,7 +432,6 @@ void ui_begin_loop(Ui_t *ui) {
     handle_user_input(ui);
 
     render_clear();
-    update_animations(ui, events_get_delta_time());
 }
 
 static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds, int32_t alpha) {
@@ -1143,12 +1142,12 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         container->content_size_dirty = false;
     }
 
+    Bounds_t container_bounds = container->bounds;
+    apply_container_animations(container, &container_bounds);
+
     if ( container->overflow_y.kind == OVERFLOW_SCROLL ) {
         recompute_vertical_scroll_bar_bounds(container);
     }
-
-    Bounds_t container_bounds = container->bounds;
-    apply_container_animations(container, &container_bounds);
     base_bounds.x += container_bounds.x;
     base_bounds.y += container_bounds.y;
 
@@ -1194,6 +1193,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
 }
 
 void ui_draw(const Ui_t *ui) {
+    update_animations(ui, events_get_delta_time());
     const Bounds_t bounds = {0};
     draw_all_container(ui, ui->root_container, bounds);
 }
@@ -2941,26 +2941,30 @@ void ui_container_update_background_colors_immediate(const Container_t *containe
     }
 }
 
-static void toggle_widget_reconfigure(void *widget_data) {
-    const ToggleWidget_t *result = widget_data;
-
-    // Update each text's offset_x using the current (post-resize) text height and
-    // reposition before reading end_x, so final_text_width is based on correct positions.
-    for ( size_t i = 0; i < result->text_drawables->size; i++ ) {
-        Drawable_t *text = result->text_drawables->data[i];
+static void reposition_toggle_widget_text(const ToggleWidget_t *widget) {
+    for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
+        Drawable_t *text = widget->text_drawables->data[i];
         if ( i > 0 )
             text->layout.offset_x = text->bounds.h;
         ui_reposition_drawable(text);
-        if ( i < result->option_hitboxes->size ) {
+        if ( i < widget->option_hitboxes->size ) {
             const double height = text->bounds.h;
             const double padding = height * 0.5;
-            Drawable_t *hitbox = result->option_hitboxes->data[i];
+            Drawable_t *hitbox = widget->option_hitboxes->data[i];
             hitbox->layout.offset_y = -padding / 2.0;
             hitbox->layout.offset_x = -padding;
             hitbox->layout.padding_w = height;
             ui_reposition_drawable(hitbox);
         }
     }
+}
+
+static void toggle_widget_reconfigure(void *widget_data) {
+    const ToggleWidget_t *result = widget_data;
+
+    // Update each text's offset_x using the current (post-resize) text height and
+    // reposition before reading end_x, so final_text_width is based on correct positions.
+    reposition_toggle_widget_text(result);
 
     const double start_x = result->d_anchor->bounds.x;
     double end_x = 0, end_w = 0;
@@ -2973,11 +2977,14 @@ static void toggle_widget_reconfigure(void *widget_data) {
 
     const double padding = prev->bounds.h;
     const double final_text_width = end_x + end_w - start_x;
-    const double final_width = final_text_width + padding * 2;
+    const double final_width = final_text_width + padding;
     const double extra_height = prev->bounds.h * 0.5;
     result->d_anchor->bounds.w = final_width;
     result->d_anchor->bounds.h = prev->bounds.h + extra_height;
     ui_reposition_drawable(result->d_anchor);
+
+    // Reposition the text AGAIN since they depend on the anchor
+    reposition_toggle_widget_text(result);
 
     const Layout_t bg_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_HEIGHT | LAYOUT_PROPORTIONAL_H,
@@ -3257,6 +3264,19 @@ void ui_widget_button_enabled(const ButtonWidget_t *widget, const bool enabled) 
         widget->d_text->enabled = enabled;
     if ( widget->d_image )
         widget->d_image->enabled = enabled;
+}
+
+void ui_widget_toggle_enabled(const ToggleWidget_t *widget, const bool enabled) {
+    widget->d_background->enabled = enabled;
+    widget->d_foreground->enabled = enabled;
+    for ( size_t i = 0; i < widget->text_drawables->size; i++ ) {
+        Drawable_t *text = widget->text_drawables->data[i];
+        text->enabled = enabled;
+    }
+    for ( size_t i = 0; i < widget->option_hitboxes->size; i++ ) {
+        Drawable_t *option_hitbox = widget->option_hitboxes->data[i];
+        option_hitbox->enabled = enabled;
+    }
 }
 
 void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, const int length) {

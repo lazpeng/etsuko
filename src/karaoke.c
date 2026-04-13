@@ -34,6 +34,7 @@ struct Karaoke_t {
         ButtonWidget_t *settings_button;
         ButtonWidget_t *back_button;
         ProgressBarWidget_t *song_progress_bar;
+        ToggleWidget_t *language_toggle;
     } drawables;
     bool hovering_controls;
     struct {
@@ -353,6 +354,13 @@ static void on_mouse_moved(const UiEventOpts_t *, Drawable_t *, void *custom_dat
 
     if ( state->drawables.back_button != NULL )
         ui_widget_button_enabled(state->drawables.back_button, true);
+
+    if ( state->drawables.language_toggle != NULL )
+        ui_widget_toggle_enabled(state->drawables.language_toggle, true);
+}
+
+static void on_language_changed(Ui_t *ui, const ToggleWidget_t *widget, int selected_opt) {
+
 }
 
 static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custom_data) {
@@ -370,6 +378,9 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custo
 
         if ( state->drawables.back_button != NULL )
             ui_widget_button_enabled(state->drawables.back_button, false);
+
+        if ( state->drawables.language_toggle != NULL )
+            ui_widget_toggle_enabled(state->drawables.language_toggle, false);
     }
 }
 
@@ -597,6 +608,37 @@ void karaoke_setup(Karaoke_t *state) {
     state->drawables.play_button->custom_data = state;
     state->drawables.play_button->on_click_callback = on_play_button_click;
     state->drawables.play_button->on_hover_callback = on_play_button_hover;
+
+    // Language toggle
+    if ( song_get()->languages->size > 1 ) {
+#define MAX_LANGUAGES 4
+        if ( song_get()->languages->size > MAX_LANGUAGES ) {
+            error_abort("num of languages in file larger than MAX_LANGUAGES. Considering increasing this number");
+        }
+        const char *opts[MAX_LANGUAGES] = {0};
+        for ( size_t i = 0; i < song_get()->languages->size; i++ ) {
+            const Song_Language_t *lang = song_get()->languages->data[i];
+            opts[i] = lang->language;
+        }
+#undef MAX_LANGUAGES
+
+        state->drawables.language_toggle = ui_build_toggle_widget(
+            state->ui, state->drawables.song_controls_container,
+            &(Layout_t){
+                .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y | LAYOUT_CENTER_X,
+                .relative_to = state->drawables.play_button->d_background,
+                .offset_y = 1.0,
+            },
+            &(ToggleWidgetOpts_t){
+                .text_em = 0.8,
+                .text_color = {.r = 255, .g = 255, .b = 255, .a = 100},
+                .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+                .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
+                .opts = opts,
+                .num_opts = (int32_t)song_get()->languages->size,
+            });
+        state->drawables.language_toggle->on_change_callback = on_language_changed;
+    }
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
 

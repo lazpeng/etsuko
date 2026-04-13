@@ -64,6 +64,7 @@ typedef struct Song_Language_t {
     OWNING char *language;
     OWNING Vector_t *lines; // of Song_Line_t*
     OWNING Vector_t *temp_readings; // of const char *
+    bool is_default;
 } Song_Language_t;
 
 // The actual song definition and options

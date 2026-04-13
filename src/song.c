@@ -334,7 +334,7 @@ static void read_readings(const Song_Language_t *lang, const char *buffer, const
     }
 }
 
-static Song_Language_t *select_language(const Song_t *song, const char *language) {
+static Song_Language_t *select_language(const Song_t *song, const char *language, const bool is_default) {
     Song_Language_t *target = NULL;
 
     for ( size_t i = 0; i < song->languages->size; i++ ) {
@@ -350,6 +350,7 @@ static Song_Language_t *select_language(const Song_t *song, const char *language
         target->language = strdup(language);
         target->lines = vec_init();
         target->temp_readings = vec_init();
+        target->is_default = is_default;
         vec_add(song->languages, target);
     }
 
@@ -387,7 +388,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
             const int32_t language_idx = str_find(buffer, ':', 0, (int32_t)strlen(buffer));
             if ( language_idx > 0 ) {
                 const char *current_language_str = buffer + language_idx + 1;
-                language = select_language(g_song, current_language_str);
+                language = select_language(g_song, current_language_str, false);
             } else {
                 language = NULL;
             }
@@ -418,7 +419,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
                 printf("Warning: language is not set in the header, using empty\n");
                 g_song->language = "";
             }
-            language = select_language(g_song, g_song->language);
+            language = select_language(g_song, g_song->language, true);
         }
 
         switch ( current_block ) {
@@ -451,7 +452,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
     str_buf_destroy(str_buffer);
 
-    const Song_Language_t *default_language = select_language(g_song, g_song->language);
+    const Song_Language_t *default_language = select_language(g_song, g_song->language, true);
     // Compat: Add lyrics lines from the original language
     g_song->lyrics_lines = default_language->lines;
 

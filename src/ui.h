@@ -554,6 +554,7 @@ void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget);
 ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout, const ButtonWidgetOpts_t *opts);
 void ui_destroy_button_widget(Ui_t *ui, ButtonWidget_t *widget);
 void ui_widget_button_enabled(const ButtonWidget_t *widget, bool enabled);
+void ui_widget_toggle_enabled(const ToggleWidget_t *widget, bool enabled);
 void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, int length);
 ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent, const Layout_t *layout,
                                                   const ProgressBarWidgetOpts_t *opts);
