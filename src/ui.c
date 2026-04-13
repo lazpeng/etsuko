@@ -1859,7 +1859,8 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
                 info->start_y = y;
             }
 
-            Bounds_t destination = {.x = x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
+            const double dest_x = x + texture->left_bearing_offset;
+            Bounds_t destination = {.x = dest_x, .y = y, .w = (float)texture->width, .h = (float)texture->height};
             // Disable blend on the texture so it doesn't lose alpha from blending multiple times
             // when rendering onto a target texture
             const BlendMode_t blend_mode = render_get_blend_mode();

@@ -30,6 +30,8 @@ typedef struct Texture_t {
     unsigned int vbo, vao;
     // Cached values used when configuring the above VAO and VBO so we can track when those need to be reconfigured
     int32_t buf_x, buf_y, buf_w, buf_h;
+    // Padding on the left of the texture. Automatically removed from the given coordinates during draw
+    int32_t left_bearing_offset;
 } Texture_t;
 
 /**
@@ -127,12 +129,7 @@ typedef enum FontType_t {
 /**
  * Blend modes used by the renderer when drawing textures to the screen
  */
-typedef enum BlendMode_t {
-    BLEND_MODE_BLEND = 0,
-    BLEND_MODE_ADD,
-    BLEND_MODE_NONE,
-    BLEND_MODE_ERASE
-} BlendMode_t;
+typedef enum BlendMode_t { BLEND_MODE_BLEND = 0, BLEND_MODE_ADD, BLEND_MODE_NONE, BLEND_MODE_ERASE } BlendMode_t;
 
 /**
  * Represents the bounds of a single character inside a bigger string of characters with the specified font
@@ -156,8 +153,8 @@ typedef struct CharBounds_t {
  * y coordinates, in this case, go from 0 (bottom) to 1 (top))
  * Note that this only applies to this particular instance as it's passed directly to OpenGL. All other instances
  * of coordinates expect 0 to be top and H (screen height) to be bottom.
- * Actually this doesn't really matter as long as it represents a valid interval in the y axis, whether it's 0-0.5 or 0.5-0 I believe
- * it behaves the same, but it's just something to keep in mind.
+ * Actually this doesn't really matter as long as it represents a valid interval in the y axis, whether it's 0-0.5 or 0.5-0 I
+ * believe it behaves the same, but it's just something to keep in mind.
  */
 typedef struct DrawRegionOpt_t {
     float x0_perc, x1_perc;
@@ -177,11 +174,11 @@ typedef struct DrawRegionOptSet_t {
 /**
  * Set of regions to apply scale in a geometry level, that is, we apply a transformation to the quad for the texture in
  * the geometry shader before drawing it to the screen, leaving the rest unchanged.
- * The relative_scale param behaves in the same way as the Bounds_t scale_mod, that is, 0 being the default and any value other than 0
- * being a mod to the original value, e.g. a relative_scale of 0.5 is the same as 1.5 of the original scale, in other words, bigger than the default.
- * A negative value yields a smaller final scale.
- * Original scale in this case means whatever scale_mod the texture this is being applied to has in their Bounds
- * from_scale and to_scale only exist because this API is a mess and it's used as interpolation values by the animation
+ * The relative_scale param behaves in the same way as the Bounds_t scale_mod, that is, 0 being the default and any value other
+ * than 0 being a mod to the original value, e.g. a relative_scale of 0.5 is the same as 1.5 of the original scale, in other
+ * words, bigger than the default. A negative value yields a smaller final scale. Original scale in this case means whatever
+ * scale_mod the texture this is being applied to has in their Bounds from_scale and to_scale only exist because this API is a
+ * mess and it's used as interpolation values by the animation
  */
 typedef struct ScaleRegionOpt_t {
     float x0_perc, x1_perc;
@@ -238,19 +235,18 @@ typedef struct Background_t {
 } Background_t;
 
 /**
- * Initializes the rendering backend with the creation of a window (in case of a desktop build), an OpenGL context and initialization
- * of various settings and parameters.
- * This function will abort on error so it's not possible to programmatically check if it succeeded or not, other than that the
- * program flow continues past the point of calling it.
- * After it returns, it's safe to call any other associated functions on it.
- * It's not recommended (and this applies to the renderer in general, not just this one function) to call any of the render_* functions
- * on threads other than the main one. No synchronization is in place and some of these calls modify internal render state (blend mode,
- * render targets, etc) that will cause weird behavior if called concurrently.
+ * Initializes the rendering backend with the creation of a window (in case of a desktop build), an OpenGL context and
+ * initialization of various settings and parameters. This function will abort on error so it's not possible to programmatically
+ * check if it succeeded or not, other than that the program flow continues past the point of calling it. After it returns, it's
+ * safe to call any other associated functions on it. It's not recommended (and this applies to the renderer in general, not just
+ * this one function) to call any of the render_* functions on threads other than the main one. No synchronization is in place and
+ * some of these calls modify internal render state (blend mode, render targets, etc) that will cause weird behavior if called
+ * concurrently.
  */
 void render_init(void);
 /**
- * Cleans up all resources taken up by the renderer. It's only expected to be ran once in the program lifetime, as the renderer is not
- * meant to be destroyed and reconstructed on each scene/screen change.
+ * Cleans up all resources taken up by the renderer. It's only expected to be ran once in the program lifetime, as the renderer is
+ * not meant to be destroyed and reconstructed on each scene/screen change.
  */
 void render_finish(void);
 /**
@@ -282,7 +278,8 @@ const Bounds_t *render_get_viewport(void);
 /**
  * Returns the pixel scale of the reported screen size relative to the actual pixel framebuffer we can draw to.
  * This is mostly because on mac OS, mouse events are reported in "whole" pixels while the framebuffer itself, in retina displays,
- * usually count every pixel as 2, so any calculations regarding if the mouse cursor is at a certain place on the screen is always off.
+ * usually count every pixel as 2, so any calculations regarding if the mouse cursor is at a certain place on the screen is always
+ * off.
  */
 double render_get_pixel_scale(void);
 /**
@@ -292,7 +289,8 @@ void render_set_window_title(const char *title);
 /**
  * Sample 5 colors from the given raw image data to be used in background effects.
  * Supported image types: JPEG, PNG
- * For effects that use less than 5 colors (static gradient, dynamic gradient, solid color), the first N colors will be used from this sample
+ * For effects that use less than 5 colors (static gradient, dynamic gradient, solid color), the first N colors will be used from
+ * this sample
  */
 void render_sample_bg_colors_from_image(const unsigned char *bytes, int length, Color_t colors[5]);
 /**
@@ -308,8 +306,8 @@ BlendMode_t render_get_blend_mode(void);
  */
 Color_t render_color_parse(uint32_t color);
 /**
- * Darkens a given color by a given amount in the range of 0 to 1, e.g. 0.2 darkens a color by 20%, or the equivalent of multiplying
- * all color channels by 0.8
+ * Darkens a given color by a given amount in the range of 0 to 1, e.g. 0.2 darkens a color by 20%, or the equivalent of
+ * multiplying all color channels by 0.8
  */
 Color_t render_color_darken(Color_t color, double amount);
 /**
@@ -346,14 +344,13 @@ Texture_t *render_make_null(void);
 Texture_t *render_make_empty(int32_t width, int32_t height);
 /**
  * Creates a texture of the given text string using the provided font, font size and color.
- * The resulting texture is exactly the size it needs to contain the final bitmap and no centering, alignment or wrapping is performed
- * in the renderer.
+ * The resulting texture is exactly the size it needs to contain the final bitmap and no centering, alignment or wrapping is
+ * performed in the renderer.
  */
 Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t *color, FontType_t font_type);
 /**
- * Creates a texture from raw image data, optionally assigning a border radius to the texture directly (but it's not a feature exclusive
- * to images).
- * Supported image formats: JPEG, PNG
+ * Creates a texture from raw image data, optionally assigning a border radius to the texture directly (but it's not a feature
+ * exclusive to images). Supported image formats: JPEG, PNG
  */
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
 /**
@@ -362,14 +359,13 @@ Texture_t *render_make_image(const unsigned char *bytes, int length, double bord
  */
 Texture_t *render_make_dummy_image(double border_radius_em);
 /**
- * Creates a shadow texture based on the provided texture, which by adding the additional padding so the blur looks better will always
- * be larger than the original texture.
- * The shadow is first created by making a completely black version of the same texture, applying blur to it with some alpha blending
- * and then erasing the part of the original texture that would/will sit on top of the shadow. This is calculated using the provided offset,
- * so if the shadow is later drawn at a different offset, it'll probably show transparent parts.
- * It's probably useful if we have an option to do this erase part or not based on a parameter.
- * The texture itself is not modified but render_draw_texture needs a non-const pointer to the texture because it may need to reconfigure
- * the cached attributes inside the texture (see Texture_t and render_draw_texture for more information).
+ * Creates a shadow texture based on the provided texture, which by adding the additional padding so the blur looks better will
+ * always be larger than the original texture. The shadow is first created by making a completely black version of the same
+ * texture, applying blur to it with some alpha blending and then erasing the part of the original texture that would/will sit on
+ * top of the shadow. This is calculated using the provided offset, so if the shadow is later drawn at a different offset, it'll
+ * probably show transparent parts. It's probably useful if we have an option to do this erase part or not based on a parameter.
+ * The texture itself is not modified but render_draw_texture needs a non-const pointer to the texture because it may need to
+ * reconfigure the cached attributes inside the texture (see Texture_t and render_draw_texture for more information).
  */
 Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, int32_t offset);
 /**
@@ -383,35 +379,35 @@ void render_destroy_texture(Texture_t *texture);
 /**
  * Creates a texture render target with the given width and height.
  * The provided dimensions will be the final size of the resulting texture.
- * Any draw operations called between this function call and render_restore_texture_target will be drawn to *A* render target instead of
- * the framebuffer.
- * Texture render targets can be accumulated and the most recent call to this function will set the active target to be drawn to.
+ * Any draw operations called between this function call and render_restore_texture_target will be drawn to *A* render target
+ * instead of the framebuffer. Texture render targets can be accumulated and the most recent call to this function will set the
+ * active target to be drawn to.
  */
 const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
 /**
- * Restores the currently active render target, or aborts with an error if no target is active (i.e., we're currently drawing to the framebuffer.
- * it's arguably better to return an error code, but if this situation ever happens it's something that needs to be resolved in the application code
- * so it's better to be pretty explicit about this one case).
- * If a render target was already active when another one was created, it is saved and restored when this function is called, so that render targets can
- * stack on top of each other.
- * This function also returns the texture associated with the created framebuffer, which must be freed separately.
+ * Restores the currently active render target, or aborts with an error if no target is active (i.e., we're currently drawing to
+ * the framebuffer. it's arguably better to return an error code, but if this situation ever happens it's something that needs to
+ * be resolved in the application code so it's better to be pretty explicit about this one case). If a render target was already
+ * active when another one was created, it is saved and restored when this function is called, so that render targets can stack on
+ * top of each other. This function also returns the texture associated with the created framebuffer, which must be freed
+ * separately.
  */
 Texture_t *render_restore_texture_target(void);
 /**
- * Draws a rounded rect to the screen, using the bounds parameter as both location and dimension parameters, using the given color and border radius.
- * A null texture (created using render_make_null) is needed because a vertex array object and buffer object are pre-computed for the given dimensions
- * for performance and the null texture, even if it doesn't actually point to a texture uploaded to the GPU, helps keep track of this information.
- * This draw function is subject to the currently active render target and behaves the same as render_draw_texture in that regard.
+ * Draws a rounded rect to the screen, using the bounds parameter as both location and dimension parameters, using the given color
+ * and border radius. A null texture (created using render_make_null) is needed because a vertex array object and buffer object
+ * are pre-computed for the given dimensions for performance and the null texture, even if it doesn't actually point to a texture
+ * uploaded to the GPU, helps keep track of this information. This draw function is subject to the currently active render target
+ * and behaves the same as render_draw_texture in that regard.
  */
 void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius);
 /**
- * Draws a texture to the currently active render target (which can be a texture render target, or the framebuffer itself), using the provided options.
- * Bounds specifies the location and size the texture is to be drawn to/as, and upon change in dimensions the pre-computed vertex array object and
- * buffer object can be reconfigured.
- * The texture itself is not changed, but because of the procedure described above, cached values for the dimensions as well as the vertex objects
- * themselves may suffer changes.
- * All options are non-destructive and only affect how the texture is drawn to the target, not changing the original data in the texture uploaded to
- * GPU memory.
+ * Draws a texture to the currently active render target (which can be a texture render target, or the framebuffer itself), using
+ * the provided options. Bounds specifies the location and size the texture is to be drawn to/as, and upon change in dimensions
+ * the pre-computed vertex array object and buffer object can be reconfigured. The texture itself is not changed, but because of
+ * the procedure described above, cached values for the dimensions as well as the vertex objects themselves may suffer changes.
+ * All options are non-destructive and only affect how the texture is drawn to the target, not changing the original data in the
+ * texture uploaded to GPU memory.
  */
 void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts);
 

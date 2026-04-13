@@ -1306,6 +1306,23 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     }
     width = (int)(width * (double)scale);
 
+    // Add some padding on characters that have a left bearing (e.g. J) so it doesn't cut off too abruptly
+    int left_pad = 0;
+    {
+        int32_t first_i = 0;
+        const int32_t first_c = str_u8_next(text, len, &first_i);
+        if ( first_c >= 0 ) {
+            int bx0;
+            stbtt_GetCodepointBitmapBoxSubpixel(font, first_c, scale, scale, 0, 0, &bx0, NULL, NULL, NULL);
+            if ( bx0 < 0 )
+                left_pad = -bx0;
+        }
+    }
+    // Add 1 pixel for good measure
+    if ( left_pad > 0 )
+        left_pad++;
+    width += left_pad;
+
     unsigned char *bitmap = calloc(1, width * height);
 
     double x = 0;
@@ -1331,7 +1348,7 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
         unsigned char *char_bitmap = stbtt_GetCodepointBitmapSubpixel(font, 0, scale, 0, 0, c, &c_w, &c_h, &c_xoff, &c_yoff);
 
         if ( char_bitmap ) {
-            const int target_x = (int)x + c_xoff;
+            const int target_x = (int)x + c_xoff + left_pad;
             const int target_y = baseline + c_yoff;
 
             for ( int y = 0; y < c_h; ++y ) {
@@ -1382,6 +1399,7 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
 
     free(rgba);
     texture->id = texture_id;
+    texture->left_bearing_offset = left_pad;
 
     return texture;
 }
@@ -1528,7 +1546,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     const float w = (float)(at->w == 0 ? (float)texture->width : at->w) * scale;
     const float h = (float)(at->w == 0 ? (float)texture->height : at->h) * scale;
 
-    double x = at->x, y = at->y;
+    double x = at->x - (double)texture->left_bearing_offset, y = at->y;
     if ( scale != 1.f && opts->center_on_scale ) {
         x -= (w - original_w) / 2.f;
         y -= (h - original_h) / 2.f;
@@ -1611,10 +1629,18 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindVertexArray(texture->vao);
     glBindBuffer(GL_ARRAY_BUFFER, texture->vbo);
 
-    const Bounds_t final_bounds = {.x = x, .y = y, .w = (int32_t)w, .h = (int32_t)h};
+    // Pad the texture when blur is active so we get a smoother fade at the edges
+    const float blur_pad = (blur_radius > 0.f && border_radius == 0.f) ? blur_radius * 4.0f : 0.f;
+    const Bounds_t final_bounds = {
+        .x = x - blur_pad, .y = y - blur_pad, .w = (int32_t)(w + 2.f * blur_pad), .h = (int32_t)(h + 2.f * blur_pad)};
     if ( texture_needs_reconfigure(texture, &final_bounds) ) {
         float vertices[QUAD_VERTICES_SIZE] = {0};
-        create_quad_vertices((float)x, (float)y, w, h, vertices);
+        if ( blur_pad > 0.f ) {
+            create_quad_vertices_with_uv((float)(x - blur_pad), (float)(y - blur_pad), w + 2.f * blur_pad, h + 2.f * blur_pad,
+                                         -blur_pad / w, -blur_pad / h, 1.f + blur_pad / w, 1.f + blur_pad / h, vertices);
+        } else {
+            create_quad_vertices((float)x, (float)y, w, h, vertices);
+        }
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
         mark_texture_configured(texture, &final_bounds);
     }
