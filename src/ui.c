@@ -728,17 +728,21 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
 
     if ( animation->elapsed <= animation->delay ) {
         final_bounds->y = data->from_y;
+        final_bounds->x = data->from_x;
         return;
     }
     double progress = (animation->elapsed - animation->delay) / animation->duration;
 
-    // TODO: Animate the x axis too
     if ( progress < 1.0 ) {
         progress = apply_ease_func(progress, animation->ease_func);
         const double y_delta = data->to_y - data->from_y;
-        if ( fabs(y_delta) > 0.01 ) {
+        if ( fabs(y_delta) > 0.01 )
             final_bounds->y = data->from_y + y_delta * progress;
-        }
+
+        const double x_delta = data->to_x - data->from_x;
+        if ( fabs(x_delta) > 0.01 )
+            final_bounds->x = data->from_x + x_delta * progress;
+
     } else {
         animation->active = false;
     }
@@ -3105,6 +3109,10 @@ ToggleWidget_t *ui_build_toggle_widget(Ui_t *ui, Container_t *parent, const Layo
 
     toggle_widget_reconfigure(widget);
     widget->entry_id = ui_register_widget(parent, toggle_widget_reconfigure, toggle_widget_destroy, widget);
+
+    // Add animation after the first reconfigure so it doesn't animate the initial positioning
+    const Animation_EaseTranslationData_t fg_translation_data = {.duration = 0.1, .ease_func = ANIM_EASE_OUT_CUBIC};
+    ui_animate_translation(widget->d_foreground, &fg_translation_data);
 
     return widget;
 }
