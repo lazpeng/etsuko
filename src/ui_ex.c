@@ -420,6 +420,32 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
     return result;
 }
 
+static void set_default_language(LyricsView_t *view) {
+    const Song_Language_t *language = NULL;
+    const LyricLanguageSetting_t preference = settings_get()->lyric_language;
+    for ( size_t i = 0; i < view->song->languages->size; i++ ) {
+        const Song_Language_t *current = view->song->languages->data[i];
+        if ( current->is_default && preference == SET_LYRIC_LANGUAGE_PREFER_ORIGINAL ) {
+            language = current;
+            break;
+        }
+        // Set the first translated option as the target
+        if ( current->is_default == false && preference == SET_LYRIC_LANGUAGE_PREFER_TRANSLATED ) {
+            language = current;
+            break;
+        }
+    }
+
+    if ( language == NULL ) {
+        printf("Warning: Unable to set default language based on settings.\n");
+        if ( view->song->languages->size == 0 )
+            error_abort("No languages set in song");
+        language = view->song->languages->data[0];
+    }
+
+    ui_ex_lyrics_view_set_language(view, language->language);
+}
+
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
     if ( parent == NULL ) {
         error_abort("Parent container is NULL");
@@ -444,7 +470,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         Song_Language_t *language = song->languages->data[i];
         make_lyrics_language(ui, view, language);
     }
-    ui_ex_lyrics_view_set_language(view, song->language);
+    set_default_language(view);
 
     ensure_read_hints_initialized(ui, view);
 

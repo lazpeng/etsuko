@@ -3278,6 +3278,17 @@ void ui_widget_toggle_enabled(const ToggleWidget_t *widget, const bool enabled) 
     }
 }
 
+void ui_widget_toggle_selected(ToggleWidget_t *widget, const int selected) {
+    if ( selected == widget->active_index )
+        return;
+
+    if ( selected >= (int32_t)widget->option_hitboxes->size )
+        error_abort("Error: ui_widget_toggle_selected: selected index is larger than number of options");
+
+    widget->active_index = selected;
+    toggle_widget_reconfigure(widget);
+}
+
 void ui_widget_button_set_image(const ButtonWidget_t *widget, const unsigned char *bytes, const int length) {
     if ( widget->d_image == NULL )
         error_abort("ui_widget_button_set_image: button was not built with BUTTON_CONTENT_IMAGE");

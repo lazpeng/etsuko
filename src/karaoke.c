@@ -457,6 +457,18 @@ static void setup_background(const Karaoke_t *state) {
     }
 }
 
+static void update_lyric_language_toggle(const Karaoke_t *state) {
+    const bool original = settings_get()->lyric_language == SET_LYRIC_LANGUAGE_PREFER_ORIGINAL;
+
+    for ( size_t i = 0; i < song_get()->languages->size; i++ ) {
+        const Song_Language_t *language = song_get()->languages->data[i];
+        if ( language->is_default == original ) {
+            ui_widget_toggle_selected(state->drawables.language_toggle, (int)i);
+            ui_ex_lyrics_view_set_language(state->drawables.lyrics_view, language->language);
+        }
+    }
+}
+
 void karaoke_setup(Karaoke_t *state) {
     if ( state->ui != NULL ) {
         ui_finish(state->ui);
@@ -647,6 +659,7 @@ void karaoke_setup(Karaoke_t *state) {
     }
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
+    update_lyric_language_toggle(state);
 
     if ( config_get()->settings.show_settings ) {
         const Layout_t layout = {
@@ -724,6 +737,8 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
         return APP_STATUS_FAILURE;
     audio_loop();
 
+    const LyricLanguageSetting_t old_setting = settings_get()->lyric_language;
+
     ui_begin_loop(state->ui);
     // Recalculate dynamic elements
     update_elapsed_text(state);
@@ -741,6 +756,10 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     ui_draw(state->ui);
     ui_end_loop();
     settings_on_frame_end(state->ui);
+
+    if ( old_setting != settings_get()->lyric_language ) {
+        update_lyric_language_toggle(state);
+    }
 
     global_update();
     return APP_STATUS_OK;
