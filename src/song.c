@@ -461,7 +461,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
         Song_Language_t *lang = g_song->languages->data[i];
         for ( size_t j = 0; j < lang->temp_readings->size; j++ ) {
             char *line = lang->temp_readings->data[j];
-            read_readings(lang, line, (int32_t)strlen(line), (int32_t)i);
+            read_readings(lang, line, (int32_t)strlen(line), (int32_t)j);
             free(line);
         }
         vec_destroy(lang->temp_readings);
