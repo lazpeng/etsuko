@@ -2977,9 +2977,8 @@ static void toggle_widget_reconfigure(void *widget_data) {
 
     const double padding = prev->bounds.h;
     const double final_text_width = end_x + end_w - start_x;
-    const double final_width = final_text_width + padding;
     const double extra_height = prev->bounds.h * 0.5;
-    result->d_anchor->bounds.w = final_width;
+    result->d_anchor->bounds.w = final_text_width;
     result->d_anchor->bounds.h = prev->bounds.h + extra_height;
     ui_reposition_drawable(result->d_anchor);
 
