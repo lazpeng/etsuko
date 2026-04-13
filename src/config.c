@@ -37,7 +37,7 @@ static Config_t *get_default_config(void) {
         return NULL;
     }
     config->lyrics_font = strdup("NotoSans_ExtraCondensed-Bold.ttf");
-    config->ui_font = strdup("NotoSans-Regular.ttf");
+    config->ui_font = strdup("NotoSansJP-Regular.ttf");
     config->op_mode = APP_MODE_MENU;
     config->time_scale = 1.0;
     config->karaoke = (KaraokeOpts_t) {
