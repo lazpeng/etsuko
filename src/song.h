@@ -65,13 +65,18 @@ typedef struct Song_Language_t {
     OWNING Vector_t *lines; // of Song_Line_t*
     OWNING Vector_t *temp_readings; // of const char *
     bool is_default;
+    // Whether the lyric language has reading hints
+    bool has_reading_info;
+    // Whether the song has timed lyrics at all
+    bool has_timings;
+    // Whether the song has segment timings (parts of the same line)
+    bool has_sub_timings;
 } Song_Language_t;
 
 // The actual song definition and options
 typedef struct Song_t {
     OWNING char *name, *translated_name, *artist, *album;
     int year;
-    OWNING Vector_t *lyrics_lines; // of Song_Line_t
     OWNING Vector_t *languages;
     OWNING char *id;
     OWNING char *file_path, *album_art_path;
@@ -87,12 +92,6 @@ typedef struct Song_t {
     // Override of a font file to be used for the lyrics in particular
     OWNING char *font_override;
     Song_BgType_t bg_type;
-    // Whether the song has timed lyrics at all
-    bool has_timings;
-    // Whether the song has segment timings (parts of the same line)
-    bool has_sub_timings;
-    // Whether the song has reading hints
-    bool has_reading_info;
     /**
      * When this is enabled, add a single sub-timing with the same duration as the line itself when none is provided.
      * This enables some of the dynamic fill options to work (linear will, full-word won't)

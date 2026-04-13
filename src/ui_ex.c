@@ -37,37 +37,37 @@
 #define LINE_BLUR_FACTOR (1.f)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
-    const Song_Line_t *line = view->song->lyrics_lines->data[index];
+    const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
     return str_is_empty(line->full_text) && line->base_duration > 5;
 }
 
 static void reposition_hint_for_line(const LyricsView_t *view, const int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        Drawable_t *hint = view->line_read_hints->data[index];
+    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
+        Drawable_t *hint = view->selected_language->line_read_hints->data[index];
         ui_reposition_drawable(hint);
     }
 }
 
 static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        const Drawable_t *drawable = view->line_drawables->data[index];
-        Drawable_t *hint = view->line_read_hints->data[index];
+    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
+        const Drawable_t *drawable = view->selected_language->line_drawables->data[index];
+        Drawable_t *hint = view->selected_language->line_read_hints->data[index];
         ui_drawable_set_scale_factor(hint, 1.f + (float)drawable->bounds.scale_mod);
     }
 }
 
 static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        const Drawable_t *drawable = view->line_drawables->data[index];
-        Drawable_t *hint = view->line_read_hints->data[index];
+    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
+        const Drawable_t *drawable = view->selected_language->line_drawables->data[index];
+        Drawable_t *hint = view->selected_language->line_read_hints->data[index];
         ui_drawable_set_alpha(hint, drawable->alpha_mod);
     }
 }
 
 static void blur_hint_for_line(const LyricsView_t *view, const int32_t index) {
-    if ( index < (int32_t)view->line_read_hints->size ) {
-        const Drawable_t *drawable = view->line_drawables->data[index];
-        Drawable_t *hint = view->line_read_hints->data[index];
+    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
+        const Drawable_t *drawable = view->selected_language->line_drawables->data[index];
+        Drawable_t *hint = view->selected_language->line_read_hints->data[index];
         hint->blur_radius = drawable->blur_radius;
     }
 }
@@ -80,8 +80,8 @@ typedef struct ReadingEntry_t {
 static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
     const bool place_hints_under_segment = config_get()->karaoke.position_hints_under_segment;
     const double hint_padding = view->container->bounds.w * 0.005;
-    for ( int32_t i = 0; i < (int32_t)view->line_read_hints->size; i++ ) {
-        Drawable_t *hint = view->line_read_hints->data[i];
+    for ( int32_t i = 0; i < (int32_t)view->selected_language->line_read_hints->size; i++ ) {
+        Drawable_t *hint = view->selected_language->line_read_hints->data[i];
 
         if ( hint->pending_recompute ) {
             if ( hint->texture != NULL ) {
@@ -89,7 +89,7 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
                 hint->texture = NULL;
             }
 
-            const Drawable_t *drawable = view->line_drawables->data[i];
+            const Drawable_t *drawable = view->selected_language->line_drawables->data[i];
             const Drawable_TextData_t *lyric_data = drawable->custom_data;
             if ( lyric_data->line_offsets == NULL )
                 continue;
@@ -97,7 +97,7 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
             const int pixels = render_measure_pixels_from_em(0.8);
             const Color_t white = {255, 255, 255, 255};
 
-            const Song_Line_t *line = view->song->lyrics_lines->data[i];
+            const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
 
             Vector_t *entries = vec_init();
             double max_w = 0, max_h = 0;
@@ -178,9 +178,10 @@ static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
 }
 
 static double get_line_vertical_padding(const LyricsView_t *view) {
-    const bool has_hints = view->song->has_reading_info && config_get()->karaoke.enable_reading_hints;
+    const bool enabled_in_config = config_get()->karaoke.enable_reading_hints;
+    const bool has_hints = view->selected_language->song_language->has_reading_info;
 
-    return has_hints ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
+    return has_hints && enabled_in_config ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
 }
 
 static float get_inactive_line_scale() {
@@ -205,8 +206,8 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void 
     LyricsView_t *view = custom_data;
 
     int32_t index = -1;
-    for ( size_t i = 0; i < view->line_drawables->size; i++ ) {
-        const Drawable_t *i_d = view->line_drawables->data[i];
+    for ( size_t i = 0; i < view->selected_language->line_drawables->size; i++ ) {
+        const Drawable_t *i_d = view->selected_language->line_drawables->data[i];
         if ( i_d == drawable ) {
             index = (int32_t)i;
             break;
@@ -216,18 +217,18 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void 
         error_abort("on_line_event: could not find the index of the hovered line drawable");
 
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-        view->current_hovered_index = index;
+        view->selected_language->current_hovered_index = index;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        view->current_hovered_index = -1;
+        view->selected_language->current_hovered_index = -1;
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
-        const Song_Line_t *line = view->song->lyrics_lines->data[index];
+        const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
         audio_seek(line->base_start_time);
     }
 }
 
 static void toggle_hints_visibility(const LyricsView_t *view) {
-    for ( size_t i = 0; i < view->line_read_hints->size; i++ ) {
-        Drawable_t *hint = view->line_read_hints->data[i];
+    for ( size_t i = 0; i < view->selected_language->line_read_hints->size; i++ ) {
+        Drawable_t *hint = view->selected_language->line_read_hints->data[i];
         hint->enabled = !hint->enabled;
     }
 }
@@ -239,53 +240,38 @@ static void on_key_pressed(const UiEventOpts_t *opt, Drawable_t *, void *custom_
     }
 }
 
-LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
-    if ( parent == NULL ) {
-        error_abort("Parent container is NULL");
-    }
-
-    if ( song == NULL ) {
-        error_abort("Song is NULL");
-    }
-
-    LyricsView_t *view = calloc(1, sizeof(*view));
-    view->container = parent;
-    view->song = song;
-    view->line_drawables = vec_init();
-    view->line_read_hints = vec_init();
-    view->current_hovered_index = -1;
-    view->current_first_active_index = -1;
-
-    // Setup container for scrolling
-    view->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.6};
-    ui_container_add_vertical_scrollbar(ui, view->container, SCROLL_BAR_AUTO_HIDE);
-    ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
-
-    ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
-
-    const bool should_generate_reading_hints = song->has_reading_info && config_get()->karaoke.enable_reading_hints;
-
-    if ( song->lyrics_lines->size == 0 ) {
+static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song_Language_t *language) {
+    if ( language->lines->size == 0 ) {
         error_abort("Song has no lyrics");
     }
 
+    LyricsLanguage_t *result = calloc(1, sizeof (*result));
+    result->song_language = language;
+    result->line_drawables = vec_init();
+    result->line_read_hints = vec_init();
+    result->language_str = strdup(language->language);
+
+    vec_add(view->lyrics_languages, result);
+    ui_ex_lyrics_view_set_language(view, result->language_str);
+
+    const bool should_generate_reading_hints = language->has_reading_info && config_get()->karaoke.enable_reading_hints;
     const Color_t color = {.r = 255, .b = 255, .g = 255, .a = 255};
 
     DrawableAlignment_t base_alignment = ALIGN_LEFT;
     LayoutFlags_t base_alignment_flags = LAYOUT_NONE;
     double base_offset_x = 0;
-    if ( song->line_alignment == SONG_LINE_CENTER ) {
+    if ( view->song->line_alignment == SONG_LINE_CENTER ) {
         base_alignment = ALIGN_CENTER;
         base_alignment_flags = LAYOUT_CENTER_X;
-    } else if ( song->line_alignment == SONG_LINE_RIGHT ) {
+    } else if ( view->song->line_alignment == SONG_LINE_RIGHT ) {
         base_alignment = ALIGN_RIGHT;
         base_alignment_flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_WRAP_AROUND_X | LAYOUT_PROPORTIONAL_X;
         base_offset_x = LINE_RIGHT_ALIGN_PADDING;
     }
 
     Drawable_t *prev = NULL;
-    for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
-        const Song_Line_t *line = song->lyrics_lines->data[i];
+    for ( size_t i = 0; i < language->lines->size; i++ ) {
+        const Song_Line_t *line = language->lines->data[i];
 
         char *line_text = line->full_text;
         if ( line_text == NULL ) {
@@ -305,7 +291,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         LayoutFlags_t alignment_flags = base_alignment_flags;
         double offset_x = base_offset_x;
         // line override
-        if ( line->alignment != song->line_alignment ) {
+        if ( line->alignment != view->song->line_alignment ) {
             if ( line->alignment == SONG_LINE_CENTER ) {
                 alignment = ALIGN_CENTER;
                 alignment_flags = LAYOUT_CENTER_X;
@@ -321,7 +307,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
             }
         }
 
-        const double lyrics_em = song->has_timings ? 2.5 : 1.5;
+        const double lyrics_em = language->has_timings ? 2.5 : 1.5;
         const double line_padding = should_generate_reading_hints ? TEXT_LINE_PADDING_WITH_READINGS : 0;
         Drawable_TextData_t data = {.text = line_text,
                                     .font_type = FONT_LYRICS,
@@ -332,7 +318,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                     .line_padding_em = line_padding,
                                     .alignment = alignment,
                                     .draw_shadow = config_get()->karaoke.draw_lyric_shadow,
-                                    .compute_offsets = song->has_sub_timings || song->has_reading_info};
+                                    .compute_offsets = language->has_sub_timings || language->has_reading_info};
         const double vertical_padding = get_line_vertical_padding(view);
         const Layout_t layout = {
             .offset_y = prev == NULL ? LINE_FIRST_VERTICAL_OFFSET : vertical_padding,
@@ -340,12 +326,12 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
             .relative_to = prev,
         };
-        prev = ui_make_text(ui, &data, parent, &layout);
-        vec_add(view->line_drawables, prev);
-        view->line_states[i] = LINE_NONE;
+        prev = ui_make_text(ui, &data, view->container, &layout);
+        vec_add(result->line_drawables, prev);
+        result->line_states[i] = LINE_NONE;
 
         // Set events
-        if ( song->has_timings ) {
+        if ( language->has_timings ) {
             ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, prev, on_line_event, view);
             ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, prev, on_line_event, view);
             ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
@@ -371,19 +357,19 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
 
         if ( should_generate_reading_hints ) {
             Drawable_t *hint = ui_make_custom(
-                ui, parent,
+                ui, view->container,
                 &(Layout_t){
                     .offset_x = 0, .offset_y = 0, .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y, .relative_to = prev});
             ui_animate_fade(hint,
                             &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_scale(hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
 
-            vec_add(view->line_read_hints, hint);
+            vec_add(result->line_read_hints, hint);
         }
     }
 
-    if ( !str_is_empty(song->credits) && prev != NULL ) {
-        view->credit_separator =
+    if ( !str_is_empty(view->song->credits) && prev != NULL ) {
+        result->credit_separator =
             ui_make_rectangle(ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}}, view->container,
                               &(Layout_t){.offset_y = 0.02 + get_line_vertical_padding(view),
                                           .offset_x = 0,
@@ -392,10 +378,10 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                                           .flags = LAYOUT_PROPORTIONAL_W | LAYOUT_RELATIVE_TO_Y |
                                                    LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
                                           .relative_to = prev});
-        ui_animate_translation(view->credit_separator,
+        ui_animate_translation(result->credit_separator,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
 
-        view->credits_prefix =
+        result->credits_prefix =
             ui_make_text(ui,
                          &(Drawable_TextData_t){.text = "Written by: ",
                                                 .draw_shadow = true,
@@ -406,15 +392,15 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                          view->container,
                          &(Layout_t){.offset_y = 0.01,
                                      .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
-                                     .relative_to = view->credit_separator});
-        ui_drawable_set_alpha_immediate(view->credits_prefix, 150);
-        ui_animate_translation(view->credits_prefix,
+                                     .relative_to = result->credit_separator});
+        ui_drawable_set_alpha_immediate(result->credits_prefix, 150);
+        ui_animate_translation(result->credits_prefix,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_blur(view->credits_prefix, &(Animation_BlurRadiusData_t){.duration = 0.3});
+        ui_animate_blur(result->credits_prefix, &(Animation_BlurRadiusData_t){.duration = 0.3});
 
-        view->credits_content =
+        result->credits_content =
             ui_make_text(ui,
-                         &(Drawable_TextData_t){.text = song->credits,
+                         &(Drawable_TextData_t){.text = view->song->credits,
                                                 .draw_shadow = true,
                                                 .em = 0.8,
                                                 .font_type = FONT_UI,
@@ -424,12 +410,41 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                          &(Layout_t){.offset_y = 0,
                                      .offset_x = 0.001,
                                      .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_PROPORTIONAL_POS,
-                                     .relative_to = view->credits_prefix});
-        ui_drawable_set_alpha_immediate(view->credits_prefix, 200);
-        ui_animate_translation(view->credits_content,
+                                     .relative_to = result->credits_prefix});
+        ui_drawable_set_alpha_immediate(result->credits_prefix, 200);
+        ui_animate_translation(result->credits_content,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_blur(view->credits_content, &(Animation_BlurRadiusData_t){.duration = 0.3});
+        ui_animate_blur(result->credits_content, &(Animation_BlurRadiusData_t){.duration = 0.3});
     }
+
+    return result;
+}
+
+LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song) {
+    if ( parent == NULL ) {
+        error_abort("Parent container is NULL");
+    }
+
+    if ( song == NULL ) {
+        error_abort("Song is NULL");
+    }
+
+    LyricsView_t *view = calloc(1, sizeof(*view));
+    view->container = parent;
+    view->song = song;
+    view->lyrics_languages = vec_init();
+
+    // Setup container for scrolling
+    view->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.6};
+    ui_container_add_vertical_scrollbar(ui, view->container, SCROLL_BAR_AUTO_HIDE);
+    ui_container_animate_scroll_y(view->container, 0.1, ANIM_EASE_OUT_CUBIC);
+
+    ui_add_global_event_callback(ui, UI_EVENT_KEY_PRESSED, on_key_pressed, view);
+    for ( size_t i = 0; i < song->languages->size; i++ ) {
+        Song_Language_t *language = song->languages->data[i];
+        make_lyrics_language(ui, view, language);
+    }
+    ui_ex_lyrics_view_set_language(view, song->language);
 
     ensure_read_hints_initialized(ui, view);
 
@@ -448,7 +463,7 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
             end = prev_active;
         }
         for ( int32_t i = start; i < end; i++ ) {
-            const Song_Line_t *line = view->song->lyrics_lines->data[i];
+            const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
             if ( str_is_empty(line->full_text) ) {
                 distance -= 1;
             }
@@ -484,11 +499,11 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
     // TODO: Clear fill for past lines when scrolling backwards
     for ( int32_t s = 0; s < line->num_timings; s++ ) {
-        if ( view->active_line_segment_visited[s] ) {
+        if ( view->selected_language->active_line_segment_visited[s] ) {
             const Song_LineTiming_t *timing = &line->timings[s];
             const double start_time = line->base_start_time + timing->cumulative_duration;
             if ( audio_elapsed < start_time ) {
-                view->active_line_segment_visited[s] = 0;
+                view->selected_language->active_line_segment_visited[s] = 0;
             }
         }
     }
@@ -549,7 +564,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                 duration = duration_per_character * segment_length_in_current_line;
             }
 
-            const bool segment_visited = view->active_line_segment_visited[s] & (1 << i);
+            const bool segment_visited = view->selected_language->active_line_segment_visited[s] & (1 << i);
 
             const bool pulse_enabled_in_settings = config_get()->karaoke.enable_pulse_effect;
             const bool pulse_enabled_in_config = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_EFFECT;
@@ -576,7 +591,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
                 const double down_duration = MAX(duration - SCALE_REGION_UP_DURATION, SCALE_REGION_DOWN_MIN_DURATION);
                 const AnimatedSetOpts_t down_anim_opts = {.duration = down_duration, .apply_type = ANIM_APPLY_SEQUENTIAL};
                 ui_drawable_add_scale_region_dur(drawable, &region, down_anim_opts);
-                view->active_line_segment_visited[s] |= (1 << i);
+                view->selected_language->active_line_segment_visited[s] |= (1 << i);
             }
 
             x1 += (float)segment_fill_contribution;
@@ -598,7 +613,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 }
 
 static void set_line_active(LyricsView_t *view, const int32_t index) {
-    Drawable_t *drawable = view->line_drawables->data[index];
+    Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     drawable->enabled = true;
     ui_drawable_set_blur_radius_immediate(drawable, 0.f);
@@ -609,30 +624,30 @@ static void set_line_active(LyricsView_t *view, const int32_t index) {
     fade_hint_for_line(view, index);
     blur_hint_for_line(view, index);
 
-    const Song_Line_t *line = view->song->lyrics_lines->data[index];
+    const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
 
     const LineState_t new_state = LINE_ACTIVE;
-    if ( view->line_states[index] != new_state ) {
-        view->line_states[index] = new_state;
+    if ( view->selected_language->line_states[index] != new_state ) {
+        view->selected_language->line_states[index] = new_state;
 
         // Clear visited for the current line
         for ( int i = 0; i < MAX_TIMINGS_PER_LINE; i++ ) {
-            view->active_line_segment_visited[i] = 0;
+            view->selected_language->active_line_segment_visited[i] = 0;
         }
 
-        if ( view->song->has_sub_timings && line->num_timings > 0 ) {
+        if ( view->selected_language->song_language->has_sub_timings && line->num_timings > 0 ) {
             ui_drawable_set_draw_underlay(drawable, true, calculate_alpha(0));
         }
     }
 
     const bool fill_enabled_in_settings = settings_get()->lyric_fill != SET_LYRIC_FILL_DISABLED;
-    if ( view->song->has_sub_timings && line->num_timings > 0 && fill_enabled_in_settings ) {
+    if ( view->selected_language->song_language->has_sub_timings && line->num_timings > 0 && fill_enabled_in_settings ) {
         calculate_sub_region_for_active_line(view, drawable, view->song, line);
     }
 }
 
 static void set_line_inactive(LyricsView_t *view, const int32_t index, const int32_t prev_active) {
-    Drawable_t *drawable = view->line_drawables->data[index];
+    Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     int32_t alpha = 200;
     float blur = 0.f;
@@ -648,7 +663,7 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     }
 
     // don't change the alpha if the user is hovering over the line
-    if ( view->current_hovered_index == index ) {
+    if ( view->selected_language->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
         ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         blur_hint_for_line(view, index);
@@ -664,9 +679,9 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     }
 
     const LineState_t new_state = LINE_INACTIVE;
-    if ( view->line_states[index] != new_state ) {
-        const LineState_t prev_state = view->line_states[index];
-        view->line_states[index] = new_state;
+    if ( view->selected_language->line_states[index] != new_state ) {
+        const LineState_t prev_state = view->selected_language->line_states[index];
+        view->selected_language->line_states[index] = new_state;
 
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
@@ -687,18 +702,18 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
 static double get_lyric_line_scroll_position(const LyricsView_t *view, const int32_t index) {
     if ( index >= 0 ) {
         const double base_position = LINE_FIRST_VERTICAL_OFFSET * view->container->bounds.h;
-        const Drawable_t *target = view->line_drawables->data[index];
+        const Drawable_t *target = view->selected_language->line_drawables->data[index];
         return target->bounds.y - base_position;
     }
     return 0;
 }
 
 static void set_line_hidden(LyricsView_t *view, const int32_t index) {
-    Drawable_t *drawable = view->line_drawables->data[index];
+    Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     const LineState_t new_state = LINE_HIDDEN;
-    if ( view->line_states[index] != new_state ) {
-        view->line_states[index] = new_state;
+    if ( view->selected_language->line_states[index] != new_state ) {
+        view->selected_language->line_states[index] = new_state;
 
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
@@ -707,7 +722,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     }
 
     const bool should_hide_past = settings_get()->past_language_visibility == SET_PAST_LYRICS_HIDE;
-    const int32_t comp_idx = view->current_first_active_index;
+    const int32_t comp_idx = view->selected_language->current_first_active_index;
     const double prev_scroll_pos = get_lyric_line_scroll_position(view, comp_idx);
     const double current_scroll_pos = view->container->overflow_y.set_amount;
     // Allow users to scroll up and see the past lyrics. if it's not scrolled, just fade to 0 as normal
@@ -716,13 +731,13 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
-        if ( view->current_active_index < 0 || is_line_intermission(view, view->current_active_index) ) {
+        if ( view->selected_language->current_active_index < 0 || is_line_intermission(view, view->selected_language->current_active_index) ) {
             distance = LINE_FADE_MAX_DISTANCE;
         } else {
-            distance = calculate_distance(view, index, view->current_active_index);
+            distance = calculate_distance(view, index, view->selected_language->current_active_index);
         }
         // Don't change the alpha if the user is hovering over the line
-        if ( view->current_hovered_index == index ) {
+        if ( view->selected_language->current_hovered_index == index ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
             ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         } else {
@@ -735,26 +750,26 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
 }
 
 static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
-    Drawable_t *drawable = view->line_drawables->data[index];
+    Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
-    if ( view->line_states[index] != new_state ) {
-        if ( view->line_states[index] == LINE_ACTIVE ) {
+    if ( view->selected_language->line_states[index] != new_state ) {
+        if ( view->selected_language->line_states[index] == LINE_ACTIVE ) {
             const int32_t alpha = calculate_alpha(1);
             ui_drawable_disable_draw_region(drawable);
             ui_drawable_set_draw_underlay(drawable, false, 0);
             ui_drawable_set_alpha(drawable, alpha);
             fade_hint_for_line(view, index);
         }
-        view->line_states[index] = new_state;
+        view->selected_language->line_states[index] = new_state;
     }
 }
 
 static void ensure_read_hints_visibility_setting(const LyricsView_t *view) {
-    if ( view->line_read_hints->size <= 0 )
+    if ( view->selected_language->line_read_hints->size <= 0 )
         return;
 
-    const Drawable_t *drawable = view->line_read_hints->data[0];
+    const Drawable_t *drawable = view->selected_language->line_read_hints->data[0];
     const bool currently_visible = drawable->enabled;
     const bool enabled_in_config = config_get()->karaoke.enable_reading_hints;
     const bool enabled_in_settings = settings_get()->read_hints_visibility == SET_READ_HINTS_SHOWN;
@@ -768,12 +783,12 @@ static void ensure_read_hints_visibility_setting(const LyricsView_t *view) {
 static void update_credits_blur(const LyricsView_t *view) {
     float blur_radius = 0.f;
     const bool config_blur_credits = config_get()->karaoke.blur_credits;
-    const int32_t last = (int32_t)view->song->lyrics_lines->size - 1;
-    const int32_t active = view->current_first_active_index;
+    const int32_t last = (int32_t)view->selected_language->song_language->lines->size - 1;
+    const int32_t active = view->selected_language->current_first_active_index;
     const bool before_last_line = active < last;
     bool scrolled_downwards = false;
     if ( active >= 0 ) {
-        const Drawable_t *line = view->line_drawables->data[active];
+        const Drawable_t *line = view->selected_language->line_drawables->data[active];
         const double threshold = line->bounds.y + line->bounds.h;
         const double amount = view->container->overflow_y.set_amount;
         scrolled_downwards = amount > threshold;
@@ -781,8 +796,8 @@ static void update_credits_blur(const LyricsView_t *view) {
     if ( config_blur_credits && !scrolled_downwards && before_last_line ) {
         blur_radius = calculate_blur(1);
     }
-    ui_drawable_set_blur_radius(view->credits_prefix, blur_radius);
-    ui_drawable_set_blur_radius(view->credits_content, blur_radius);
+    ui_drawable_set_blur_radius(view->selected_language->credits_prefix, blur_radius);
+    ui_drawable_set_blur_radius(view->selected_language->credits_content, blur_radius);
 }
 
 void ui_ex_lyrics_view_loop(LyricsView_t *view) {
@@ -793,7 +808,7 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
         return;
     ensure_read_hints_visibility_setting(view);
 
-    if ( !view->song->has_timings )
+    if ( !view->selected_language->song_language->has_timings )
         return;
 
     int32_t prev_active = -1;
@@ -802,8 +817,8 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     const double user_offset = settings_get()->global_audio_offset_ms / 1000.0;
     const double elapsed_time = audio_elapsed_time() + offset + user_offset;
 
-    for ( int32_t i = 0; i < (int32_t)view->song->lyrics_lines->size; i++ ) {
-        const Song_Line_t *line = view->song->lyrics_lines->data[i];
+    for ( int32_t i = 0; i < (int32_t)view->selected_language->song_language->lines->size; i++ ) {
+        const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
         if ( elapsed_time < line->base_start_time + line->base_duration ) {
             if ( elapsed_time >= line->base_start_time ) {
                 set_line_active(view, i);
@@ -812,14 +827,14 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
                 prev_active = i;
             } else {
                 if ( prev_active < 0 ) {
-                    prev_active = view->current_active_index;
+                    prev_active = view->selected_language->current_active_index;
                 }
                 set_line_inactive(view, i, prev_active);
             }
         } else {
             // If the next line still hasn't reached its start time, don't completely vanish the line just yet
-            if ( i + 1 < (int32_t)view->song->lyrics_lines->size ) {
-                const Song_Line_t *next_line = view->song->lyrics_lines->data[i + 1];
+            if ( i + 1 < (int32_t)view->selected_language->song_language->lines->size ) {
+                const Song_Line_t *next_line = view->selected_language->song_language->lines->data[i + 1];
                 if ( elapsed_time < next_line->base_start_time ) {
                     set_line_almost_hidden(view, i);
                     continue;
@@ -830,16 +845,16 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
         }
     }
 
-    const bool active_changed = first_active != view->current_first_active_index;
+    const bool active_changed = first_active != view->selected_language->current_first_active_index;
     const bool screen_changed = events_window_changed();
     if ( first_active >= 0 && (active_changed || screen_changed) ) {
-        view->current_first_active_index = first_active;
+        view->selected_language->current_first_active_index = first_active;
         ui_ex_lyrics_view_scroll_to_active(view);
     }
 
     update_credits_blur(view);
 
-    view->current_active_index = prev_active;
+    view->selected_language->current_active_index = prev_active;
 }
 
 void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
@@ -849,14 +864,50 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
         error_abort("destroy: lyrics_view is NULL");
     }
     // No need to free the drawables individually
-    vec_destroy(view->line_drawables);
-    vec_destroy(view->line_read_hints);
+    vec_destroy(view->selected_language->line_drawables);
+    vec_destroy(view->selected_language->line_read_hints);
     free(view);
 }
 
 void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
-    if ( !view->song->has_timings )
+    if ( !view->selected_language->song_language->has_timings )
         return;
-    const double position = get_lyric_line_scroll_position(view, view->current_first_active_index);
+    const double position = get_lyric_line_scroll_position(view, view->selected_language->current_first_active_index);
     ui_container_scroll_y_to_dur(view->container, position, (AnimatedSetOpts_t){.duration = SCROLL_ANIMATION_DURATION});
+}
+
+static void set_lyrics_language_visible(LyricsLanguage_t *target, const bool visible) {
+    for ( size_t i = 0; i < target->line_drawables->size; i++ ) {
+        Drawable_t *drawable = target->line_drawables->data[i];
+        drawable->enabled = visible;
+    }
+    for ( size_t i = 0; i < target->line_read_hints->size; i++ ) {
+        Drawable_t *drawable = target->line_read_hints->data[i];
+        drawable->enabled = visible;
+    }
+}
+
+void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language) {
+    if ( view->selected_language != NULL && str_equals(view->selected_language->language_str, language) )
+        return;
+
+    LyricsLanguage_t *target = view->selected_language;
+    for ( size_t i = 0; i < view->lyrics_languages->size; i++ ) {
+        LyricsLanguage_t *lyrics = view->lyrics_languages->data[i];
+        if ( str_equals(lyrics->language_str, language) ) {
+            target = lyrics;
+        }
+    }
+
+    if ( target == view->selected_language ) {
+        printf("Warning: Lyrics language '%s' not found\n", language);
+        return;
+    }
+
+    // Hide previous lyrics and show current ones
+    if ( view->selected_language != NULL )
+        set_lyrics_language_visible(view->selected_language, false);
+
+    set_lyrics_language_visible(target, true);
+    view->selected_language = target;
 }

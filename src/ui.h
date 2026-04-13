@@ -371,6 +371,7 @@ typedef struct ToggleWidget_t {
     int entry_id;
     WEAK Container_t *parent;
     WEAK c_widget_toggle_on_change on_change_callback;
+    WEAK void *custom_data;
 } ToggleWidget_t;
 
 typedef struct ToggleWidgetOpts_t {

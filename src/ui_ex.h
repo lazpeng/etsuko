@@ -32,17 +32,24 @@ typedef enum LineState_t {
     LINE_HIDDEN,
 } LineState_t;
 
-// Holds the state for the karaoke lyric container
-typedef struct etsuko_LyricsView_t {
-    OWNING Container_t *container;
-    WEAK const Song_t *song;
-    OWNING Vector_t *line_drawables;  // of Drawable_t
-    OWNING Vector_t *line_read_hints; // of Drawable_t
+typedef struct LyricsLanguage_t {
+    OWNING const char *language_str;
+    WEAK Song_Language_t *song_language;
+    OWNING Vector_t *line_drawables;
+    OWNING Vector_t *line_read_hints;
     int32_t current_active_index, current_hovered_index;
     int32_t current_first_active_index;
     LineState_t line_states[MAX_SONG_LINES];
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
     uint32_t active_line_segment_visited[MAX_TIMINGS_PER_LINE];
+} LyricsLanguage_t;
+
+// Holds the state for the karaoke lyric container
+typedef struct etsuko_LyricsView_t {
+    OWNING Container_t *container;
+    WEAK const Song_t *song;
+    OWNING Vector_t *lyrics_languages;
+    WEAK LyricsLanguage_t *selected_language;
 } LyricsView_t;
 
 // Initializes the lyric view
@@ -55,7 +62,7 @@ void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view);
 void ui_ex_destroy_lyrics_view(LyricsView_t *view);
 // Reset container scroll to the active line
 void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view);
-
-#undef MAX_SONG_LINES
+// Change the current language of the displayed lyrics
+void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language);
 
 #endif // ETSUKO_RENDERER_EX_H

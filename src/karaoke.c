@@ -359,8 +359,13 @@ static void on_mouse_moved(const UiEventOpts_t *, Drawable_t *, void *custom_dat
         ui_widget_toggle_enabled(state->drawables.language_toggle, true);
 }
 
-static void on_language_changed(Ui_t *ui, const ToggleWidget_t *widget, int selected_opt) {
+static void on_language_changed(Ui_t *, const ToggleWidget_t *widget, const int selected_opt) {
+    const Karaoke_t *state = widget->custom_data;
 
+    if ( selected_opt < (int32_t)song_get()->languages->size ) {
+        const Song_Language_t *language = song_get()->languages->data[selected_opt];
+        ui_ex_lyrics_view_set_language(state->drawables.lyrics_view, language->language);
+    }
 }
 
 static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custom_data) {
@@ -638,6 +643,7 @@ void karaoke_setup(Karaoke_t *state) {
                 .num_opts = (int32_t)song_get()->languages->size,
             });
         state->drawables.language_toggle->on_change_callback = on_language_changed;
+        state->drawables.language_toggle->custom_data = state;
     }
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());

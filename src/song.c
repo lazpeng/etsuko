@@ -181,7 +181,7 @@ static void read_timings(const Song_t *song, const Song_Language_t *lang, const 
         vec_add(lang->lines, line);
 }
 
-static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *start, const char *end) {
+static void read_ass_line_content(Song_t *song, Song_Line_t *line, Song_Language_t *language, const char *start, const char *end) {
     if ( end == NULL )
         end = start + strlen(start);
 
@@ -203,7 +203,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
         return;
     }
 
-    song->has_sub_timings = true;
+    language->has_sub_timings = true;
     const Song_LineTiming_t *prev = NULL;
 
     const char *ptr = start;
@@ -247,7 +247,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
     str_buf_destroy(buffer);
 }
 
-static void read_ass(Song_t *song, const Song_Language_t *lang, const char *buffer) {
+static void read_ass(Song_t *song, Song_Language_t *lang, const char *buffer) {
     if ( str_is_empty(buffer) )
         return;
 
@@ -276,7 +276,7 @@ static void read_ass(Song_t *song, const Song_Language_t *lang, const char *buff
     // Now what's left is the actual line text
     // Before, set the end to wherever is the properties part (or NULL if this line doesn't have any)
     const char *properties = strchr(comma + 1, '#');
-    read_ass_line_content(song, line, comma + 1, properties);
+    read_ass_line_content(song, line, lang, comma + 1, properties);
     // If we have any properties, read those now
     if ( properties != NULL ) {
         read_lyrics_opts(line, properties + 1);
@@ -395,7 +395,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
             if ( str_equals_sized(buffer, "#timings", 8) ) {
                 current_block = BLOCK_TIMINGS;
-                g_song->has_timings = true;
             } else if ( str_equals_sized(buffer, "#lyrics", 7) ) {
                 old_lyrics_compat = true;
                 current_block = BLOCK_LYRICS;
@@ -403,10 +402,8 @@ void song_load(const char *filename, const char *src, const int src_size) {
             } else if ( str_equals_sized(buffer, "#ass", 4) ) {
                 current_block = BLOCK_ASS;
                 has_lyrics = true;
-                g_song->has_timings = true;
             } else if ( str_equals_sized(buffer, "#readings", 9) ) {
                 current_block = BLOCK_READINGS;
-                g_song->has_reading_info = true;
             } else {
                 printf("Unknown block type: %s\n", buffer);
                 current_block = BLOCK_UNKNOWN;
@@ -422,6 +419,9 @@ void song_load(const char *filename, const char *src, const int src_size) {
             language = select_language(g_song, g_song->language, true);
         }
 
+        if ( current_block != BLOCK_HEADER && language == NULL )
+            error_abort("fuck this warning");
+
         switch ( current_block ) {
         case BLOCK_HEADER:
             read_header(g_song, buffer, len);
@@ -430,16 +430,19 @@ void song_load(const char *filename, const char *src, const int src_size) {
             read_lyrics(language, buffer, block_line_index);
             break;
         case BLOCK_TIMINGS:
+            language->has_timings = true;
             read_timings(g_song, language, buffer, block_line_index);
             break;
         case BLOCK_ASS:
+            language->has_timings = true;
             read_ass(g_song, language, buffer);
             break;
         case BLOCK_READINGS:
+            language->has_reading_info = true;
             if ( has_lyrics ) {
                 // Process readings directly
                 read_readings(language, buffer, (int32_t)len, block_line_index);
-            } else if (language != NULL ) {
+            } else {
                 vec_add(language->temp_readings, strdup(buffer));
             }
             break;
@@ -452,9 +455,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
     str_buf_destroy(str_buffer);
 
-    const Song_Language_t *default_language = select_language(g_song, g_song->language, true);
-    // Compat: Add lyrics lines from the original language
-    g_song->lyrics_lines = default_language->lines;
 
     // Process things that have been postponed to until we have all the lyrics
     for ( size_t i = 0; i < g_song->languages->size; i++ ) {
@@ -468,9 +468,10 @@ void song_load(const char *filename, const char *src, const int src_size) {
         lang->temp_readings = NULL;
     }
 
-    if ( g_song->lyrics_lines->size > 0 && old_lyrics_compat ) {
+    const Song_Language_t *default_language = select_language(g_song, g_song->language, true);
+    if ( default_language->lines->size > 0 && old_lyrics_compat ) {
         // Since the last line will have a 0 duration, set it here to a reasonable number so we can see the last line
-        Song_Line_t *line = g_song->lyrics_lines->data[g_song->lyrics_lines->size - 1];
+        Song_Line_t *line = default_language->lines->data[default_language->lines->size - 1];
         if ( line->base_duration == 0 )
             line->base_duration = 100.0;
     }
@@ -493,7 +494,6 @@ static void free_song_languages(const Song_t *song) {
             free(line->full_text);
             free(line);
         }
-        vec_destroy(song->lyrics_lines);
         if ( language->temp_readings != NULL ) {
             for ( size_t j = 0; j < language->temp_readings->size; j++ ) {
                 free(language->temp_readings->data[j]);
