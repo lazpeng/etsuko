@@ -104,6 +104,7 @@ typedef struct ScrollBar_t {
     OWNING Drawable_t *background, *handle;
     double width_em;
     Color_t background_color, handle_color;
+    bool hovered;
 } ScrollBar_t;
 
 typedef struct ContainerOverflow_t {

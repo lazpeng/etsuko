@@ -1328,7 +1328,7 @@ static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t 
 }
 
 static void on_hover_scrollbar(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
-    const Container_t *container = custom;
+    Container_t *container = custom;
 
     Drawable_t *bg = container->overflow_y.scrollbar.background;
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
@@ -1339,10 +1339,12 @@ static void on_hover_scrollbar(const UiEventOpts_t *opts, Drawable_t *, void *cu
         const AnimatedSetOpts_t anim_opts = {.duration = fade_duration, .apply_type = ANIM_APPLY_OVERRIDE};
         ui_drawable_set_alpha_dur(bg, bg_alpha, anim_opts);
         ui_drawable_set_alpha_dur(handle, handle_alpha, anim_opts);
+        container->overflow_y.scrollbar.hovered = true;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
         const AnimatedSetOpts_t anim_opts = {.duration = fade_duration, .delay = 0.5, .apply_type = ANIM_APPLY_OVERRIDE};
         ui_drawable_set_alpha_dur(bg, 0, anim_opts);
         ui_drawable_set_alpha_dur(handle, 0, anim_opts);
+        container->overflow_y.scrollbar.hovered = false;
     }
 }
 
@@ -1358,11 +1360,13 @@ static void on_container_scroll(const UiEventOpts_t *opts, Drawable_t *, void *c
     const int32_t handle_alpha = container->overflow_y.scrollbar.handle_color.a;
     // Show immediately, then fade out. Using OVERRIDE for fade-out means repeated scroll events
     // just reset the timer rather than chaining additional animations.
-    ui_drawable_set_alpha_immediate(bg, bg_alpha);
-    ui_drawable_set_alpha_immediate(handle, handle_alpha);
-    const AnimatedSetOpts_t anim_opts = {.duration = 1.0, .delay = 0.5, .apply_type = ANIM_APPLY_OVERRIDE};
-    ui_drawable_set_alpha_dur(bg, 0, anim_opts);
-    ui_drawable_set_alpha_dur(handle, 0, anim_opts);
+    if ( !container->overflow_y.scrollbar.hovered ) {
+        ui_drawable_set_alpha_immediate(bg, bg_alpha);
+        ui_drawable_set_alpha_immediate(handle, handle_alpha);
+        const AnimatedSetOpts_t anim_opts = {.duration = 1.0, .delay = 0.5, .apply_type = ANIM_APPLY_OVERRIDE};
+        ui_drawable_set_alpha_dur(bg, 0, anim_opts);
+        ui_drawable_set_alpha_dur(handle, 0, anim_opts);
+    }
 }
 
 void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const ScrollBarKind_t kind) {
