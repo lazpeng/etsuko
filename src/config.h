@@ -35,6 +35,8 @@ typedef struct KaraokeOpts_t {
     bool position_hints_under_segment;
     // Blur lyric lines as they get farther away from the active line
     bool blur_lyrics;
+    // Blur the credits text, in addition to blurring the lyrics (only applies if blur_lyrics is true)
+    bool blur_credits;
 } KaraokeOpts_t;
 
 typedef struct SettingsOpts_t {

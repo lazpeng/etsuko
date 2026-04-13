@@ -410,6 +410,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_drawable_set_alpha_immediate(view->credits_prefix, 150);
         ui_animate_translation(view->credits_prefix,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_blur(view->credits_prefix, &(Animation_BlurRadiusData_t){.duration = 0.3});
 
         view->credits_content =
             ui_make_text(ui,
@@ -427,6 +428,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
         ui_drawable_set_alpha_immediate(view->credits_prefix, 200);
         ui_animate_translation(view->credits_content,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_blur(view->credits_content, &(Animation_BlurRadiusData_t){.duration = 0.3});
     }
 
     ensure_read_hints_initialized(ui, view);
@@ -763,6 +765,26 @@ static void ensure_read_hints_visibility_setting(const LyricsView_t *view) {
     }
 }
 
+static void update_credits_blur(const LyricsView_t *view) {
+    float blur_radius = 0.f;
+    const bool config_blur_credits = config_get()->karaoke.blur_credits;
+    const int32_t last = (int32_t)view->song->lyrics_lines->size - 1;
+    const int32_t active = view->current_first_active_index;
+    const bool before_last_line = active < last;
+    bool scrolled_downwards = false;
+    if ( active >= 0 ) {
+        const Drawable_t *line = view->line_drawables->data[active];
+        const double threshold = line->bounds.y + line->bounds.h;
+        const double amount = view->container->overflow_y.set_amount;
+        scrolled_downwards = amount > threshold;
+    }
+    if ( config_blur_credits && !scrolled_downwards && before_last_line ) {
+        blur_radius = calculate_blur(1);
+    }
+    ui_drawable_set_blur_radius(view->credits_prefix, blur_radius);
+    ui_drawable_set_blur_radius(view->credits_content, blur_radius);
+}
+
 void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
@@ -814,6 +836,8 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
         view->current_first_active_index = first_active;
         ui_ex_lyrics_view_scroll_to_active(view);
     }
+
+    update_credits_blur(view);
 
     view->current_active_index = prev_active;
 }
