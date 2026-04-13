@@ -345,7 +345,6 @@ static void toggle_show_lyrics(const Karaoke_t *state) {
 
 static void on_mouse_moved(const UiEventOpts_t *, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
-    // state->hovering_controls = ui_mouse_hovering_container(state->drawables.song_info_container, NULL, NULL, NULL);
     state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = false;
     state->drawables.song_controls_container->enabled = true;
 
@@ -377,15 +376,14 @@ static void on_mouse_stopped(const UiEventOpts_t *opt, Drawable_t *, void *custo
         if ( !show_controls ) {
             state->drawables.song_name_text->enabled = state->drawables.song_artist_album_text->enabled = true;
             state->drawables.song_controls_container->enabled = false;
+            if ( state->drawables.language_toggle != NULL )
+                ui_widget_toggle_enabled(state->drawables.language_toggle, false);
         }
         if ( state->drawables.settings_button != NULL )
             ui_widget_button_enabled(state->drawables.settings_button, false);
 
         if ( state->drawables.back_button != NULL )
             ui_widget_button_enabled(state->drawables.back_button, false);
-
-        if ( state->drawables.language_toggle != NULL )
-            ui_widget_toggle_enabled(state->drawables.language_toggle, false);
     }
 }
 
@@ -635,7 +633,7 @@ void karaoke_setup(Karaoke_t *state) {
         const char *opts[MAX_LANGUAGES] = {0};
         for ( size_t i = 0; i < song_get()->languages->size; i++ ) {
             const Song_Language_t *lang = song_get()->languages->data[i];
-            opts[i] = lang->language;
+            opts[i] = lang->description;
         }
 #undef MAX_LANGUAGES
 
@@ -659,7 +657,8 @@ void karaoke_setup(Karaoke_t *state) {
     }
 
     state->drawables.lyrics_view = ui_ex_make_lyrics_view(state->ui, state->drawables.right_container, song_get());
-    update_lyric_language_toggle(state);
+    if ( state->drawables.language_toggle != NULL )
+        update_lyric_language_toggle(state);
 
     if ( config_get()->settings.show_settings ) {
         const Layout_t layout = {

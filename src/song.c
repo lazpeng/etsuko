@@ -334,6 +334,17 @@ static void read_readings(const Song_Language_t *lang, const char *buffer, const
     }
 }
 
+static const char *get_description_for_language(const char *language) {
+    if ( str_equals(language, "jpn") ) {
+        return "Japanese";
+    }
+    if ( str_equals(language, "eng") ) {
+        return "English";
+    }
+
+    return "(empty)";
+}
+
 static Song_Language_t *select_language(const Song_t *song, const char *language, const bool is_default) {
     Song_Language_t *target = NULL;
 
@@ -351,6 +362,7 @@ static Song_Language_t *select_language(const Song_t *song, const char *language
         target->lines = vec_init();
         target->temp_readings = vec_init();
         target->is_default = is_default;
+        target->description = get_description_for_language(language);
         vec_add(song->languages, target);
     }
 
@@ -419,9 +431,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
             language = select_language(g_song, g_song->language, true);
         }
 
-        if ( current_block != BLOCK_HEADER && language == NULL )
-            error_abort("fuck this warning");
-
         switch ( current_block ) {
         case BLOCK_HEADER:
             read_header(g_song, buffer, len);
@@ -430,20 +439,24 @@ void song_load(const char *filename, const char *src, const int src_size) {
             read_lyrics(language, buffer, block_line_index);
             break;
         case BLOCK_TIMINGS:
-            language->has_timings = true;
+            if ( language != NULL )
+                language->has_timings = true;
             read_timings(g_song, language, buffer, block_line_index);
             break;
         case BLOCK_ASS:
-            language->has_timings = true;
+            if ( language != NULL )
+                language->has_timings = true;
             read_ass(g_song, language, buffer);
             break;
         case BLOCK_READINGS:
-            language->has_reading_info = true;
-            if ( has_lyrics ) {
-                // Process readings directly
-                read_readings(language, buffer, (int32_t)len, block_line_index);
-            } else {
-                vec_add(language->temp_readings, strdup(buffer));
+            if ( language != NULL ) {
+                language->has_reading_info = true;
+                if ( has_lyrics ) {
+                    // Process readings directly
+                    read_readings(language, buffer, (int32_t)len, block_line_index);
+                } else {
+                    vec_add(language->temp_readings, strdup(buffer));
+                }
             }
             break;
         case BLOCK_UNKNOWN:

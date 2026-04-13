@@ -62,6 +62,7 @@ typedef struct Song_Line_t {
 
 typedef struct Song_Language_t {
     OWNING char *language;
+    WEAK const char *description;
     OWNING Vector_t *lines; // of Song_Line_t*
     OWNING Vector_t *temp_readings; // of const char *
     bool is_default;
