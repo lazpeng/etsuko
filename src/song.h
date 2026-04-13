@@ -60,11 +60,18 @@ typedef struct Song_Line_t {
     OWNING Vector_t *readings; // Of Song_LineReading_t
 } Song_Line_t;
 
+typedef struct Song_Language_t {
+    OWNING char *language;
+    OWNING Vector_t *lines; // of Song_Line_t*
+    OWNING Vector_t *temp_readings; // of const char *
+} Song_Language_t;
+
 // The actual song definition and options
 typedef struct Song_t {
     OWNING char *name, *translated_name, *artist, *album;
     int year;
     OWNING Vector_t *lyrics_lines; // of Song_Line_t
+    OWNING Vector_t *languages;
     OWNING char *id;
     OWNING char *file_path, *album_art_path;
     OWNING char *credits;

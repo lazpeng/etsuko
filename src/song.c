@@ -122,10 +122,10 @@ static Song_Line_t *make_line(void) {
     return line;
 }
 
-static void read_lyrics(const Song_t *song, const char *buffer, const size_t index) {
+static void read_lyrics(const Song_Language_t *lang, const char *buffer, const size_t index) {
     Song_Line_t *line;
-    if ( index < song->lyrics_lines->size ) {
-        line = song->lyrics_lines->data[index];
+    if ( index < lang->lines->size ) {
+        line = lang->lines->data[index];
     } else {
         line = make_line();
     }
@@ -137,8 +137,8 @@ static void read_lyrics(const Song_t *song, const char *buffer, const size_t ind
         read_lyrics_opts(line, hash + 1);
     }
 
-    if ( index >= song->lyrics_lines->size )
-        vec_add(song->lyrics_lines, line);
+    if ( index >= lang->lines->size )
+        vec_add(lang->lines, line);
 }
 
 static double convert_timing(const char *str, const size_t len) {
@@ -153,10 +153,10 @@ static double convert_timing(const char *str, const size_t len) {
     return minutes * 60.0 + seconds;
 }
 
-static void read_timings(const Song_t *song, const char *buffer, const size_t index) {
+static void read_timings(const Song_t *song, const Song_Language_t *lang, const char *buffer, const size_t index) {
     Song_Line_t *line;
-    if ( index < song->lyrics_lines->size ) {
-        line = song->lyrics_lines->data[index];
+    if ( index < lang->lines->size ) {
+        line = lang->lines->data[index];
     } else {
         line = make_line();
     }
@@ -166,7 +166,7 @@ static void read_timings(const Song_t *song, const char *buffer, const size_t in
 
     line->base_start_time = convert_timing(buffer, start_len);
     if ( index > 0 ) {
-        Song_Line_t *last_line = song->lyrics_lines->data[index - 1];
+        Song_Line_t *last_line = lang->lines->data[index - 1];
         if ( last_line->base_duration == 0.0 ) {
             last_line->base_duration = line->base_start_time - last_line->base_start_time;
         }
@@ -177,8 +177,8 @@ static void read_timings(const Song_t *song, const char *buffer, const size_t in
     }
 
     line->alignment = song->line_alignment;
-    if ( index >= song->lyrics_lines->size )
-        vec_add(song->lyrics_lines, line);
+    if ( index >= lang->lines->size )
+        vec_add(lang->lines, line);
 }
 
 static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *start, const char *end) {
@@ -247,7 +247,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, const char *s
     str_buf_destroy(buffer);
 }
 
-static void read_ass(Song_t *song, const char *buffer) {
+static void read_ass(Song_t *song, const Song_Language_t *lang, const char *buffer) {
     if ( str_is_empty(buffer) )
         return;
 
@@ -282,10 +282,10 @@ static void read_ass(Song_t *song, const char *buffer) {
         read_lyrics_opts(line, properties + 1);
     }
 
-    vec_add(song->lyrics_lines, line);
+    vec_add(lang->lines, line);
 }
 
-static void read_readings(const Song_t *song, const char *buffer, const int32_t len, const int32_t index) {
+static void read_readings(const Song_Language_t *lang, const char *buffer, const int32_t len, const int32_t index) {
     if ( len == 0 )
         return;
 
@@ -302,11 +302,11 @@ static void read_readings(const Song_t *song, const char *buffer, const int32_t 
     // Where to find the given part of the lyric
     int32_t lyric_idx = 0;
 
-    if ( (size_t)index >= song->lyrics_lines->size ) {
+    if ( (size_t)index >= lang->lines->size ) {
         error_abort("read_readings: There are more reading hint lines than lyrics");
     }
 
-    const Song_Line_t *line = song->lyrics_lines->data[index];
+    const Song_Line_t *line = lang->lines->data[index];
     const int32_t lyric_len = (int32_t)strlen(line->full_text);
 
     int32_t start = 0;
@@ -334,21 +334,42 @@ static void read_readings(const Song_t *song, const char *buffer, const int32_t 
     }
 }
 
+static Song_Language_t *select_language(const Song_t *song, const char *language) {
+    Song_Language_t *target = NULL;
+
+    for ( size_t i = 0; i < song->languages->size; i++ ) {
+        Song_Language_t *current = song->languages->data[i];
+        if ( str_equals(current->language, language) ) {
+            target = current;
+            break;
+        }
+    }
+
+    if ( target == NULL ) {
+        target = calloc(1, sizeof(*target));
+        target->language = strdup(language);
+        target->lines = vec_init();
+        target->temp_readings = vec_init();
+        vec_add(song->languages, target);
+    }
+
+    return target;
+}
+
 void song_load(const char *filename, const char *src, const int src_size) {
     g_song = calloc(1, sizeof(*g_song));
-    g_song->lyrics_lines = vec_init();
+    g_song->languages = vec_init();
 
     g_song->id = strdup(filename);
 
     // This controls whether the lyrics portion of the song is already
     bool has_lyrics = false;
 
-    Vector_t *readings_vec = vec_init();
-
     bool old_lyrics_compat = false;
     BlockType current_block = BLOCK_HEADER;
     int32_t block_line_index = 0;
     StrBuffer_t *str_buffer = str_buf_init();
+    Song_Language_t *language = NULL;
 
     int32_t offset = 0;
     while ( true ) {
@@ -363,6 +384,13 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
         if ( len > 0 && buffer[0] == '#' ) {
             block_line_index = 0;
+            const int32_t language_idx = str_find(buffer, ':', 0, (int32_t)strlen(buffer));
+            if ( language_idx > 0 ) {
+                const char *current_language_str = buffer + language_idx + 1;
+                language = select_language(g_song, current_language_str);
+            } else {
+                language = NULL;
+            }
 
             if ( str_equals_sized(buffer, "#timings", 8) ) {
                 current_block = BLOCK_TIMINGS;
@@ -385,25 +413,33 @@ void song_load(const char *filename, const char *src, const int src_size) {
             continue;
         }
 
+        if ( current_block != BLOCK_HEADER && language == NULL ) {
+            if ( g_song->language == NULL ) {
+                printf("Warning: language is not set in the header, using empty\n");
+                g_song->language = "";
+            }
+            language = select_language(g_song, g_song->language);
+        }
+
         switch ( current_block ) {
         case BLOCK_HEADER:
             read_header(g_song, buffer, len);
             break;
         case BLOCK_LYRICS:
-            read_lyrics(g_song, buffer, block_line_index);
+            read_lyrics(language, buffer, block_line_index);
             break;
         case BLOCK_TIMINGS:
-            read_timings(g_song, buffer, block_line_index);
+            read_timings(g_song, language, buffer, block_line_index);
             break;
         case BLOCK_ASS:
-            read_ass(g_song, buffer);
+            read_ass(g_song, language, buffer);
             break;
         case BLOCK_READINGS:
             if ( has_lyrics ) {
                 // Process readings directly
-                read_readings(g_song, buffer, (int32_t)len, block_line_index);
-            } else {
-                vec_add(readings_vec, strdup(buffer));
+                read_readings(language, buffer, (int32_t)len, block_line_index);
+            } else if (language != NULL ) {
+                vec_add(language->temp_readings, strdup(buffer));
             }
             break;
         case BLOCK_UNKNOWN:
@@ -415,11 +451,20 @@ void song_load(const char *filename, const char *src, const int src_size) {
 
     str_buf_destroy(str_buffer);
 
+    const Song_Language_t *default_language = select_language(g_song, g_song->language);
+    // Compat: Add lyrics lines from the original language
+    g_song->lyrics_lines = default_language->lines;
+
     // Process things that have been postponed to until we have all the lyrics
-    for ( size_t i = 0; i < readings_vec->size; i++ ) {
-        char *line = readings_vec->data[i];
-        read_readings(g_song, line, (int32_t)strlen(line), (int32_t)i);
-        free(line);
+    for ( size_t i = 0; i < g_song->languages->size; i++ ) {
+        Song_Language_t *lang = g_song->languages->data[i];
+        for ( size_t j = 0; j < lang->temp_readings->size; j++ ) {
+            char *line = lang->temp_readings->data[j];
+            read_readings(lang, line, (int32_t)strlen(line), (int32_t)i);
+            free(line);
+        }
+        vec_destroy(lang->temp_readings);
+        lang->temp_readings = NULL;
     }
 
     if ( g_song->lyrics_lines->size > 0 && old_lyrics_compat ) {
@@ -428,33 +473,42 @@ void song_load(const char *filename, const char *src, const int src_size) {
         if ( line->base_duration == 0 )
             line->base_duration = 100.0;
     }
-
-    // Clean up vecs
-    vec_destroy(readings_vec);
 }
 
 Song_t *song_get(void) { return g_song; }
 
-static void free_song_lyrics(const Song_t *song) {
-    for ( size_t i = 0; i < song->lyrics_lines->size; i++ ) {
-        Song_Line_t *line = song->lyrics_lines->data[i];
-        if ( line->readings != NULL ) {
-            for ( size_t j = 0; j < line->readings->size; j++ ) {
-                Song_LineReading_t *reading = line->readings->data[j];
-                free(reading->reading_text);
-                free(reading);
+static void free_song_languages(const Song_t *song) {
+    for ( size_t i = 0; i < song->languages->size; i++ ) {
+        Song_Language_t *language = song->languages->data[i];
+        for ( size_t j = 0; j < language->lines->size; j++ ) {
+            Song_Line_t *line = language->lines->data[j];
+            if ( line->readings != NULL ) {
+                for ( size_t h = 0; h < line->readings->size; h++ ) {
+                    Song_LineReading_t *reading = line->readings->data[h];
+                    free(reading->reading_text);
+                    free(reading);
+                }
             }
+            free(line->full_text);
+            free(line);
         }
-        free(line->full_text);
-        free(line);
+        vec_destroy(song->lyrics_lines);
+        if ( language->temp_readings != NULL ) {
+            for ( size_t j = 0; j < language->temp_readings->size; j++ ) {
+                free(language->temp_readings->data[j]);
+            }
+            vec_destroy(language->temp_readings);
+        }
+        free(language->language);
+        free(language);
     }
-    vec_destroy(song->lyrics_lines);
+    vec_destroy(song->languages);
 }
 
 void song_destroy(void) {
     if ( g_song != NULL ) {
         // Free lyrics lines
-        free_song_lyrics(g_song);
+        free_song_languages(g_song);
         // Free strings
         if ( g_song->id != NULL ) {
             free(g_song->id);
