@@ -2685,9 +2685,8 @@ void ui_drawable_set_draw_underlay(Drawable_t *drawable, const bool draw, const 
     drawable->underlay_alpha = alpha;
 }
 
-void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, AnimatedSetOpts_t opts) {
+void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleRegionOpt_t *region, const AnimatedSetOpts_t opts) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE_REGION);
-    // TODO: This function doesn't do anything if there's no animation attached
     if ( base_anim != NULL ) {
         AnimationApplyType_t apply_type = opts.apply_type;
         if ( apply_type == ANIM_APPLY_DEFAULT )
@@ -2699,6 +2698,8 @@ void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleReg
             animation->duration = opts.duration;
             animation->delay = opts.delay;
         }
+    } else {
+        printf("Warning: ui_drawable_add_scale_region_dur: No animation set, this call does nothing\n");
     }
 }
 
