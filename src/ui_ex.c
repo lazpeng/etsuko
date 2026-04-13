@@ -217,12 +217,12 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void 
         error_abort("on_line_event: could not find the index of the hovered line drawable");
 
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
-        view->selected_language->current_hovered_index = index;
+        view->current_hovered_index = index;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        view->selected_language->current_hovered_index = -1;
+        view->current_hovered_index = -1;
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
-        audio_seek(line->base_start_time);
+        audio_seek(line->base_start_time + 0.5);
     }
 }
 
@@ -329,6 +329,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         prev = ui_make_text(ui, &data, view->container, &layout);
         vec_add(result->line_drawables, prev);
         result->line_states[i] = LINE_NONE;
+        ui_drawable_set_alpha_immediate(prev, calculate_alpha(LINE_FADE_MAX_DISTANCE));
 
         // Set events
         if ( language->has_timings ) {
@@ -459,6 +460,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     view->container = parent;
     view->song = song;
     view->lyrics_languages = vec_init();
+    view->current_hovered_index = -1;
 
     // Setup container for scrolling
     view->container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = 0.6};
@@ -689,7 +691,7 @@ static void set_line_inactive(LyricsView_t *view, const int32_t index, const int
     }
 
     // don't change the alpha if the user is hovering over the line
-    if ( view->selected_language->current_hovered_index == index ) {
+    if ( view->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
         ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         blur_hint_for_line(view, index);
@@ -763,7 +765,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
             distance = calculate_distance(view, index, view->selected_language->current_active_index);
         }
         // Don't change the alpha if the user is hovering over the line
-        if ( view->selected_language->current_hovered_index == index ) {
+        if ( view->current_hovered_index == index ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
             ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         } else {
@@ -775,7 +777,7 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void set_line_almost_hidden(LyricsView_t *view, const int32_t index) {
+static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
@@ -936,4 +938,5 @@ void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language) {
 
     set_lyrics_language_visible(target, true);
     view->selected_language = target;
+    view->current_hovered_index = -1;
 }

@@ -37,7 +37,7 @@ typedef struct LyricsLanguage_t {
     WEAK Song_Language_t *song_language;
     OWNING Vector_t *line_drawables;
     OWNING Vector_t *line_read_hints;
-    int32_t current_active_index, current_hovered_index;
+    int32_t current_active_index;
     int32_t current_first_active_index;
     LineState_t line_states[MAX_SONG_LINES];
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
@@ -50,6 +50,7 @@ typedef struct etsuko_LyricsView_t {
     WEAK const Song_t *song;
     OWNING Vector_t *lyrics_languages;
     WEAK LyricsLanguage_t *selected_language;
+    int32_t current_hovered_index;
 } LyricsView_t;
 
 // Initializes the lyric view
