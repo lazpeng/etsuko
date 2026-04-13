@@ -400,7 +400,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
                          &(Drawable_TextData_t){.text = "Written by: ",
                                                 .draw_shadow = true,
                                                 .em = 0.8,
-                                                .font_type = FONT_UI,
+                                                .font_type = FONT_LYRICS,
                                                 .alignment = ALIGN_LEFT,
                                                 .color = {200, 200, 200, 255}},
                          view->container,
