@@ -1534,6 +1534,14 @@ static void stamp_into_fb_texture(void) {
     float fb_proj[PROJECTION_MATRIX_SIZE];
     create_orthographic_matrix((float)c.x, (float)(c.x + c.w), (float)(c.y + c.h), (float)c.y, fb_proj);
 
+    // Unbind texture 1 in case it's bound to something because writing to and reading from
+    // the same texture in webgl is undefined behavior.
+    // and in the cases I tested specifically, even though the texture isn't being read from in this case,
+    // causes visual artifacts
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+
     glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_data.fb_fbo);
     glViewport(0, 0, (GLsizei)c.w, (GLsizei)c.h);
     glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, fb_proj);
