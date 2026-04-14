@@ -14,6 +14,7 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,7 +66,8 @@ typedef struct TextureShaderData_t {
     GLint blur_radius_loc;
     GLint fb_tex_loc;
     GLint use_fb_tex_loc;
-    GLint viewport_size_loc;
+    GLint fb_tex_origin_loc;
+    GLint fb_tex_size_loc;
 } TextureShaderData_t;
 
 typedef struct RectShaderData_t {
@@ -130,13 +132,10 @@ typedef struct ShaderData_t {
     AmLikeShaderData_t am_like;
 } ShaderData_t;
 
-#define FB_GRID_COLS 20
-#define FB_GRID_ROWS 20
-
 typedef struct BlurData_t {
     Texture_t *fb_texture;
-    GLuint fbo;
-    bool fb_grid_invalid[FB_GRID_COLS][FB_GRID_ROWS];
+    Bounds_t container_bounds;
+    bool in_ctx;
 } BlurData_t;
 
 typedef struct Renderer_t {
@@ -267,15 +266,16 @@ static void draw_blurred_bg_at(const Bounds_t *bounds, const float blur_radius) 
     if ( fb_tex == NULL )
         return;
 
-    const float vp_w = (float)g_renderer->viewport.w;
-    const float vp_h = (float)g_renderer->viewport.h;
+    const Bounds_t c = g_renderer->blur_data.container_bounds;
+    const float cx = (float)c.x, cy = (float)c.y;
+    const float cw = (float)c.w, ch = (float)c.h;
     const float x = (float)bounds->x, y = (float)bounds->y;
     const float w = (float)bounds->w, h = (float)bounds->h;
 
-    const float u0 = x / vp_w;
-    const float u1 = (x + w) / vp_w;
-    const float v0 = 1.f - y / vp_h;
-    const float v1 = 1.f - (y + h) / vp_h;
+    const float u0 = (x - cx) / cw;
+    const float u1 = (x + w - cx) / cw;
+    const float v0 = 1.f - (y - cy) / ch;
+    const float v1 = 1.f - (y + h - cy) / ch;
 
     set_shader_program(g_renderer->shaders.tex.id);
     glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, get_projection_matrix());
@@ -437,7 +437,8 @@ void render_init(void) {
     g_renderer->shaders.tex.blur_radius_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_blurRadius");
     g_renderer->shaders.tex.fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fb_tex");
     g_renderer->shaders.tex.use_fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_useFbTex");
-    g_renderer->shaders.tex.viewport_size_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_viewportSize");
+    g_renderer->shaders.tex.fb_tex_origin_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fbTexOrigin");
+    g_renderer->shaders.tex.fb_tex_size_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fbTexSize");
 
     // Get uniform locations for rect shader
     g_renderer->shaders.rect.projection_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_projection");
@@ -706,68 +707,43 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
     return texture;
 }
 
-typedef struct GridRange_t {
-    int col_min, col_max, row_min, row_max;
-} GridRange_t;
+#define BLUR_CTX_STACK_MAX 16
+static BlurData_t g_blur_ctx_stack[BLUR_CTX_STACK_MAX];
+static int g_blur_ctx_depth = 0;
 
-static GridRange_t bounds_to_grid_range(const Bounds_t *at) {
-    const double vp_w = g_renderer->viewport.w;
-    const double vp_h = g_renderer->viewport.h;
-
-    int col_min = (int)(at->x * FB_GRID_COLS / vp_w);
-    int col_max = (int)((at->x + at->w) * FB_GRID_COLS / vp_w);
-    int row_min = (int)(at->y * FB_GRID_ROWS / vp_h);
-    int row_max = (int)((at->y + at->h) * FB_GRID_ROWS / vp_h);
-
-    col_min = col_min < 0 ? 0 : col_min >= FB_GRID_COLS ? FB_GRID_COLS - 1 : col_min;
-    col_max = col_max < 0 ? 0 : col_max >= FB_GRID_COLS ? FB_GRID_COLS - 1 : col_max;
-    row_min = row_min < 0 ? 0 : row_min >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_min;
-    row_max = row_max < 0 ? 0 : row_max >= FB_GRID_ROWS ? FB_GRID_ROWS - 1 : row_max;
-
-    return (GridRange_t){col_min, col_max, row_min, row_max};
+void render_push_blur_ctx(const Bounds_t *container_bounds) {
+    assert(g_blur_ctx_depth < BLUR_CTX_STACK_MAX);
+    g_blur_ctx_stack[g_blur_ctx_depth++] = g_renderer->blur_data;
+    g_renderer->blur_data = (BlurData_t){.container_bounds = *container_bounds, .in_ctx = true};
 }
 
-static void invalidate_cached_fb_portion(const Bounds_t *at) {
-    const GridRange_t gr = bounds_to_grid_range(at);
-    for ( int c = gr.col_min; c <= gr.col_max; c++ ) {
-        for ( int r = gr.row_min; r <= gr.row_max; r++ ) {
-            g_renderer->blur_data.fb_grid_invalid[c][r] = true;
-        }
+void render_pop_blur_ctx(void) {
+    if ( g_renderer->blur_data.fb_texture != NULL ) {
+        render_destroy_texture(g_renderer->blur_data.fb_texture);
     }
+    g_renderer->blur_data = g_blur_ctx_stack[--g_blur_ctx_depth];
 }
 
-static bool is_cached_fb_invalid_for_portion(const Bounds_t *at) {
-    const GridRange_t gr = bounds_to_grid_range(at);
-    for ( int c = gr.col_min; c <= gr.col_max; c++ ) {
-        for ( int r = gr.row_min; r <= gr.row_max; r++ ) {
-            if ( g_renderer->blur_data.fb_grid_invalid[c][r] ) {
-                return true;
-            }
-        }
-    }
-    return false;
+static void ensure_fb_snapshot(void) {
+    if ( !g_renderer->blur_data.in_ctx )
+        return;
+    if ( g_renderer->blur_data.fb_texture != NULL )
+        return;
+
+    const Bounds_t b = g_renderer->blur_data.container_bounds;
+    const int32_t cw = (int32_t)b.w;
+    const int32_t ch = (int32_t)b.h;
+    const int32_t cx = (int32_t)b.x;
+    const int32_t fb_y = (int32_t)g_renderer->viewport.h - (int32_t)b.y - ch;
+
+    g_renderer->blur_data.fb_texture = render_make_empty(cw, ch);
+
+    glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cx, fb_y, cw, ch);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-static void ensure_fb_snapshot(const Bounds_t *at) {
-    const int32_t ivp_w = (int32_t)g_renderer->viewport.w;
-    const int32_t ivp_h = (int32_t)g_renderer->viewport.h;
-
-    if ( g_renderer->blur_data.fb_texture == NULL ) {
-        g_renderer->blur_data.fb_texture = render_make_empty(ivp_w, ivp_h);
-        memset(g_renderer->blur_data.fb_grid_invalid, 1, sizeof(g_renderer->blur_data.fb_grid_invalid));
-    }
-
-    if ( is_cached_fb_invalid_for_portion(at) ) {
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, ivp_w, ivp_h);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, g_renderer->blur_data.fbo);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        memset(g_renderer->blur_data.fb_grid_invalid, 0, sizeof(g_renderer->blur_data.fb_grid_invalid));
-    }
-}
-
-static const RenderTarget_t *set_render_target(GLuint fbo, Texture_t *target_texture) {
+static const RenderTarget_t *set_render_target(const GLuint fbo, Texture_t *target_texture) {
     RenderTarget_t *target = calloc(1, sizeof(*target));
     if ( target == NULL ) {
         error_abort("Failed to allocate render target");
@@ -841,9 +817,7 @@ static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t blend_mode = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_BLEND);
     if ( background->blur ) {
-        const Bounds_t fb_bounds = {
-            .x = (int32_t)bounds->x, .y = (int32_t)bounds->y, .w = (int32_t)bounds->w, .h = (int32_t)bounds->h};
-        ensure_fb_snapshot(&fb_bounds);
+        ensure_fb_snapshot();
         const float blur_radius = (float)(bounds->w + bounds->h) / 2 * 0.0025f;
         draw_blurred_bg_at(bounds, blur_radius);
     }
@@ -1615,13 +1589,17 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     const bool use_fb_tex = blur_radius > 0.f && opts->blur_with_bg;
     glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, use_fb_tex);
     if ( use_fb_tex ) {
-        const Bounds_t fb_bounds = {.x = x, .y = y, .w = (int32_t)w, .h = (int32_t)h};
-        ensure_fb_snapshot(&fb_bounds);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
-        glUniform1i(g_renderer->shaders.tex.fb_tex_loc, 1);
-        glUniform2f(g_renderer->shaders.tex.viewport_size_loc, (float)g_renderer->viewport.w, (float)g_renderer->viewport.h);
-        glActiveTexture(GL_TEXTURE0);
+        ensure_fb_snapshot();
+        if ( g_renderer->blur_data.fb_texture != NULL ) {
+            const Bounds_t b = g_renderer->blur_data.container_bounds;
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
+            glUniform1i(g_renderer->shaders.tex.fb_tex_loc, 1);
+            glUniform2f(g_renderer->shaders.tex.fb_tex_origin_loc, (float)b.x,
+                        (float)g_renderer->viewport.h - (float)b.y - (float)b.h);
+            glUniform2f(g_renderer->shaders.tex.fb_tex_size_loc, (float)b.w, (float)b.h);
+            glActiveTexture(GL_TEXTURE0);
+        }
     }
 
     glBindTexture(GL_TEXTURE_2D, texture->id);
@@ -1650,11 +1628,6 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
-
-    const bool is_default_framebuffer = g_renderer->render_target == NULL;
-    if ( is_default_framebuffer && !opts->skip_fb_invalidation ) {
-        invalidate_cached_fb_portion(&final_bounds);
-    }
 
     // Re-draw the scaled portions of the texture in separate draw calls
     // this will of course induce additional rebuilding of the VBO and the draw calls themselves but...
@@ -1723,6 +1696,17 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     Texture_t *result = render_restore_texture_target();
 
     result->border_radius = texture->border_radius;
+
+    const float blur_r = (float)offset / 2.f;
+    if ( blur_r > 0.f ) {
+        render_make_texture_target(width, height);
+        const Bounds_t blur_bounds = {.x = 0, .y = 0, .w = width, .h = height};
+        const DrawTextureOpts_t blur_opts = {.alpha_mod = 255, .color_mod = 1.f, .blur_radius = blur_r};
+        render_draw_texture(result, &blur_bounds, &blur_opts);
+        render_destroy_texture(result);
+        result = render_restore_texture_target();
+        result->border_radius = texture->border_radius;
+    }
 
     Shadow_t *shadow = calloc(1, sizeof(*shadow));
     shadow->offset = offset;

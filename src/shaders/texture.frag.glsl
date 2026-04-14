@@ -15,11 +15,12 @@ uniform vec4 u_erase_regions[20];
 uniform float u_blurRadius;
 uniform sampler2D u_fb_tex;
 uniform bool u_useFbTex;
-uniform vec2 u_viewportSize;
+uniform vec2 u_fbTexOrigin;
+uniform vec2 u_fbTexSize;
 
 vec4 sample_blurred(vec2 uv) {
     if (u_useFbTex) {
-        vec4 fb = texture(u_fb_tex, gl_FragCoord.xy / u_viewportSize);
+        vec4 fb = texture(u_fb_tex, (gl_FragCoord.xy - u_fbTexOrigin) / u_fbTexSize);
         vec4 src = texture(u_tex, uv);
         return mix(fb, src, src.a);
     }

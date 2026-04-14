@@ -946,7 +946,6 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
     DrawTextureOpts_t opts = {0};
     opts.scale_regions = &delta.scale_regions;
     opts.center_on_scale = drawable->center_on_scale;
-    opts.skip_fb_invalidation = true;
 
     if ( drawable->shadow != NULL ) {
         Bounds_t shadow_bounds = rect;
@@ -959,7 +958,6 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         shadow_opts.alpha_mod = alpha;
         shadow_opts.scale_regions = NULL;
 
-        shadow_opts.blur_radius = (float)drawable->shadow->offset / 2.f;
         render_draw_texture(drawable->shadow->texture, &shadow_bounds, &shadow_opts);
     }
 
@@ -971,7 +969,6 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
-    opts.skip_fb_invalidation = false;
     if ( delta.final_blur_radius > 0.f ) {
         opts.blur_radius = delta.final_blur_radius;
         opts.blur_with_bg = true;
@@ -1158,6 +1155,8 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         .h = container_bounds.h,
     };
 
+    render_push_blur_ctx(&container_screen_bounds);
+
     if ( container->background->type != BACKGROUND_NONE ) {
         render_draw_background(container->background, &container_screen_bounds);
     }
@@ -1190,6 +1189,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
             c_idx += 1;
         }
     }
+    render_pop_blur_ctx();
 }
 
 void ui_draw(const Ui_t *ui) {

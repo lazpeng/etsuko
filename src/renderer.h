@@ -217,8 +217,6 @@ typedef struct DrawTextureOpts_t {
     float blur_radius;
     // Blur texture together with a sampled portion of the default framebuffer at the location being drawn, if blur_radius is > 0
     bool blur_with_bg;
-    // Skips invalidation of the drawn portion of the framebuffer in case of sequential calls for the same texture
-    bool skip_fb_invalidation;
 } DrawTextureOpts_t;
 
 /**
@@ -410,5 +408,15 @@ void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds,
  * texture uploaded to GPU memory.
  */
 void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts);
+/**
+ * Begins a container-scoped blur context. Must be called before drawing a container's children when blur effects may be present.
+ * The first draw with blur_with_bg inside this context will lazily capture a snapshot of the framebuffer at the container bounds.
+ * Contexts stack: nested containers each push their own context.
+ */
+void render_push_blur_ctx(const Bounds_t *container_bounds);
+/**
+ * Ends the current container blur context, freeing any snapshot that was taken. Restores the previous context.
+ */
+void render_pop_blur_ctx(void);
 
 #endif // ETSUKO_RENDERER_H
