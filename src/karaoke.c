@@ -685,7 +685,7 @@ void karaoke_setup(Karaoke_t *state) {
     ui_add_global_event_callback(state->ui, UI_EVENT_KEY_PRESSED, on_key_pressed, state);
 
     if ( settings_get()->auto_play == SET_AUTO_PLAY_ENABLED )
-        audio_resume();
+        toggle_pause(state);
 }
 
 static void update_elapsed_text(const Karaoke_t *state) {
