@@ -693,16 +693,15 @@ static void update_elapsed_text(const Karaoke_t *state) {
     const int32_t minutes = (int32_t)(elapsed / 60);
     const int32_t seconds = (int32_t)elapsed % 60;
 
-    char *time_str;
-    asprintf(&time_str, "%.2d:%.2d", minutes, seconds);
+    static char time_str[32];
+    time_str[0] = '\0';
+    sprintf(time_str, "%.2d:%.2d", minutes, seconds);
 
     Drawable_TextData_t *custom_data = state->drawables.elapsed_time_text->custom_data;
     if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
         free(custom_data->text);
-        custom_data->text = time_str;
+        custom_data->text = strdup(time_str);
         ui_recompute_drawable(state->ui, state->drawables.elapsed_time_text);
-    } else {
-        free(time_str);
     }
 }
 
@@ -710,16 +709,16 @@ static void update_remaining_text(const Karaoke_t *state) {
     const double remaining = audio_total_time() - audio_elapsed_time();
     const int32_t minutes = (int32_t)(remaining / 60);
     const int32_t seconds = (int32_t)remaining % 60;
-    char *time_str;
-    asprintf(&time_str, "-%.2d:%.2d", minutes, seconds);
+
+    static char time_str[32];
+    time_str[0] = '\0';
+    sprintf(time_str, "-%.2d:%.2d", minutes, seconds);
 
     Drawable_TextData_t *custom_data = state->drawables.remaining_time_text->custom_data;
     if ( strcmp(time_str, custom_data->text) != 0 ) {
         free(custom_data->text);
-        custom_data->text = time_str;
+        custom_data->text = strdup(time_str);
         ui_recompute_drawable(state->ui, state->drawables.remaining_time_text);
-    } else {
-        free(time_str);
     }
 }
 
