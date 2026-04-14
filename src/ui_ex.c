@@ -77,11 +77,11 @@ typedef struct ReadingEntry_t {
     double x, y;
 } ReadingEntry_t;
 
-static void ensure_read_hints_initialized(const LyricsView_t *view) {
+static void ensure_read_hints_initialized(const LyricsView_t *view, LyricsLanguage_t *language) {
     const bool place_hints_under_segment = config_get()->karaoke.position_hints_under_segment;
     const double hint_padding = view->container->bounds.w * 0.005;
-    for ( int32_t i = 0; i < (int32_t)view->selected_language->line_read_hints->size; i++ ) {
-        Drawable_t *hint = view->selected_language->line_read_hints->data[i];
+    for ( int32_t i = 0; i < (int32_t)language->line_read_hints->size; i++ ) {
+        Drawable_t *hint = language->line_read_hints->data[i];
 
         if ( hint->pending_recompute ) {
             if ( hint->texture != NULL ) {
@@ -89,7 +89,7 @@ static void ensure_read_hints_initialized(const LyricsView_t *view) {
                 hint->texture = NULL;
             }
 
-            const Drawable_t *drawable = view->selected_language->line_drawables->data[i];
+            const Drawable_t *drawable = language->line_drawables->data[i];
             const Drawable_TextData_t *lyric_data = drawable->custom_data;
             if ( lyric_data->line_offsets == NULL )
                 continue;
@@ -97,7 +97,7 @@ static void ensure_read_hints_initialized(const LyricsView_t *view) {
             const int pixels = render_measure_pixels_from_em(0.8);
             const Color_t white = {255, 255, 255, 255};
 
-            const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
+            const Song_Line_t *line = language->song_language->lines->data[i];
 
             Vector_t *entries = vec_init();
             double max_w = 0, max_h = 0;
@@ -418,6 +418,8 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         ui_animate_blur(result->credits_content, &(Animation_BlurRadiusData_t){.duration = 0.3});
     }
 
+    ensure_read_hints_initialized(view, result);
+
     return result;
 }
 
@@ -474,8 +476,6 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     }
     set_default_language(view);
 
-    ensure_read_hints_initialized(view);
-
     return view;
 }
 
@@ -526,7 +526,6 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
     int32_t timing_offset_start = 0;
 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
-    // TODO: Clear fill for past lines when scrolling backwards
     for ( int32_t s = 0; s < line->num_timings; s++ ) {
         if ( view->selected_language->active_line_segment_visited[s] ) {
             const Song_LineTiming_t *timing = &line->timings[s];
@@ -890,7 +889,7 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     view->selected_language->current_active_index = prev_active;
 }
 
-void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view) { ensure_read_hints_initialized(view); }
+void ui_ex_lyrics_view_on_screen_change(const LyricsView_t *view) { ensure_read_hints_initialized(view, view->selected_language); }
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {
