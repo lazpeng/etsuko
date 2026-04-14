@@ -15,7 +15,7 @@
 
 // This is very messy, could be refactored into something at least consistent with the naming
 #define LINE_VERTICAL_PADDING (0.015)
-#define LINE_VERTICAL_PADDING_WITH_READINGS (0.025)
+#define LINE_VERTICAL_PADDING_WITH_READINGS (0.03)
 #define LINE_FIRST_VERTICAL_OFFSET (0.35)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
@@ -222,7 +222,7 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *drawable, void 
         view->current_hovered_index = -1;
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
-        audio_seek(line->base_start_time + 0.5);
+        audio_seek(line->base_start_time);
     }
 }
 

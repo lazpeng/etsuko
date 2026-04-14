@@ -134,6 +134,7 @@ typedef struct ShaderData_t {
 
 typedef struct BlurData_t {
     Texture_t *fb_texture;
+    GLuint fb_fbo;
     Bounds_t container_bounds;
     bool in_ctx;
 } BlurData_t;
@@ -507,6 +508,8 @@ void render_finish(void) {
 
     if ( g_renderer->blur_data.fb_texture != NULL )
         render_destroy_texture(g_renderer->blur_data.fb_texture);
+    if ( g_renderer->blur_data.fb_fbo != 0 )
+        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
 
     // Cleanup
     free(g_renderer);
@@ -540,6 +543,10 @@ void render_on_window_changed(void) {
     if ( g_renderer->blur_data.fb_texture != NULL ) {
         render_destroy_texture(g_renderer->blur_data.fb_texture);
         g_renderer->blur_data.fb_texture = NULL;
+    }
+    if ( g_renderer->blur_data.fb_fbo != 0 ) {
+        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
+        g_renderer->blur_data.fb_fbo = 0;
     }
 
     glViewport(0, 0, outW, outH);
@@ -721,6 +728,9 @@ void render_pop_blur_ctx(void) {
     if ( g_renderer->blur_data.fb_texture != NULL ) {
         render_destroy_texture(g_renderer->blur_data.fb_texture);
     }
+    if ( g_renderer->blur_data.fb_fbo != 0 ) {
+        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
+    }
     g_renderer->blur_data = g_blur_ctx_stack[--g_blur_ctx_depth];
 }
 
@@ -741,6 +751,15 @@ static void ensure_fb_snapshot(void) {
     glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cx, fb_y, cw, ch);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Create an FBO backed by the snapshot texture so we can stamp blurred drawables into it
+    // as they are drawn. This keeps the snapshot current, so each subsequent drawable that
+    // samples from it sees the already-composited result of all previous drawables rather than
+    // just the raw pre-container background.
+    glGenFramebuffers(1, &g_renderer->blur_data.fb_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_data.fb_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 static const RenderTarget_t *set_render_target(const GLuint fbo, Texture_t *target_texture) {
@@ -1509,6 +1528,24 @@ void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds,
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+static void stamp_into_fb_texture(void) {
+    const Bounds_t c = g_renderer->blur_data.container_bounds;
+
+    float fb_proj[PROJECTION_MATRIX_SIZE];
+    create_orthographic_matrix((float)c.x, (float)(c.x + c.w), (float)(c.y + c.h), (float)c.y, fb_proj);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_data.fb_fbo);
+    glViewport(0, 0, (GLsizei)c.w, (GLsizei)c.h);
+    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, fb_proj);
+    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, (GLsizei)g_renderer->viewport.w, (GLsizei)g_renderer->viewport.h);
+    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, get_projection_matrix());
+}
+
 void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts) {
     if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
@@ -1624,6 +1661,11 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     }
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Stamp into the blur context's fb_texture so the snapshot stays current
+    if ( g_renderer->render_target == NULL && g_renderer->blur_data.fb_fbo != 0 && (blur_radius > 0.f || opts->blur_with_bg) ) {
+        stamp_into_fb_texture();
+    }
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
