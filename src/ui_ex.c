@@ -77,7 +77,7 @@ typedef struct ReadingEntry_t {
     double x, y;
 } ReadingEntry_t;
 
-static void ensure_read_hints_initialized(Ui_t *ui, const LyricsView_t *view) {
+static void ensure_read_hints_initialized(const LyricsView_t *view) {
     const bool place_hints_under_segment = config_get()->karaoke.position_hints_under_segment;
     const double hint_padding = view->container->bounds.w * 0.005;
     for ( int32_t i = 0; i < (int32_t)view->selected_language->line_read_hints->size; i++ ) {
@@ -474,7 +474,7 @@ LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t
     }
     set_default_language(view);
 
-    ensure_read_hints_initialized(ui, view);
+    ensure_read_hints_initialized(view);
 
     return view;
 }
@@ -885,7 +885,7 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     view->selected_language->current_active_index = prev_active;
 }
 
-void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view) { ensure_read_hints_initialized(ui, view); }
+void ui_ex_lyrics_view_on_screen_change(Ui_t *ui, const LyricsView_t *view) { ensure_read_hints_initialized(view); }
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {
