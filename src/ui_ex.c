@@ -245,7 +245,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         error_abort("Song has no lyrics");
     }
 
-    LyricsLanguage_t *result = calloc(1, sizeof (*result));
+    LyricsLanguage_t *result = calloc(1, sizeof(*result));
     result->song_language = language;
     result->line_drawables = vec_init();
     result->line_read_hints = vec_init();
@@ -501,11 +501,12 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
-static bool is_segment_single_punctuation(const Song_Line_t *line, const TextOffsetInfo_t *segment) {
-    if ( segment->num_chars > 1 )
+static bool is_segment_single_punctuation(const Song_Line_t *line, const int32_t segment_char_count,
+                                          const int32_t first_char_byte_offset) {
+    if ( segment_char_count > 1 )
         return false;
 
-    int32_t idx = segment->start_byte_offset;
+    int32_t idx = first_char_byte_offset;
     const int32_t c = str_u8_next(line->full_text, strlen(line->full_text), &idx);
     return c == '(' || c == ')' || c == ',' || c == '.' || c == '!' || c == '?' || str_ch_is_japanese_punctuation(c);
 }
@@ -536,7 +537,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         }
     }
 
-    bool is_last_segment_single_punctuation = false;
+    bool is_single_punctuation = false;
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
@@ -594,10 +595,14 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 
             const bool segment_visited = view->selected_language->active_line_segment_visited[s] & (1 << i);
 
+            const CharOffsetInfo_t *seg_first_char = offset_info->char_offsets->data[segment_start_in_line];
+            const int32_t start_byte_offset = seg_first_char->start_byte_offset;
+            is_single_punctuation = is_segment_single_punctuation(line, segment_length, start_byte_offset);
+
             const bool pulse_enabled_in_settings = config_get()->karaoke.enable_pulse_effect;
             const bool pulse_enabled_in_config = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_EFFECT;
             const bool should_show_pulse = pulse_enabled_in_settings && pulse_enabled_in_config;
-            if ( !segment_visited && should_show_pulse ) {
+            if ( !segment_visited && should_show_pulse && !is_single_punctuation ) {
                 ScaleRegionOpt_t region = {
                     .x0_perc = x1,
                     .x1_perc = x1 + (float)segment_fill_contribution,
@@ -624,7 +629,6 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
 
             x1 += (float)segment_fill_contribution;
             last_segment_remaining = duration - elapsed_since_segment;
-            is_last_segment_single_punctuation = is_segment_single_punctuation(line, offset_info);
         }
         draw_regions.regions[i].x1_perc = MIN(1.f, x1);
 
@@ -635,7 +639,7 @@ static void calculate_sub_region_for_active_line(LyricsView_t *view, Drawable_t 
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
-    const double min_duration = is_last_segment_single_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
+    const double min_duration = is_single_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
     const double fill_duration = MAX(min_duration, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, (AnimatedSetOpts_t){.duration = fill_duration});
 }
@@ -759,7 +763,8 @@ static void set_line_hidden(LyricsView_t *view, const int32_t index) {
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
-        if ( view->selected_language->current_active_index < 0 || is_line_intermission(view, view->selected_language->current_active_index) ) {
+        if ( view->selected_language->current_active_index < 0 ||
+             is_line_intermission(view, view->selected_language->current_active_index) ) {
             distance = LINE_FADE_MAX_DISTANCE;
         } else {
             distance = calculate_distance(view, index, view->selected_language->current_active_index);
