@@ -77,7 +77,7 @@ typedef struct ReadingEntry_t {
     double x, y;
 } ReadingEntry_t;
 
-static void ensure_read_hints_initialized(const LyricsView_t *view, LyricsLanguage_t *language) {
+static void ensure_read_hints_initialized(const LyricsView_t *view, const LyricsLanguage_t *language) {
     const bool place_hints_under_segment = config_get()->karaoke.position_hints_under_segment;
     const double hint_padding = view->container->bounds.w * 0.005;
     for ( int32_t i = 0; i < (int32_t)language->line_read_hints->size; i++ ) {
@@ -115,14 +115,15 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, LyricsLangua
 
                     const int32_t index_on_this_line = MAX(0, reading->start_ch_idx - offset_info->start_char_idx);
                     const CharOffsetInfo_t *character = offset_info->char_offsets->data[index_on_this_line];
-                    const double character_x = offset_info->start_x + character->x;
+                    const double char_padding = character->width * 0.1;
+                    const double character_x = offset_info->start_x + char_padding + character->x;
 
                     // Place this hint below the segment it's supposed to hint at, but if the previous hint already
                     // overshoots the length of its segment, place it a few pixels to the right of wherever the last hint ended
 
                     const double x_padded = x + hint_padding;
                     if ( place_hints_under_segment )
-                        x = MAX(x_padded, character_x + ui_compute_relative_horizontal(0.01, view->container));
+                        x = MAX(x_padded, character_x);
                     else
                         x = x_padded;
 
