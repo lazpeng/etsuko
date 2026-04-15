@@ -879,10 +879,11 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
 
     const bool active_changed = first_active != view->selected_language->current_first_active_index;
     const bool screen_changed = events_window_changed();
-    if ( first_active >= 0 && (active_changed || screen_changed) ) {
+    if ( first_active >= 0 && (active_changed || screen_changed || view->language_changed) ) {
         view->selected_language->current_first_active_index = first_active;
         ui_ex_lyrics_view_scroll_to_active(view);
     }
+    view->language_changed = false;
 
     update_credits_blur(view);
 
@@ -952,4 +953,5 @@ void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language) {
     set_lyrics_language_visible(target, true);
     view->selected_language = target;
     view->current_hovered_index = -1;
+    view->language_changed = true;
 }

@@ -51,6 +51,7 @@ typedef struct etsuko_LyricsView_t {
     OWNING Vector_t *lyrics_languages;
     WEAK LyricsLanguage_t *selected_language;
     int32_t current_hovered_index;
+    bool language_changed;
 } LyricsView_t;
 
 // Initializes the lyric view
