@@ -889,7 +889,9 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     view->selected_language->current_active_index = prev_active;
 }
 
-void ui_ex_lyrics_view_on_screen_change(const LyricsView_t *view) { ensure_read_hints_initialized(view, view->selected_language); }
+void ui_ex_lyrics_view_on_screen_change(const LyricsView_t *view) {
+    ensure_read_hints_initialized(view, view->selected_language);
+}
 
 void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {
@@ -908,7 +910,7 @@ void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
     ui_container_scroll_y_to_dur(view->container, position, (AnimatedSetOpts_t){.duration = SCROLL_ANIMATION_DURATION});
 }
 
-static void set_lyrics_language_visible(LyricsLanguage_t *target, const bool visible) {
+static void set_lyrics_language_visible(const LyricsLanguage_t *target, const bool visible) {
     for ( size_t i = 0; i < target->line_drawables->size; i++ ) {
         Drawable_t *drawable = target->line_drawables->data[i];
         drawable->enabled = visible;
@@ -917,6 +919,13 @@ static void set_lyrics_language_visible(LyricsLanguage_t *target, const bool vis
         Drawable_t *drawable = target->line_read_hints->data[i];
         drawable->enabled = visible;
     }
+
+    if ( target->credit_separator != NULL )
+        target->credit_separator->enabled = visible;
+    if ( target->credits_prefix != NULL )
+        target->credits_prefix->enabled = visible;
+    if ( target->credits_content != NULL )
+        target->credits_content->enabled = visible;
 }
 
 void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language) {
