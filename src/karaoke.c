@@ -693,7 +693,7 @@ static void update_elapsed_text(const Karaoke_t *state) {
     const int32_t minutes = (int32_t)(elapsed / 60);
     const int32_t seconds = (int32_t)elapsed % 60;
 
-    static char time_str[32];
+    static char time_str[256];
     time_str[0] = '\0';
     sprintf(time_str, "%.2d:%.2d", minutes, seconds);
 
@@ -710,7 +710,7 @@ static void update_remaining_text(const Karaoke_t *state) {
     const int32_t minutes = (int32_t)(remaining / 60);
     const int32_t seconds = (int32_t)remaining % 60;
 
-    static char time_str[32];
+    static char time_str[256];
     time_str[0] = '\0';
     sprintf(time_str, "-%.2d:%.2d", minutes, seconds);
 
