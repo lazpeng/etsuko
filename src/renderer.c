@@ -38,7 +38,6 @@
 #define DEFAULT_WIDTH (1280)
 #define DEFAULT_HEIGHT (720)
 #define DEFAULT_PT (16)
-#define BASE_DPI 96.f
 // 1MB
 #define MAX_SHADER_SIZE (1 * 1024 * 1024)
 #define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
@@ -142,7 +141,6 @@ typedef struct BlurData_t {
 typedef struct Renderer_t {
     GLFWwindow *window;
     Bounds_t viewport;
-    double h_dpi, v_dpi;
     RenderTarget_t *render_target;
     float projection_matrix[PROJECTION_MATRIX_SIZE];
     BlendMode_t blend_mode;
@@ -308,8 +306,9 @@ static void draw_blurred_bg_at(const Bounds_t *bounds, const float blur_radius) 
 
 static float resolve_background_border_radius(const Background_t *background, const Bounds_t *bounds) {
     if ( background->border_radius_em > 0 ) {
-        return (float)render_measure_pt_from_em(background->border_radius_em);
+        return (float)render_measure_pixels_from_em(background->border_radius_em);
     }
+    // AUTO mode
     if ( background->border_radius_em < 0 ) {
         return (float)MIN(bounds->w, bounds->h) * 0.5f;
     }
@@ -530,13 +529,6 @@ void render_on_window_changed(void) {
 #endif
 
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
-
-    float x_scale, y_scale;
-    glfwGetWindowContentScale(g_renderer->window, &x_scale, &y_scale);
-
-    // Approximate DPI based on scale factor
-    g_renderer->h_dpi = BASE_DPI * x_scale;
-    g_renderer->v_dpi = BASE_DPI * y_scale;
 
     g_renderer->viewport = (Bounds_t){.x = 0, .y = 0, .w = (double)outW, .h = (double)outH};
 
@@ -958,13 +950,6 @@ int32_t render_measure_pixels_from_em(const double em) {
     const double rem = DEFAULT_PT * scale;
     const double pixels = em * rem;
     return (int32_t)pixels;
-}
-
-int32_t render_measure_pt_from_em(const double em) {
-    const double pixels = render_measure_pixels_from_em(em);
-    const double dpi_scale = BASE_DPI / MIN(g_renderer->h_dpi, g_renderer->v_dpi);
-    const int32_t pt_size = (int32_t)lround(pixels * dpi_scale);
-    return pt_size;
 }
 
 void render_measure_char_bounds(const int32_t c, const int32_t prev_c, const int32_t pixels, CharBounds_t *out_bounds,
@@ -1461,7 +1446,7 @@ Texture_t *render_make_image(const unsigned char *bytes, const int length, const
     texture->id = texture_id;
 
     if ( border_radius_em > 0 ) {
-        texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
+        texture->border_radius = (float)render_measure_pixels_from_em(border_radius_em);
     } else if ( border_radius_em < 0 ) {
         texture->border_radius = BORDER_RADIUS_AUTO;
     }
@@ -1473,7 +1458,7 @@ Texture_t *render_make_dummy_image(const double border_radius_em) {
     Texture_t *texture = create_test_texture();
 
     if ( border_radius_em > 0 ) {
-        texture->border_radius = (float)render_measure_pt_from_em(border_radius_em);
+        texture->border_radius = (float)render_measure_pixels_from_em(border_radius_em);
     } else if ( border_radius_em < 0 ) {
         texture->border_radius = BORDER_RADIUS_AUTO;
     }

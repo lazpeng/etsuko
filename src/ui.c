@@ -439,7 +439,7 @@ static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *b
 
     float border_radius = (float)data->border_radius_em;
     if ( border_radius > 0 )
-        border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+        border_radius = (float)render_measure_pixels_from_em(data->border_radius_em);
 
     Color_t color = data->color;
     color.a = (uint8_t)alpha;
@@ -2179,7 +2179,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
         const Drawable_ImageData_t *data = drawable->custom_data;
         if ( data->border_radius_em > 0 ) {
-            drawable->texture->border_radius = (float)render_measure_pt_from_em(data->border_radius_em);
+            drawable->texture->border_radius = (float)render_measure_pixels_from_em(data->border_radius_em);
         }
         ui_reposition_drawable(drawable);
         if ( data->draw_shadow ) {

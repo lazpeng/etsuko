@@ -511,7 +511,7 @@ void karaoke_setup(Karaoke_t *state) {
     state->drawables.album_image = ui_make_image(
         state->resources.album_art_buffer->data, (int)state->resources.album_art_buffer->downloaded_bytes,
         &(Drawable_ImageData_t){
-            .border_radius_em = 2.0,
+            .border_radius_em = 0.5,
             .draw_shadow = config_get()->karaoke.draw_album_art_shadow,
         },
         state->drawables.left_container,

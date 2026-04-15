@@ -398,7 +398,7 @@ static void setup_song(MainMenu_t *menu, const MenuSong_t *song) {
     if ( no_data == NULL )
         error_abort("Fatal error: Couldn't load the default album image");
 
-    const Drawable_ImageData_t data = {.border_radius_em = 1};
+    const Drawable_ImageData_t data = {.border_radius_em = 0.5};
     Drawable_t *image = ui_make_image(no_data->image_data, (int)no_data->image_data_size, &data, menu->container, &layout);
     grid->last_in_row = image;
     if ( set_first )

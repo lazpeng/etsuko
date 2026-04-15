@@ -318,11 +318,6 @@ void render_load_font(const unsigned char *data, int data_size, FontType_t type)
  */
 void render_measure_text_size(const char *text, int32_t pixels, MAYBE_NULL int32_t *w, MAYBE_NULL int32_t *h, FontType_t kind);
 /**
- * Returns a pt size for the given em value, which is essentially (and this might be wrong, but it IS what the function does)
- * the value of render_measure_pixels_from_em but with scaling based on the ratio of the current screen DPI and the base DPI
- */
-int32_t render_measure_pt_from_em(double em);
-/**
  * Returns a pixel size for the given em value
  */
 int32_t render_measure_pixels_from_em(double em);
