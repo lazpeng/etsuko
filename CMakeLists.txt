@@ -53,25 +53,28 @@ if (EMSCRIPTEN)
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
 
     target_compile_options(etsuko PRIVATE
-            "SHELL:-Oz"
+            "SHELL:-O3"
             "SHELL:-g0"
+            "SHELL:-flto"
+            "SHELL:-msimd128"
     )
 
     target_link_options(etsuko PRIVATE
             "SHELL:-sUSE_GLFW=3"
             "SHELL:-lopenal"
 
-            "SHELL:-sALLOW_MEMORY_GROWTH=1"
+            "SHELL:-sINITIAL_MEMORY=104857600"
             "SHELL:-sEXIT_RUNTIME=0"
             "SHELL:-sASYNCIFY=0"
             "SHELL:-sFETCH=1"
 
-            "SHELL:-sMIN_WEBGL_VERSION=1"
+            "SHELL:-sMIN_WEBGL_VERSION=2"
             "SHELL:-sMAX_WEBGL_VERSION=2"
 
-            "SHELL:-Oz"
+            "SHELL:-O3"
             "SHELL:-g0"
             "SHELL:-flto"
+            "SHELL:-msimd128"
             "SHELL:-sFILESYSTEM=1"
             "SHELL:-lidbfs.js"
             "SHELL:--closure=1"
@@ -116,7 +119,8 @@ else ()
         target_link_options(etsuko PRIVATE "-fsanitize=address,undefined")
         target_compile_options(etsuko PRIVATE "-g")
     else ()
-        target_compile_options(etsuko PRIVATE "-g0")
+        target_compile_options(etsuko PRIVATE "-g0" "-O3" "-flto=auto" "-DNDEBUG")
+        target_link_options(etsuko PRIVATE "-flto=auto")
     endif ()
 
     add_custom_command(TARGET etsuko POST_BUILD
