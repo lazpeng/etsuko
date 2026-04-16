@@ -693,9 +693,9 @@ static void update_elapsed_text(const Karaoke_t *state) {
     const int32_t minutes = (int32_t)(elapsed / 60);
     const int32_t seconds = (int32_t)elapsed % 60;
 
-    static char time_str[256];
+    static char time_str[64];
     time_str[0] = '\0';
-    sprintf(time_str, "%.2d:%.2d", minutes, seconds);
+    snprintf(time_str, sizeof(time_str), "%.2d:%.2d", minutes, seconds);
 
     Drawable_TextData_t *custom_data = state->drawables.elapsed_time_text->custom_data;
     if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
@@ -710,9 +710,9 @@ static void update_remaining_text(const Karaoke_t *state) {
     const int32_t minutes = (int32_t)(remaining / 60);
     const int32_t seconds = (int32_t)remaining % 60;
 
-    static char time_str[256];
+    static char time_str[64];
     time_str[0] = '\0';
-    sprintf(time_str, "-%.2d:%.2d", minutes, seconds);
+    snprintf(time_str, sizeof(time_str), "-%.2d:%.2d", minutes, seconds);
 
     Drawable_TextData_t *custom_data = state->drawables.remaining_time_text->custom_data;
     if ( strcmp(time_str, custom_data->text) != 0 ) {
