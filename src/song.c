@@ -335,14 +335,20 @@ static void read_readings(const Song_Language_t *lang, const char *buffer, const
 }
 
 static const char *get_description_for_language(const char *language) {
+    if ( strlen(language) == 0 )
+        return "(empty)";
+
     if ( str_equals(language, "jpn") ) {
         return "Japanese";
     }
     if ( str_equals(language, "eng") ) {
         return "English";
     }
+    if ( str_equals(language, "pt-br") ) {
+        return "Brazilian Portuguese";
+    }
 
-    return "(empty)";
+    return "Unspecified";
 }
 
 static Song_Language_t *select_language(const Song_t *song, const char *language, const bool is_default) {
