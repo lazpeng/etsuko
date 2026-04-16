@@ -947,7 +947,7 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
     opts.scale_regions = &delta.scale_regions;
     opts.center_on_scale = drawable->center_on_scale;
 
-    if ( drawable->shadow != NULL ) {
+    if ( drawable->shadow != NULL && delta.final_alpha > 0 ) {
         Bounds_t shadow_bounds = rect;
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
@@ -973,7 +973,8 @@ static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *b
         opts.blur_radius = delta.final_blur_radius;
         opts.blur_with_bg = true;
     }
-    render_draw_texture(drawable->texture, &rect, &opts);
+    if ( delta.final_alpha > 0 )
+        render_draw_texture(drawable->texture, &rect, &opts);
 }
 
 static void apply_container_animations(Container_t *container, Bounds_t *bounds) {
