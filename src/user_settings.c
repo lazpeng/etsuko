@@ -960,7 +960,7 @@ void settings_show(Ui_t *ui) {
     Drawable_t *prev = create_hints_setting(ui);
     prev = create_past_lyrics_setting(ui, prev);
     prev = create_fill_setting(ui, prev);
-    prev = create_effect_setting(ui, prev);
+    // prev = create_effect_setting(ui, prev);
     prev = create_language_setting(ui, prev);
     prev = create_auto_play_setting(ui, prev);
     prev = create_blur_setting(ui, prev);
