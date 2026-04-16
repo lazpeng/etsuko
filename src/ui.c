@@ -906,7 +906,7 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
     }
 }
 
-static void perform_draw(const Ui_t *ui, Drawable_t *drawable, const Bounds_t *base_bounds) {
+static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bounds_t *base_bounds) {
     if ( !drawable->enabled || drawable->pending_recompute ) {
         return;
     }
@@ -1798,8 +1798,8 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
     }
 }
 
-static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawable_TextData_t *weak_data,
-                                      const Container_t *container, const Layout_t *layout) {
+static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextData_t *weak_data, const Container_t *container,
+                                      const Layout_t *layout) {
     Texture_t *final_texture;
 
     Drawable_TextData_t *data = dup_text_data(weak_data);
@@ -1916,7 +1916,7 @@ static Drawable_t *internal_make_text(Ui_t *ui, Drawable_t *result, const Drawab
 
 Drawable_t *ui_make_text(Ui_t *ui, const Drawable_TextData_t *data, Container_t *container, const Layout_t *layout) {
     Drawable_t *result = make_drawable(container, DRAW_TYPE_TEXT, false);
-    internal_make_text(ui, result, data, container, layout);
+    internal_make_text(result, data, container, layout);
     vec_add_sorted_drawable(container->child_drawables, result);
     return result;
 }
@@ -2175,7 +2175,7 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
             render_destroy_shadow(drawable->shadow);
             drawable->shadow = NULL;
         }
-        internal_make_text(ui, drawable, old_custom_data, container, &drawable->layout);
+        internal_make_text(drawable, old_custom_data, container, &drawable->layout);
         free_text_data(old_custom_data);
     } else if ( drawable->type == DRAW_TYPE_IMAGE ) {
         const Drawable_ImageData_t *data = drawable->custom_data;
