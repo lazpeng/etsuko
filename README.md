@@ -1,8 +1,16 @@
 # etsuko
 
 *Notice:*\
-**This repository is unlicensed on purpose. You may not use, copy, modify, or
-distribute this code without permission.**\
+**This repository is licensed under the [PolyForm Noncommercial License
+1.0.0](LICENSE.md). You may use, copy, modify, and distribute this code for
+any noncommercial purpose, subject to the terms of that license. Commercial
+use is not permitted without prior written permission.**\
+**Do note that the license only applies to the code itself, and any files served
+through or as part of the application must be licensed from the respective rights
+holders separately. I do not condone or endorse illegal redistribution of copyrighted
+media, and the demo available below is only for demonstrative purposes, not redistribution.**\
+**If you represent an artist and would like your song taken down from
+the demo, you may also contact me via the email below.**\
 **I do not plan on accepting contributions. Please get in contact through
 GitHub or *info at wooby dot moe* before you waste your time writing code and
 opening a pull request.**
@@ -24,11 +32,6 @@ A publicly viewable demo is hosted [here](https://karaoke.wooby.moe/)
 using emscripten to target wasm.\
 Check the console if it takes a while to load to see if there are any errors.
 Also, it expects support for WebGL 2/OpenGL ES 3.0, or else it'll fail to run.\
-**If you represent an artist and would like your song taken down from
-the website, you may also contact me via the email above.**\
-**I make no money out of this whatsoever nor the site shows any ads.
-All audio files were acquired legally through iTunes, and lyrics are either
-my own translations or the original obtained from public sources.**
 
 ## Build instructions
 
