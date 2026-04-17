@@ -955,4 +955,6 @@ void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language) {
     view->selected_language = target;
     view->current_hovered_index = -1;
     view->language_changed = true;
+    // Recompute scroll bar bounds
+    view->container->content_size_dirty = true;
 }

@@ -1025,6 +1025,8 @@ ContainerScrollableArea_t gather_container_scrollable_area(const Container_t *co
 
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         const Drawable_t *drawable = container->child_drawables->data[i];
+        if ( drawable->enabled == false )
+            continue;
         result.min_content_y = MIN(result.min_content_y, drawable->bounds.y);
         result.max_content_y = MAX(result.max_content_y, drawable->bounds.y + drawable->bounds.h - container->bounds.h);
 
