@@ -63,11 +63,11 @@ void main() {
 
     vec4 texColor;
     if (u_blurRadius > 0.0) {
-        const float weights[3] = float[](0.264152, 0.226424, 0.141501);
+        const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
         vec2 tex_offset = u_blurRadius / vec2(textureSize(u_tex, 0));
         vec4 result = texture(u_tex, TexCoord) * weights[0] * weights[0];
-        for (int i = -2; i <= 2; i++) {
-            for (int j = -2; j <= 2; j++) {
+        for (int i = -4; i <= 4; i++) {
+            for (int j = -4; j <= 4; j++) {
                 if (i == 0 && j == 0) continue;
                 result += texture(u_tex, TexCoord + vec2(float(i), float(j)) * tex_offset)
                           * weights[abs(i)] * weights[abs(j)];
