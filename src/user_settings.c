@@ -126,7 +126,7 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     }
 
     settings->volume = 100;
-    settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
+    settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
 
     const char *read_hints = json_get_string(json_obj_get(root_obj, "read_hints_visibility"));
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
@@ -314,7 +314,7 @@ bool settings_ensure_loaded(void) {
     if ( state < 0 ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
-        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
+        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
         return true;
@@ -323,7 +323,7 @@ bool settings_ensure_loaded(void) {
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
-        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
+        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
@@ -333,7 +333,7 @@ bool settings_ensure_loaded(void) {
     if ( g_settings == NULL ) {
         g_settings = calloc(1, sizeof(*g_settings));
         g_settings->volume = 100;
-        g_settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
+        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
         g_settings->past_language_visibility =
             config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
     }
@@ -926,7 +926,7 @@ static void on_reset_clicked(Ui_t *, const ButtonWidget_t *) {
     UserSettings_t *settings = settings_get();
     *settings = (UserSettings_t){0};
     settings->volume = 100;
-    settings->blur_lyrics = config_get()->karaoke.blur_lyrics;
+    settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
     g_modal->should_rebuild = true;
 }
 

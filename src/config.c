@@ -52,7 +52,7 @@ static Config_t *get_default_config(void) {
         .show_loading_screen = true,
         .enlarge_active_line = false,
         .position_hints_under_segment = true,
-        .blur_lyrics = false,
+        .blur_lyrics = true,
         .blur_credits = true,
     };
     config->settings = (SettingsOpts_t) {
