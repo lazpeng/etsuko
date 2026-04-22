@@ -4,6 +4,7 @@
 
 #include "renderer.h"
 
+#include "config.h"
 #include "constants.h"
 #include "error.h"
 #include "events.h"
@@ -396,7 +397,7 @@ void render_init(void) {
         error_abort("Failed to initialize GLEW");
     }
     glGetError();
-    glfwSwapInterval(1);
+    glfwSwapInterval(config_get()->vsync ? 1 : 0);
 #else
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, false, on_web_resize);
 #endif

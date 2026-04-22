@@ -58,6 +58,8 @@ static Config_t *get_default_config(void) {
     config->settings = (SettingsOpts_t) {
         .show_settings = true
     };
+    config->show_fps = false;
+    config->vsync = true;
 
 #ifdef __EMSCRIPTEN__
     try_load_config_web(config);

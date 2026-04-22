@@ -41,7 +41,9 @@ add_executable(etsuko src/main.c
         src/contrib/minimp3.c
         src/resource_includes.h
         src/user_settings.h
-        src/user_settings.c)
+        src/user_settings.c
+        src/fps_counter.h
+        src/fps_counter.c)
 
 set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")

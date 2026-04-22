@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "config.h"
 #include "error.h"
+#include "fps_counter.h"
 #include "events.h"
 #include "repository.h"
 #include "song.h"
@@ -496,6 +497,8 @@ void karaoke_setup(Karaoke_t *state) {
 
     // Version string
     etsuko_setup_version(state->ui);
+    // Debug FPS counter (top-left), if enabled in config
+    fps_counter_setup(state->ui);
     // Make the back (to menu) "button"
     state->drawables.back_button =
         ui_build_button_widget(state->ui, ui_root_container(state->ui),
@@ -741,6 +744,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     // Recalculate dynamic elements
     update_elapsed_text(state);
     update_remaining_text(state);
+    fps_counter_update();
     update_song_progressbar(state);
     // Update the lyrics view
     if ( events_window_changed() )

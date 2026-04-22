@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "error.h"
+#include "fps_counter.h"
 #include "events.h"
 #include "main_menu.h"
 #include "repository.h"
@@ -434,6 +435,7 @@ void menu_setup(MainMenu_t *menu) {
     // Set the initial background to the first album art loaded
     update_background(menu);
     etsuko_setup_version(menu->ui);
+    fps_counter_setup(menu->ui);
 
     if ( config_get()->settings.show_settings ) {
         const Layout_t layout = {
@@ -501,6 +503,7 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
     }
 
     ui_begin_loop(menu->ui);
+    fps_counter_update();
     events_frame_end();
     ui_draw(menu->ui);
     ui_end_loop();

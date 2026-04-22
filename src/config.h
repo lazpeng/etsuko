@@ -59,6 +59,10 @@ typedef struct {
     double time_scale;
     KaraokeOpts_t karaoke;
     SettingsOpts_t settings;
+    // Draw a live FPS counter in the top-left of the screen
+    bool show_fps;
+    // Enable vsync (ignored on web — the browser controls the swap interval)
+    bool vsync;
 } Config_t;
 
 // Returns the current configuration for the application
