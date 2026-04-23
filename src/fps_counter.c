@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static Ui_t *g_ui = NULL;
 static Drawable_t *g_drawable = NULL;
 static double g_window_start = 0.0;
 static int g_frames_in_window = 0;
@@ -19,7 +18,6 @@ void fps_counter_setup(Ui_t *ui) {
     if ( !config_get()->show_fps )
         return;
 
-    g_ui = ui;
     g_drawable = ui_make_text(ui,
                               &(Drawable_TextData_t){
                                   .text = "-- fps",
@@ -54,6 +52,6 @@ void fps_counter_update(void) {
     if ( strcmp(buf, data->text) != 0 ) {
         free(data->text);
         data->text = strdup(buf);
-        ui_recompute_drawable(g_ui, g_drawable);
+        ui_recompute_drawable(g_drawable);
     }
 }

@@ -360,7 +360,7 @@ static void on_audio_delay_changed(Ui_t *, const ProgressBarWidget_t *, const do
     Drawable_TextData_t *td = g_modal->audio_delay_label->custom_data;
     free(td->text);
     asprintf(&td->text, "Global audio delay: %dms", ms);
-    ui_recompute_drawable(g_modal->ui, g_modal->audio_delay_label);
+    ui_recompute_drawable(g_modal->audio_delay_label);
 }
 
 static void on_volume_changed(Ui_t *, const ProgressBarWidget_t *, const double progress) {
@@ -373,7 +373,7 @@ static void on_volume_changed(Ui_t *, const ProgressBarWidget_t *, const double 
     Drawable_TextData_t *td = g_modal->volume_label->custom_data;
     free(td->text);
     asprintf(&td->text, "Volume: %d", volume);
-    ui_recompute_drawable(g_modal->ui, g_modal->volume_label);
+    ui_recompute_drawable(g_modal->volume_label);
 }
 
 static void on_close_settings(Ui_t *, const ButtonWidget_t *) {

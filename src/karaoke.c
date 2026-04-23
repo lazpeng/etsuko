@@ -272,7 +272,7 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
             if ( strcmp(current_loading_text, text_data->text) != 0 ) {
                 free(text_data->text);
                 text_data->text = current_loading_text;
-                ui_recompute_drawable(state->ui, state->loading.loading_text);
+                ui_recompute_drawable(state->loading.loading_text);
             } else {
                 free(current_loading_text);
             }
@@ -704,7 +704,7 @@ static void update_elapsed_text(const Karaoke_t *state) {
     if ( strncmp(custom_data->text, time_str, 5) != 0 ) {
         free(custom_data->text);
         custom_data->text = strdup(time_str);
-        ui_recompute_drawable(state->ui, state->drawables.elapsed_time_text);
+        ui_recompute_drawable(state->drawables.elapsed_time_text);
     }
 }
 
@@ -721,7 +721,7 @@ static void update_remaining_text(const Karaoke_t *state) {
     if ( strcmp(time_str, custom_data->text) != 0 ) {
         free(custom_data->text);
         custom_data->text = strdup(time_str);
-        ui_recompute_drawable(state->ui, state->drawables.remaining_time_text);
+        ui_recompute_drawable(state->drawables.remaining_time_text);
     }
 }
 

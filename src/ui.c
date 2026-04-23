@@ -42,6 +42,8 @@ struct Ui_t {
     int32_t current_drag_grab_offset_x, current_drag_grab_offset_y;
 };
 
+void internal_reposition_drawable(Drawable_t *drawable, bool animate);
+
 static ZLayer_t *z_layer_init(const int index) {
     ZLayer_t *z_layer = calloc(1, sizeof(*z_layer));
     z_layer->index = index;
@@ -1903,7 +1905,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
     result->texture = final_texture;
     result->layout = *layout;
     result->z_layer_index = layout->z_index + container->z_layer_index;
-    ui_reposition_drawable(result);
+    internal_reposition_drawable(result, false);
 
     if ( data->draw_shadow ) {
         const int32_t text_pixels = render_measure_pixels_from_em(data->em);
@@ -2166,7 +2168,7 @@ static Animation_t *find_active_animation(const Drawable_t *drawable, const Anim
     return internal_find_active_animation(drawable, type, 0);
 }
 
-void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
+void ui_recompute_drawable(Drawable_t *drawable) {
     const Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
         void *old_custom_data = drawable->custom_data;
@@ -2187,12 +2189,12 @@ void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
         if ( data->border_radius_em > 0 ) {
             drawable->texture->border_radius = (float)render_measure_pixels_from_em(data->border_radius_em);
         }
-        ui_reposition_drawable(drawable);
+        internal_reposition_drawable(drawable, false);
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);
         }
     } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
-        ui_reposition_drawable(drawable);
+        internal_reposition_drawable(drawable, false);
     } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
         // It should recompute itself inside some loop() function somewhere
         drawable->pending_recompute = true;
@@ -2211,13 +2213,13 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
         if ( drawable->layout.relative_to_size == NULL )
-            ui_recompute_drawable(ui, drawable);
+            ui_recompute_drawable(drawable);
     }
     // then those that do (saves having to store a flag whether they were recomputed or not)
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
         if ( drawable->layout.relative_to_size != NULL )
-            ui_recompute_drawable(ui, drawable);
+            ui_recompute_drawable(drawable);
     }
     // then position
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
@@ -2445,13 +2447,13 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     return internal_reapply_animation(drawable, base_anim, apply_type, 0);
 }
 
-void ui_reposition_drawable(Drawable_t *drawable) {
+void internal_reposition_drawable(Drawable_t *drawable, const bool animate) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
     position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
 
-    if ( old_x != drawable->bounds.x || old_y != drawable->bounds.y ) {
+    if ( animate && (old_x != drawable->bounds.x || old_y != drawable->bounds.y) ) {
         // recompute scrollable bounds
         drawable->parent->content_size_dirty = true;
 
@@ -2463,6 +2465,10 @@ void ui_reposition_drawable(Drawable_t *drawable) {
             }
         }
     }
+}
+
+void ui_reposition_drawable(Drawable_t *drawable) {
+    internal_reposition_drawable(drawable, true);
 }
 
 void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
