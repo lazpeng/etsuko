@@ -11,7 +11,8 @@
 #include "constants.h"
 #include "container_utils.h"
 
-#define MAX_TIMINGS_PER_LINE (24)
+// TODO: Keep in sync with renderer.h's MAX_SCALE_SUB_REGIONS
+#define MAX_TIMINGS_PER_LINE (64)
 
 /**
  * Represents a timing segment inside a line. This can be a single character, a syllable, a word or the entire line.
