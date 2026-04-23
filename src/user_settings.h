@@ -22,8 +22,8 @@ typedef enum LyricFillSetting_t {
 } LyricFillSetting_t;
 
 typedef enum LyricEffectSetting_t {
-    SET_LYRIC_EFFECT_EMPHASIZE = 0,
-    SET_LYRIC_EFFECT_PULSE
+    SET_LYRIC_EFFECT_PULSE = 0,
+    SET_LYRIC_EFFECT_EMPHASIZE
 } LyricEffectSetting_t;
 
 typedef enum LyricLanguageSetting_t {
