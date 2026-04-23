@@ -1751,12 +1751,12 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
                     last_was_kanji = str_ch_is_kanji(next_c);
                 }
 
-                // Forward kanji→kana scan failed. Fall back to the most recent script transition we passed
-                // (e.g. hiragana→katakana at る→シ in "駆け抜けるシューティングスター"), then to a hard break
-                // at the last char that still fit within the container width.
+                // Couldn't break in the transition from kanji to kana, try to break in the last transition between
+                // scripts (e.g. hiragana to katakana)
                 if ( last_script_transition_idx > start ) {
                     return last_script_transition_idx;
                 }
+                // If all else fails, break at the last suitable character before the maximum width
                 if ( last_fitting_break_idx > start ) {
                     return last_fitting_break_idx;
                 }
