@@ -14,6 +14,8 @@
 #include <string.h>
 
 // This is very messy, could be refactored into something at least consistent with the naming
+#define LINE_SIZE_WITH_TIMINGS_EM (3.5)
+#define LINE_SIZE_WITHOUT_TIMINGS_EM (1.5)
 #define LINE_VERTICAL_PADDING (0.015)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.03)
 #define LINE_FIRST_VERTICAL_OFFSET (0.35)
@@ -312,7 +314,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             }
         }
 
-        const double lyrics_em = language->has_timings ? 2.5 : 1.5;
+        const double lyrics_em = language->has_timings ? LINE_SIZE_WITH_TIMINGS_EM : LINE_SIZE_WITHOUT_TIMINGS_EM;
         const double line_padding = should_generate_reading_hints ? TEXT_LINE_PADDING_WITH_READINGS : 0;
         Drawable_TextData_t data = {.text = line_text,
                                     .font_type = FONT_LYRICS,
