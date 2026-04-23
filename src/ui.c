@@ -832,28 +832,24 @@ static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptS
 
     if ( progress >= 1.0 ) {
         progress = 1.0;
-        animation->active = false;
+        animation->active = animation->sticky;
     }
 
-    // progress = apply_ease_func(progress, data->ease_func);
+    progress = apply_ease_func(progress, data->ease_func);
     // Consider this will be the num_region'th region of the final set
     ScaleRegionOpt_t *opt = NULL;
     if ( regions->num_regions >= MAX_SCALE_SUB_REGIONS ) {
-        // Find the oldest scale region so we can replace it
-
-        // Special case, it just wrapped around
-        if ( regions->regions[0].sequence < regions->regions[regions->num_regions - 1].sequence ) {
-            opt = &regions->regions[0];
-            opt->sequence = regions->regions[regions->num_regions - 1].sequence + 1;
-        } else {
-            // Find sequentially
-            for ( int32_t i = 1; i < regions->num_regions; i++ ) {
-                if ( regions->regions[i - 1].sequence < regions->regions[i].sequence ) {
-                    opt = &regions->regions[i - 1];
-                    opt->sequence = regions->regions[i].sequence + 1;
-                }
-            }
+        // Circular buffer is full: replace the slot with the lowest sequence (oldest).
+        int32_t oldest_idx = 0;
+        int32_t newest_seq = regions->regions[0].sequence;
+        for ( int32_t i = 1; i < regions->num_regions; i++ ) {
+            if ( regions->regions[i].sequence < regions->regions[oldest_idx].sequence )
+                oldest_idx = i;
+            if ( regions->regions[i].sequence > newest_seq )
+                newest_seq = regions->regions[i].sequence;
         }
+        opt = &regions->regions[oldest_idx];
+        opt->sequence = newest_seq + 1;
     } else {
         opt = &regions->regions[regions->num_regions];
         if ( regions->num_regions > 0 ) {
@@ -873,6 +869,8 @@ static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptS
     opt->relative_scale = data->scale_region.from_scale + scale_diff * (float)progress;
     opt->from_scale = data->scale_region.from_scale;
     opt->to_scale = data->scale_region.to_scale;
+    opt->pos_x_offset = data->scale_region.pos_x_offset * progress;
+    opt->pos_y_offset = data->scale_region.pos_y_offset * progress;
 }
 
 typedef struct AnimationDelta {
@@ -2152,15 +2150,20 @@ static Animation_t *find_animation(const Drawable_t *drawable, const AnimationTy
     return NULL;
 }
 
-static Animation_t *find_active_animation(const Drawable_t *drawable, const AnimationType_t type) {
+static Animation_t *internal_find_active_animation(const Drawable_t *drawable, const AnimationType_t type,
+                                                   const int32_t unique_id) {
     // Traverse backwards so we find the most recent animation
     for ( int32_t i = (int32_t)drawable->active_animations->size - 1; i >= 0; i-- ) {
         Animation_t *animation = drawable->active_animations->data[i];
-        if ( animation->type == type ) {
+        if ( animation->type == type && animation->unique_id == unique_id ) {
             return animation;
         }
     }
     return NULL;
+}
+
+static Animation_t *find_active_animation(const Drawable_t *drawable, const AnimationType_t type) {
+    return internal_find_active_animation(drawable, type, 0);
 }
 
 void ui_recompute_drawable(Ui_t *ui, Drawable_t *drawable) {
@@ -2366,27 +2369,29 @@ static Animation_BlurRadiusData_t *dup_anim_blur_radius_data(const Animation_Blu
 /**
  * Attempts to (re)apply the given animation to a certain drawable, applying the apply rule (with a possible override)
  */
-static Animation_t *reapply_animation(const Drawable_t *drawable, const Animation_t *base_anim,
-                                      const AnimationApplyType_t apply_type) {
+static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const Animation_t *base_anim,
+                                               const AnimationApplyType_t apply_type, const int32_t unique_id) {
     // First check if we won't actually apply the animation.
-    Animation_t *existing = find_active_animation(drawable, base_anim->type);
+    Animation_t *existing = internal_find_active_animation(drawable, base_anim->type, unique_id);
     if ( apply_type == ANIM_APPLY_BLOCK && existing != NULL ) {
         return NULL; // There's already one running and we should block until it's done
     }
-    if ( apply_type == ANIM_APPLY_OVERRIDE && existing != NULL ) {
+    if ( (apply_type == ANIM_APPLY_OVERRIDE || apply_type == ANIM_APPLY_STICKY) && existing != NULL ) {
         // Reuse the current animation, just reset the elapsed
         existing->elapsed = 0.0;
         existing->active = true;
+        existing->sticky = true;
         return existing;
     }
     // duplicate the animation
-    // TODO: Remove allocation on every invocation of animations by reusing existing buffers
     Animation_t *animation = calloc(1, sizeof(*animation));
     // copy everything from the base anim
     memcpy(animation, base_anim, sizeof(*animation));
     animation->elapsed = 0.0;
     animation->delay = 0.0;
     animation->active = true;
+    animation->sticky = apply_type == ANIM_APPLY_STICKY;
+    animation->unique_id = unique_id;
     // then duplicate the data
     animation->custom_data = NULL;
     switch ( animation->type ) {
@@ -2418,9 +2423,7 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     // to an existing one In the case of overriding, we should already have had an early return above if there's an animation
     // currently playing so we avoid re-allocating the custom data and the struct itself, so it behaves the same as BLOCK (with no
     // existing anim) or CONCURRENT (whatever is the case)
-    if ( apply_type == ANIM_APPLY_BLOCK || apply_type == ANIM_APPLY_CONCURRENT || apply_type == ANIM_APPLY_OVERRIDE ) {
-        vec_add(drawable->active_animations, animation);
-    } else if ( apply_type == ANIM_APPLY_SEQUENTIAL ) {
+    if ( apply_type == ANIM_APPLY_SEQUENTIAL ) {
         // Add the current animation to the linked list of "pending" animations
         if ( existing != NULL ) {
             while ( existing->next != NULL ) {
@@ -2431,10 +2434,15 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
             vec_add(drawable->active_animations, animation);
         }
     } else {
-        error_abort("reapply_animation: Unrecognized animation type");
+        vec_add(drawable->active_animations, animation);
     }
 
     return animation;
+}
+
+static Animation_t *reapply_animation(const Drawable_t *drawable, const Animation_t *base_anim,
+                                      const AnimationApplyType_t apply_type) {
+    return internal_reapply_animation(drawable, base_anim, apply_type, 0);
 }
 
 void ui_reposition_drawable(Drawable_t *drawable) {
@@ -2496,7 +2504,7 @@ void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, Animate
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        Animation_t *animation = internal_reapply_animation(drawable, base_anim, base_anim->apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
             data->from_scale = drawable->bounds.scale_mod;
@@ -2556,7 +2564,7 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
         if ( !different )
             return;
 
-        Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+        Animation_t *animation = internal_reapply_animation(drawable, base_anim, base_anim->apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_DrawRegionData_t *data = animation->custom_data;
             // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
@@ -2617,14 +2625,14 @@ void ui_drawable_set_alpha(Drawable_t *drawable, const int32_t alpha) {
     drawable->alpha_mod = alpha;
 }
 
-void ui_drawable_set_alpha_dur(Drawable_t *drawable, int32_t alpha, AnimatedSetOpts_t opts) {
+void ui_drawable_set_alpha_dur(Drawable_t *drawable, const int32_t alpha, const AnimatedSetOpts_t opts) {
     if ( alpha == drawable->alpha_mod ) {
         return;
     }
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_FADE_IN_OUT);
     if ( base_anim != NULL ) {
-        Animation_t *animation = reapply_animation(drawable, base_anim, opts.apply_type);
+        Animation_t *animation = internal_reapply_animation(drawable, base_anim, opts.apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_FadeInOutData_t *data = animation->custom_data;
             data->from_alpha = drawable->alpha_mod;
@@ -2698,7 +2706,7 @@ void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleReg
         AnimationApplyType_t apply_type = opts.apply_type;
         if ( apply_type == ANIM_APPLY_DEFAULT )
             apply_type = base_anim->apply_type;
-        Animation_t *animation = reapply_animation(drawable, base_anim, apply_type);
+        Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_ScaleRegionData_t *data = animation->custom_data;
             data->scale_region = *region;
@@ -2941,6 +2949,14 @@ void ui_container_update_background_colors_immediate(const Container_t *containe
             container->background->colors[i] = colors[i];
         else
             container->background->colors[i] = (Color_t){0, 0, 0, 255};
+    }
+}
+
+void ui_clear_sticky_animations(const Drawable_t *drawable) {
+    for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+        Animation_t *animation = drawable->active_animations->data[i];
+        if ( animation->sticky )
+            animation->active = false;
     }
 }
 

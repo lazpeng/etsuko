@@ -216,6 +216,7 @@ typedef enum AnimationApplyType_t {
      * creation of the animation is used instead.
      */
     ANIM_APPLY_DEFAULT,
+    ANIM_APPLY_STICKY,
 } AnimationApplyType_t;
 
 typedef enum AnimationEaseType_t {
@@ -239,6 +240,8 @@ typedef struct Animation_t {
     // and replace its spot in the vector with the next, we can safely say it will be freed by the ui eventually. So in practice
     // this reference is indeed a non-owning one.
     WEAK struct Animation_t *next;
+    bool sticky;
+    int32_t unique_id;
 } Animation_t;
 
 typedef struct ContainerAnimation_t {
@@ -254,6 +257,7 @@ typedef struct AnimatedSetOpts_t {
     double duration;
     double delay;
     AnimationApplyType_t apply_type;
+    int32_t unique_id;
 } AnimatedSetOpts_t;
 
 // Options and custom data
@@ -546,6 +550,7 @@ void ui_container_animate_color_lerp(Container_t *container, double duration, An
 void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
 void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);
+void ui_clear_sticky_animations(const Drawable_t *drawable);
 // Widgets
 int ui_register_widget(const Container_t *parent, c_reconfigure_widget reconfigure_widget, c_destroy_widget destroy_callback,
                        void *widget_data);

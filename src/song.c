@@ -181,7 +181,25 @@ static void read_timings(const Song_t *song, const Song_Language_t *lang, const 
         vec_add(lang->lines, line);
 }
 
-static void read_ass_line_content(Song_t *song, Song_Line_t *line, Song_Language_t *language, const char *start, const char *end) {
+static bool is_line_timing_only_punctuation(const Song_Line_t *line, const Song_LineTiming_t *timing) {
+    bool only_punctuation = true;
+
+    int32_t idx = timing->start_idx;
+    for ( int32_t i = 0; i < timing->end_char_idx - timing->start_char_idx; i++ ) {
+        const int32_t c = str_u8_next(line->full_text, strlen(line->full_text), &idx);
+        const bool punctuation =
+            c == '(' || c == ')' || c == ',' || c == '.' || c == '!' || c == '?' || str_ch_is_japanese_punctuation(c);
+        if ( !punctuation ) {
+            only_punctuation = false;
+            break;
+        }
+    }
+
+    return only_punctuation;
+}
+
+static void read_ass_line_content(const Song_t *song, Song_Line_t *line, Song_Language_t *language, const char *start,
+                                  const char *end) {
     if ( end == NULL )
         end = start + strlen(start);
 
@@ -198,6 +216,7 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, Song_Language
             timing->start_idx = 0;
             timing->end_idx = (int32_t)len;
             timing->cumulative_duration = 0;
+            timing->is_only_punctuation = is_line_timing_only_punctuation(line, timing);
         }
         // return early
         return;
@@ -245,9 +264,14 @@ static void read_ass_line_content(Song_t *song, Song_Line_t *line, Song_Language
 
     line->full_text = strndup(buffer->data, buffer->len);
     str_buf_destroy(buffer);
+
+    for ( int32_t i = 0; i < line->num_timings; i++ ) {
+        Song_LineTiming_t *timing = &line->timings[i];
+        timing->is_only_punctuation = is_line_timing_only_punctuation(line, timing);
+    }
 }
 
-static void read_ass(Song_t *song, Song_Language_t *lang, const char *buffer) {
+static void read_ass(const Song_t *song, Song_Language_t *lang, const char *buffer) {
     if ( str_is_empty(buffer) )
         return;
 
@@ -473,7 +497,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
     }
 
     str_buf_destroy(str_buffer);
-
 
     // Process things that have been postponed to until we have all the lyrics
     for ( size_t i = 0; i < g_song->languages->size; i++ ) {

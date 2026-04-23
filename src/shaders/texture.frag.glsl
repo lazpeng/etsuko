@@ -10,7 +10,7 @@ uniform float u_colorModFactor;
 uniform int u_num_regions;
 uniform vec4 u_regions[4];
 uniform int u_num_erase_regions;
-uniform vec4 u_erase_regions[20];
+uniform vec4 u_erase_regions[64];
 
 uniform float u_blurRadius;
 uniform sampler2D u_fb_tex;

@@ -11,6 +11,7 @@
 #include "container_utils.h"
 #include "song.h"
 #include "ui.h"
+#include "user_settings.h"
 
 // 512 lines ought to be enough for anybody
 #define MAX_SONG_LINES 512
@@ -52,6 +53,8 @@ typedef struct etsuko_LyricsView_t {
     WEAK LyricsLanguage_t *selected_language;
     int32_t current_hovered_index;
     bool language_changed;
+    LyricEffectSetting_t saved_lyric_effect_setting;
+    LyricFillSetting_t saved_lyric_fill_setting;
 } LyricsView_t;
 
 // Initializes the lyric view

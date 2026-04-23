@@ -1676,8 +1676,8 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         // relative to the center of the region
         const float center_x = (region->x0_perc + region->x1_perc) / 2.f;
         const float center_y = (region->y0_perc + region->y1_perc) / 2.f;
-        bounds.x -= bounds.w * region->relative_scale * center_x;
-        bounds.y -= bounds.h * region->relative_scale * center_y;
+        bounds.x -= bounds.w * region->relative_scale * center_x - region->pos_x_offset;
+        bounds.y -= bounds.h * region->relative_scale * center_y - region->pos_y_offset;
         // Options will be the same with the exception that the draw region(s) will be just one with the actual bound
         // to be drawn, considering the actual draw regions set
         DrawTextureOpts_t new_opts = *opts;

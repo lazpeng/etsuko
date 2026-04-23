@@ -13,7 +13,7 @@
 // The max number of sub regions that can be specified when drawing portions of a texture
 #define MAX_DRAW_SUB_REGIONS (4)
 // The max number of sub regions that can be scaled at the same time
-#define MAX_SCALE_SUB_REGIONS (20)
+#define MAX_SCALE_SUB_REGIONS (64)
 #define BORDER_RADIUS_AUTO (-1.f)
 
 /**
@@ -184,6 +184,7 @@ typedef struct ScaleRegionOpt_t {
     float x0_perc, x1_perc;
     float y0_perc, y1_perc;
     float from_scale, to_scale;
+    double pos_x_offset, pos_y_offset;
     float relative_scale;
     int sequence;
 } ScaleRegionOpt_t;

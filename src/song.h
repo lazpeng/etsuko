@@ -25,6 +25,8 @@ typedef struct Song_LineTiming_t {
     double duration;
     // Sum of all the durations of segments before this one in the line it is a part of
     double cumulative_duration;
+    // Is this segment just punctuation
+    bool is_only_punctuation;
 } Song_LineTiming_t;
 
 // Tells how to align the lyric line relative to its container
