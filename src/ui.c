@@ -3210,6 +3210,12 @@ void ui_destroy_toggle_widget(Ui_t *ui, ToggleWidget_t *widget) {
     }
     vec_destroy(widget->text_drawables);
 
+    for ( size_t i = 0; i < widget->option_hitboxes->size; i++ ) {
+        Drawable_t *drawable = widget->option_hitboxes->data[i];
+        ui_destroy_drawable(ui, drawable);
+    }
+    vec_destroy(widget->option_hitboxes);
+
     ui_unregister_widget(widget->parent, widget->entry_id);
     free(widget);
 }
