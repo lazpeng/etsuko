@@ -13,10 +13,11 @@ int32_t str_skip_whitespace(const char *src, int32_t start, int32_t max_len) {
     int32_t idx = start;
     while ( idx < max_len ) {
         int32_t tmp_idx = idx;
-        int32_t c = str_u8_next(src, (size_t)max_len, &tmp_idx);
+        const int32_t c = str_u8_next(src, (size_t)max_len, &tmp_idx);
         if ( c == ' ' || c == '\r' || c == '\n' )
             idx = tmp_idx;
-        else break;
+        else
+            break;
     }
 
     return idx - start;
@@ -92,40 +93,40 @@ int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len
 }
 
 int32_t str_u8_next(const char *const bytes, size_t size, int32_t *index) {
-    int32_t i = *index;
-    if (i < 0 || (size_t)i >= size) return -1;
+    const int32_t i = *index;
+    if ( i < 0 || (size_t)i >= size )
+        return -1;
 
-    unsigned char c0 = (unsigned char)bytes[i];
+    const unsigned char c0 = (unsigned char)bytes[i];
 
     // ASCII fast path
-    if (c0 < 0x80) {
+    if ( c0 < 0x80 ) {
         *index = i + 1;
         return c0;
     }
 
     // 2-byte
-    if ((c0 & 0xE0) == 0xC0) {
-        if (i + 2 > (int32_t)size) return -1;
+    if ( (c0 & 0xE0) == 0xC0 ) {
+        if ( i + 2 > (int32_t)size )
+            return -1;
         *index = i + 2;
         return ((c0 & 0x1F) << 6) | ((unsigned char)bytes[i + 1] & 0x3F);
     }
 
     // 3-byte
-    if ((c0 & 0xF0) == 0xE0) {
-        if (i + 3 > (int32_t)size) return -1;
+    if ( (c0 & 0xF0) == 0xE0 ) {
+        if ( i + 3 > (int32_t)size )
+            return -1;
         *index = i + 3;
-        return ((c0 & 0x0F) << 12) |
-               (((unsigned char)bytes[i + 1] & 0x3F) << 6) |
-               ((unsigned char)bytes[i + 2] & 0x3F);
+        return ((c0 & 0x0F) << 12) | (((unsigned char)bytes[i + 1] & 0x3F) << 6) | ((unsigned char)bytes[i + 2] & 0x3F);
     }
 
     // 4-byte
-    if ((c0 & 0xF8) == 0xF0) {
-        if (i + 4 > (int32_t)size) return -1;
+    if ( (c0 & 0xF8) == 0xF0 ) {
+        if ( i + 4 > (int32_t)size )
+            return -1;
         *index = i + 4;
-        return ((c0 & 0x07) << 18) |
-               (((unsigned char)bytes[i + 1] & 0x3F) << 12) |
-               (((unsigned char)bytes[i + 2] & 0x3F) << 6) |
+        return ((c0 & 0x07) << 18) | (((unsigned char)bytes[i + 1] & 0x3F) << 12) | (((unsigned char)bytes[i + 2] & 0x3F) << 6) |
                ((unsigned char)bytes[i + 3] & 0x3F);
     }
 
@@ -286,7 +287,7 @@ int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32
         }
         content_end = bytes;
     }
-    str_buf_append(buf, src+start, src+content_end);
+    str_buf_append(buf, src + start, src + content_end);
 
     return bytes - start;
 }
@@ -343,4 +344,34 @@ bool str_ch_is_japanese_particle(const int32_t c) {
 bool str_ch_is_japanese_punctuation(const int32_t c) {
     // (space), 、(comma), 。(period), ！ (exclamation), ？ (interrogation)
     return c == 0x3000 || c == 0x3001 || c == 0x3002 || c == 0xFF01 || c == 0xFF1F;
+}
+
+bool str_ch_is_forbidden_line_start(const int32_t c) {
+    // Characters that shouldn't start a line: long vowel mark, small kana. Breaking immediately before
+    // one of these looks broken, so skip them as break candidates.
+    if ( c == 0x30A1 || c == 0x30A3 || // ァ ィ
+         c == 0x30A5 || c == 0x30A7 || // ゥ ェ
+         c == 0x30A9 || c == 0x30C3 || // ォ ッ
+         c == 0x30E3 || c == 0x30E5 || // ャ ュ
+         c == 0x30E7 || c == 0x30EE || // ョ ヮ
+         c == 0x30F5 || c == 0x30F6 )  // ヵ ヶ
+        return true;
+    if ( c == 0x3041 || c == 0x3043 || // ぁ ぃ
+         c == 0x3045 || c == 0x3047 || // ぅ ぇ
+         c == 0x3049 || c == 0x3063 || // ぉ っ
+         c == 0x3083 || c == 0x3085 || // ゃ ゅ
+         c == 0x3087 || c == 0x308E || // ょ ゎ
+         c == 0x3095 || c == 0x3096 )  // ゕ ゖ
+        return true;
+    return false;
+}
+
+StrScriptClass_t str_ch_script_class(const int32_t c) {
+    if ( str_ch_is_kanji(c) )
+        return STR_SCRIPT_KANJI;
+    if ( str_ch_is_hiragana(c) )
+        return STR_SCRIPT_HIRAGANA;
+    if ( str_ch_is_katakana(c) )
+        return STR_SCRIPT_KATAKANA;
+    return STR_SCRIPT_OTHER;
 }

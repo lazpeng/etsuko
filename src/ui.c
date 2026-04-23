@@ -1647,6 +1647,9 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
      * - In regular, latin-script text, break on spaces (it is impossible for it to contain newlines in the first place)
      * - In japanese text, try to break at the longest particle or punctuation point immediately after a kanji after we
      * exceeded the maximum width. If that fails, break on the first kana (non-kanji) after we exceeded the max width.
+     * - As a last resort, break at the most recent script-class transition we passed, or hard-break at the last char
+     * that still fit within the container width — otherwise very long single-script runs (e.g. long katakana words)
+     * would overflow the container with no natural break point.
      * Obs.: if the second line is too small, and the whole thing still fits in 95% of the container width (no matter the
      * max width that has been set), we don't break the line
      */
@@ -1662,8 +1665,11 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
     int32_t current_idx = start;
     int32_t last_safe_break_idx = -1;
     int32_t last_particle_break_idx = -1;
+    int32_t last_script_transition_idx = -1;
+    int32_t last_fitting_break_idx = -1;
 
     int32_t prev_c = -1;
+    StrScriptClass_t prev_script = STR_SCRIPT_OTHER;
     bool is_japanese_context = false;
 
     while ( current_idx < size ) {
@@ -1678,8 +1684,22 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
             }
         }
 
+        const StrScriptClass_t script = str_ch_script_class(c);
+        if ( prev_c != -1 && script != prev_script && !str_ch_is_forbidden_line_start(c) ) {
+            last_script_transition_idx = char_start_idx;
+        }
+        prev_script = script;
+
         CharBounds_t char_bounds;
         render_measure_char_bounds(c, prev_c, measure_pixels_size, &char_bounds, data->font_type);
+
+        // Remember the last char boundary where the line still fits the full container width, so we can
+        // hard-break there if no natural break point exists.
+        if ( current_line_width + char_bounds.width > m_current_width && char_start_idx > start &&
+             !str_ch_is_forbidden_line_start(c) && last_fitting_break_idx == -1 ) {
+            last_fitting_break_idx = char_start_idx;
+        }
+
         current_line_width += char_bounds.width;
 
         if ( c == ' ' || c == '(' || c == ')' ) {
@@ -1731,7 +1751,15 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
                     last_was_kanji = str_ch_is_kanji(next_c);
                 }
 
-                // If we ran out of text, just return end.
+                // Forward kanji→kana scan failed. Fall back to the most recent script transition we passed
+                // (e.g. hiragana→katakana at る→シ in "駆け抜けるシューティングスター"), then to a hard break
+                // at the last char that still fit within the container width.
+                if ( last_script_transition_idx > start ) {
+                    return last_script_transition_idx;
+                }
+                if ( last_fitting_break_idx > start ) {
+                    return last_fitting_break_idx;
+                }
                 return size;
             }
 

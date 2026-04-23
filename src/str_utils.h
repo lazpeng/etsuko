@@ -147,5 +147,16 @@ bool str_ch_is_japanese_particle(int32_t c);
  * Checks whether the given unicode codepoint is a japanese punctuation (includes space, comma and period)
  */
 bool str_ch_is_japanese_punctuation(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is forbidden from starting a line (small kana, long vowel mark, etc.).
+ * Used by line-wrapping logic to avoid breaking immediately before these characters.
+ */
+bool str_ch_is_forbidden_line_start(int32_t c);
+
+typedef enum StrScriptClass_t { STR_SCRIPT_OTHER, STR_SCRIPT_KANJI, STR_SCRIPT_HIRAGANA, STR_SCRIPT_KATAKANA } StrScriptClass_t;
+/**
+ * Classifies the given unicode codepoint into a broad script class (kanji, hiragana, katakana or other).
+ */
+StrScriptClass_t str_ch_script_class(int32_t c);
 
 #endif // ETSUKO_STR_UTILS_H
