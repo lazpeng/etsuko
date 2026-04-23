@@ -216,6 +216,12 @@ typedef enum AnimationApplyType_t {
      * creation of the animation is used instead.
      */
     ANIM_APPLY_DEFAULT,
+    /**
+     * This animation will play normally until completion, but then when it reaches the end of its duration, it'll keep active
+     * and applying its delta to the drawable until it's cleared by ui_clear_sticky_animations, or it's played again.
+     * The "played again" part depends on a unique id that is optionally assigned to animations at the time of trigger (when
+     * more than one can be active at the same time) so we know _which_ of the current sticky animations to replace.
+     */
     ANIM_APPLY_STICKY,
 } AnimationApplyType_t;
 
