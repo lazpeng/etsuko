@@ -448,56 +448,48 @@ static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *b
     render_draw_rounded_rect(drawable->texture, bounds, &color, border_radius);
 }
 
-static void measure_constraints(const SizeConstraint_t *constraint, MAYBE_NULL double *width, MAYBE_NULL double *height) {
-    double computed_width = 0, computed_height = 0;
-    if ( constraint->type & CONSTRAINT_RELATIVE && constraint->relative_to == NULL ) {
-        printf("Warning: compute_constraints: RELATIVE flag is set but no relative_to has been assigned\n");
-        goto finish;
+static bool measure_constraint(const SizeConstraint_t *constraint, const bool horizontal, double *out_value) {
+    switch ( constraint->type ) {
+    case CONSTRAINT_NONE:
+        return false;
+    case CONSTRAINT_ABSOLUTE:
+        *out_value = constraint->value;
+        return true;
+    case CONSTRAINT_RELATIVE:
+        if ( constraint->relative_to == NULL ) {
+            printf("Warning: measure_constraint: CONSTRAINT_RELATIVE set but no relative_to assigned\n");
+            return false;
+        }
+        *out_value = (horizontal ? constraint->relative_to->w : constraint->relative_to->h) * constraint->value;
+        return true;
     }
-
-    if ( constraint->type & CONSTRAINT_ABSOLUTE ) {
-        computed_width = constraint->value;
-        computed_height = constraint->value;
-    } else if ( constraint->type & CONSTRAINT_RELATIVE ) {
-        computed_width = constraint->relative_to->w * constraint->value;
-        computed_height = constraint->relative_to->h * constraint->value;
-    }
-
-finish:
-    if ( width != NULL )
-        *width = computed_width;
-    if ( height != NULL )
-        *height = computed_height;
+    return false;
 }
 
 static void measure_layout(const Layout_t *layout, const Container_t *parent, Bounds_t *out_bounds) {
     double w = layout->width, h = layout->height, padding_w = layout->padding_w, padding_h = layout->padding_h;
-    if ( layout->width > 0 ) {
-        if ( layout->flags & LAYOUT_PROPORTIONAL_W ) {
-            w = parent->bounds.w * w;
-            padding_w = parent->bounds.w * padding_w;
-        }
+
+    const bool relative_to_w = (layout->relative_to_size != NULL) && (layout->flags & LAYOUT_RELATIVE_TO_WIDTH);
+    const bool relative_to_h = (layout->relative_to_size != NULL) && (layout->flags & LAYOUT_RELATIVE_TO_HEIGHT);
+    const bool proportional_w = (layout->flags & LAYOUT_PROPORTIONAL_W) != 0;
+    const bool proportional_h = (layout->flags & LAYOUT_PROPORTIONAL_H) != 0;
+
+    if ( relative_to_w ) {
+        w = layout->relative_to_size->bounds.w * layout->width;
+    } else if ( proportional_w ) {
+        w = parent->bounds.w * layout->width;
+    }
+    if ( proportional_w ) {
+        padding_w = parent->bounds.w * padding_w;
     }
 
-    if ( layout->height > 0 ) {
-        if ( layout->flags & LAYOUT_PROPORTIONAL_H ) {
-            h = parent->bounds.h * h;
-            padding_h = parent->bounds.h * padding_h;
-        }
+    if ( relative_to_h ) {
+        h = layout->relative_to_size->bounds.h * layout->height;
+    } else if ( proportional_h ) {
+        h = parent->bounds.h * layout->height;
     }
-
-    if ( layout->relative_to_size != NULL ) {
-        if ( (layout->flags & LAYOUT_RELATIVE_TO_SIZE) == 0 ) {
-            puts("Warning: relative_to_size is set but no flag setting the relationship was passed.");
-        }
-
-        if ( layout->flags & LAYOUT_RELATIVE_TO_WIDTH ) {
-            w = layout->relative_to_size->bounds.w * layout->width;
-        }
-
-        if ( layout->flags & LAYOUT_RELATIVE_TO_HEIGHT ) {
-            h = layout->relative_to_size->bounds.h * layout->height;
-        }
+    if ( proportional_h ) {
+        padding_h = parent->bounds.h * padding_h;
     }
 
     w += padding_w;
@@ -505,17 +497,17 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
 
     const bool maintain_aspect_ratio = layout->flags & LAYOUT_SPECIAL_KEEP_ASPECT_RATIO;
     if ( maintain_aspect_ratio ) {
-        // Decide based on the smaller axis
-        const double aspect_ratio = out_bounds->w / out_bounds->h;
-
-        if ( w != 0.0 && h != 0.0 ) {
-            if ( w < h ) {
-                h = w / aspect_ratio;
-            } else {
-                w = h * aspect_ratio;
-            }
+        if ( out_bounds->w <= 0.0 || out_bounds->h <= 0.0 ) {
+            puts("Warning: LAYOUT_SPECIAL_KEEP_ASPECT_RATIO needs a non-zero base size on the drawable.");
         } else {
-            if ( h != 0.0 ) {
+            const double aspect_ratio = out_bounds->w / out_bounds->h;
+            if ( w != 0.0 && h != 0.0 ) {
+                if ( w < h ) {
+                    h = w / aspect_ratio;
+                } else {
+                    w = h * aspect_ratio;
+                }
+            } else if ( h != 0.0 ) {
                 w = h * aspect_ratio;
             } else if ( w != 0.0 ) {
                 h = w / aspect_ratio;
@@ -525,32 +517,17 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
-    // TODO: This will currently mess with things that have the keep aspect ratio flag on
-    //  come back to this when I can think of a solution to have both at the same time
-    if ( layout->min_width.type != CONSTRAINT_NONE ) {
-        double constraint_width = 0;
-        measure_constraints(&layout->min_width, &constraint_width, NULL);
-        if ( constraint_width != 0 )
-            w = MAX(w, constraint_width);
-    }
-    if ( layout->max_width.type != CONSTRAINT_NONE ) {
-        double constraint_width = 0;
-        measure_constraints(&layout->max_width, &constraint_width, NULL);
-        if ( constraint_width != 0 )
-            w = MIN(w, constraint_width);
-    }
-    if ( layout->min_height.type != CONSTRAINT_NONE ) {
-        double constraint_height = 0;
-        measure_constraints(&layout->min_height, NULL, &constraint_height);
-        if ( constraint_height != 0 )
-            h = MAX(h, constraint_height);
-    }
-    if ( layout->max_height.type != CONSTRAINT_NONE ) {
-        double constraint_height = 0;
-        measure_constraints(&layout->max_height, NULL, &constraint_height);
-        if ( constraint_height != 0 )
-            h = MIN(h, constraint_height);
-    }
+    // TODO: overrides keep-aspect-ratio
+    double cw;
+    if ( measure_constraint(&layout->min_width, true, &cw) )
+        w = MAX(w, cw);
+    if ( measure_constraint(&layout->max_width, true, &cw) )
+        w = MIN(w, cw);
+    double ch;
+    if ( measure_constraint(&layout->min_height, false, &ch) )
+        h = MAX(h, ch);
+    if ( measure_constraint(&layout->max_height, false, &ch) )
+        h = MIN(h, ch);
 
     // width or height being zero means automatic so dependent on the actual size of the thing, e.g. text and images
     // this is of course a major oversight and it will be wrong if you forget to set these properly so... don't :)
@@ -578,6 +555,8 @@ static void measure_container_size(const Container_t *container, Bounds_t *out_b
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
         const Container_t *child = container->child_containers->data[i];
+        if ( child->layout.absolute )
+            continue;
         Bounds_t child_bounds = {0};
         measure_container_size(child, &child_bounds);
 
@@ -592,27 +571,27 @@ static void measure_container_size(const Container_t *container, Bounds_t *out_b
     out_bounds->w = fmax(out_bounds->w, max_x - min_x);
 }
 
-static void recalculate_container_alignment(Container_t *container) {
-    if ( container->parent != NULL )
-        recalculate_container_alignment(container->parent);
+static void recalculate_container_alignment_local(Container_t *container) {
+    if ( !(container->flags & (CONTAINER_VERTICAL_ALIGN_CONTENT | CONTAINER_HORIZONTAL_ALIGN_CONTENT)) )
+        return;
 
-    if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT || container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
-        container->align_content_offset_y = 0;
-        container->align_content_offset_x = 0;
-        Bounds_t bounds = {0};
-        measure_container_size(container, &bounds);
-        if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
-            container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
-        }
-        if ( container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
-            container->align_content_offset_x = (container->bounds.w - bounds.w) / 2.f;
-            if ( container->align_content_offset_x < 0 ) {
-                bounds = (Bounds_t){0};
-                measure_container_size(container, &bounds);
-            }
-        }
+    container->align_content_offset_y = 0;
+    container->align_content_offset_x = 0;
+    Bounds_t bounds = {0};
+    measure_container_size(container, &bounds);
+    if ( container->flags & CONTAINER_VERTICAL_ALIGN_CONTENT ) {
+        container->align_content_offset_y = (container->bounds.h - bounds.h) / 2.f;
+    }
+    if ( container->flags & CONTAINER_HORIZONTAL_ALIGN_CONTENT ) {
+        container->align_content_offset_x = (container->bounds.w - bounds.w) / 2.f;
+    }
+    container->content_size_dirty = true;
+}
 
-        container->content_size_dirty = true;
+static void recalculate_container_alignment_ancestors(Container_t *container) {
+    while ( container != NULL ) {
+        recalculate_container_alignment_local(container);
+        container = container->parent;
     }
 }
 
@@ -620,53 +599,54 @@ static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_
     const Bounds_t *proportional_bounds_x = &parent->bounds;
     if ( layout->flags & LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE ) {
         if ( layout->relative_to == NULL ) {
-            printf("Warning: LAYOUT_PROPORTIONAL_POS_TO_RELATIVE is set but no relative_to is assigned\n");
+            printf("Warning: LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE is set but no relative_to is assigned\n");
         } else {
             proportional_bounds_x = &layout->relative_to->bounds;
         }
     }
 
-    double x = layout->offset_x;
-    double calc_w = 0;
-    if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
-        calc_w = out_bounds->w;
-    } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_X ) {
-        calc_w = out_bounds->w / 2.0;
-    }
+    double x;
     if ( layout->flags & LAYOUT_CENTER_X ) {
-        x = proportional_bounds_x->w / 2.f - out_bounds->w / 2.f - calc_w;
-    } else if ( layout->flags & LAYOUT_PROPORTIONAL_X ) {
-        x = proportional_bounds_x->w * x;
+        x = proportional_bounds_x->w * 0.5 - out_bounds->w * 0.5;
+        if ( layout->flags & (LAYOUT_ANCHOR_RIGHT_X | LAYOUT_ANCHOR_CENTER_X) ) {
+            puts("Warning: LAYOUT_CENTER_X combined with LAYOUT_ANCHOR_*_X; anchor ignored.");
+        }
+    } else {
+        x = (layout->flags & LAYOUT_PROPORTIONAL_X) ? proportional_bounds_x->w * layout->offset_x : layout->offset_x;
+        if ( x < 0 && (layout->flags & LAYOUT_WRAP_AROUND_X) )
+            x = proportional_bounds_x->w + x;
+        if ( layout->flags & LAYOUT_ANCHOR_RIGHT_X ) {
+            x -= out_bounds->w;
+        } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_X ) {
+            x -= out_bounds->w * 0.5;
+        }
     }
-
-    if ( x < 0 && layout->flags & LAYOUT_WRAP_AROUND_X )
-        x = proportional_bounds_x->w + x;
-    x -= calc_w;
 
     const Bounds_t *proportional_bounds_y = &parent->bounds;
     if ( layout->flags & LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE ) {
         if ( layout->relative_to == NULL ) {
-            printf("Warning: LAYOUT_PROPORTIONAL_POS_TO_RELATIVE is set but no relative_to is assigned\n");
+            printf("Warning: LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE is set but no relative_to is assigned\n");
         } else {
             proportional_bounds_y = &layout->relative_to->bounds;
         }
     }
-    double y = layout->offset_y;
-    double calc_h = 0;
-    if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
-        calc_h = out_bounds->h;
-    } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_Y ) {
-        calc_h = out_bounds->h / 2.f;
-    }
-    if ( layout->flags & LAYOUT_CENTER_Y ) {
-        y = proportional_bounds_y->h / 2.f - out_bounds->h / 2.f - calc_h;
-    } else if ( layout->flags & LAYOUT_PROPORTIONAL_Y ) {
-        y = proportional_bounds_y->h * y;
-    }
 
-    if ( y < 0 && layout->flags & LAYOUT_WRAP_AROUND_Y )
-        y = proportional_bounds_y->h + y;
-    y -= calc_h;
+    double y;
+    if ( layout->flags & LAYOUT_CENTER_Y ) {
+        y = proportional_bounds_y->h * 0.5 - out_bounds->h * 0.5;
+        if ( layout->flags & (LAYOUT_ANCHOR_BOTTOM_Y | LAYOUT_ANCHOR_CENTER_Y) ) {
+            puts("Warning: LAYOUT_CENTER_Y combined with LAYOUT_ANCHOR_*_Y; anchor ignored.");
+        }
+    } else {
+        y = (layout->flags & LAYOUT_PROPORTIONAL_Y) ? proportional_bounds_y->h * layout->offset_y : layout->offset_y;
+        if ( y < 0 && (layout->flags & LAYOUT_WRAP_AROUND_Y) )
+            y = proportional_bounds_y->h + y;
+        if ( layout->flags & LAYOUT_ANCHOR_BOTTOM_Y ) {
+            y -= out_bounds->h;
+        } else if ( layout->flags & LAYOUT_ANCHOR_CENTER_Y ) {
+            y -= out_bounds->h * 0.5;
+        }
+    }
 
     if ( layout->relative_to != NULL ) {
         if ( layout->relative_to->parent != parent ) {
@@ -674,8 +654,7 @@ static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_
         }
 
         if ( (layout->flags & LAYOUT_RELATIVE_TO_POS) == 0 ) {
-            puts("Warning: relative_to is set but no flag setting the relationship "
-                 "was passed.");
+            puts("Warning: relative_to is set but no LAYOUT_RELATIVE_TO_X/Y flag is set.");
         }
 
         if ( layout->flags & LAYOUT_RELATIVE_TO_X ) {
@@ -695,8 +674,6 @@ static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_
 
     out_bounds->x = x;
     out_bounds->y = y;
-
-    recalculate_container_alignment(parent);
 }
 
 /* Easing functions */
@@ -2108,6 +2085,8 @@ Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout
         vec_add_sorted_container(parent->child_containers, result);
         if ( result->z_layer_index > 0 )
             vec_add(ui->opaque_containers, result);
+        if ( !layout->absolute )
+            recalculate_container_alignment_ancestors(parent);
     }
 
     return result;
@@ -2250,10 +2229,12 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
         if ( drawable->layout.relative_to_size != NULL )
             ui_recompute_drawable(drawable);
     }
-    // then position
+    // Drawables without relative_to are already correctly placed above; only the ones whose position depends on another
+    // drawable need a second positioning pass to pick up the final bounds of their target.
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
-        position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
+        if ( drawable->layout.relative_to != NULL )
+            position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {
@@ -2261,6 +2242,8 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
             ui_recompute_container(ui, container->child_containers->data[i]);
         }
     }
+
+    recalculate_container_alignment_local(container);
 
     for ( size_t i = 0; i < container->widgets->size; i++ ) {
         const WidgetEntry_t *cb = container->widgets->data[i];
@@ -2308,6 +2291,8 @@ void ui_reposition_container(Container_t *container) {
             ui_reposition_container(child_container);
         }
     }
+
+    recalculate_container_alignment_local(container);
 
     for ( size_t i = 0; i < container->widgets->size; i++ ) {
         const WidgetEntry_t *cb = container->widgets->data[i];
@@ -2482,6 +2467,9 @@ void internal_reposition_drawable(Drawable_t *drawable, const bool animate) {
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
     position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
 
+    if ( !drawable->layout.absolute )
+        recalculate_container_alignment_ancestors(drawable->parent);
+
     if ( animate && (old_x != drawable->bounds.x || old_y != drawable->bounds.y) ) {
         // recompute scrollable bounds
         drawable->parent->content_size_dirty = true;
@@ -2496,9 +2484,7 @@ void internal_reposition_drawable(Drawable_t *drawable, const bool animate) {
     }
 }
 
-void ui_reposition_drawable(Drawable_t *drawable) {
-    internal_reposition_drawable(drawable, true);
-}
+void ui_reposition_drawable(Drawable_t *drawable) { internal_reposition_drawable(drawable, true); }
 
 void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     // Do this so that we can specify scale in a way that makes sense (that is, 1.0 for the default size, anything other as
