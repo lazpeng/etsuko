@@ -603,8 +603,8 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Drawa
             const bool segment_visited = view->selected_language->active_line_segment_visited[s] & (1 << i);
             is_only_punctuation = timing->is_only_punctuation;
 
-            const bool pulse_enabled_in_settings = config_get()->karaoke.enable_pulse_effect;
-            const bool pulse_enabled_in_config = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_EFFECT;
+            const bool pulse_enabled_in_config = config_get()->karaoke.enable_pulse_effect;
+            const bool pulse_enabled_in_settings = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_EFFECT;
             const bool should_show_effect = pulse_enabled_in_settings && pulse_enabled_in_config;
             if ( !segment_visited && should_show_effect ) {
                 if ( pulse_effect && !is_only_punctuation ) {
