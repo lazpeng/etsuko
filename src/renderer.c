@@ -28,7 +28,7 @@
 #define GLSL_VERSION "#version 300 es\n"
 #define GLSL_PRECISION "precision mediump float;\n"
 #else
-#include <GL/glew.h>
+#include <glad/gl.h>
 #define GLSL_VERSION "#version 330 core\n"
 #define GLSL_PRECISION ""
 #endif
@@ -390,13 +390,9 @@ void render_init(void) {
     glfwMakeContextCurrent(g_renderer->window);
 
 #ifndef __EMSCRIPTEN__
-    glewExperimental = GL_TRUE;
-    const GLenum err = glewInit();
-    if ( err != GLEW_OK ) {
-        printf("GLEW Error: %s\n", (char *)glewGetErrorString(err));
-        error_abort("Failed to initialize GLEW");
+    if ( !gladLoadGL((GLADloadfunc)glfwGetProcAddress) ) {
+        error_abort("Failed to initialize glad");
     }
-    glGetError();
     glfwSwapInterval(config_get()->vsync ? 1 : 0);
 #else
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, false, on_web_resize);

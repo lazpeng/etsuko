@@ -36,6 +36,7 @@ add_executable(etsuko src/main.c
         src/renderer.c
         src/main_menu.c
         src/json.c
+        src/contrib/glad/src/gl.c
         src/contrib/stb_image.c
         src/contrib/stb_truetype.c
         src/contrib/minimp3.c
@@ -45,6 +46,7 @@ add_executable(etsuko src/main.c
         src/fps_counter.h
         src/fps_counter.c)
 
+set_source_files_properties(src/contrib/glad/src/gl.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
@@ -110,8 +112,7 @@ else ()
     find_package(OpenGL REQUIRED)
     target_link_libraries(etsuko PRIVATE OpenGL::GL)
 
-    find_package(GLEW REQUIRED)
-    target_link_libraries(etsuko PRIVATE GLEW::GLEW)
+    target_include_directories(etsuko PRIVATE ${CMAKE_SOURCE_DIR}/src/contrib/glad/include)
 
     # -lm
     target_link_libraries(etsuko PRIVATE m)
