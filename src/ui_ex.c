@@ -930,9 +930,15 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("destroy: lyrics_view is NULL");
     }
-    // No need to free the drawables individually
-    vec_destroy(view->selected_language->line_drawables);
-    vec_destroy(view->selected_language->line_read_hints);
+    // Drawables are owned by the UI tree and freed by ui_finish; only destroy the bookkeeping vecs
+    for ( size_t i = 0; i < view->lyrics_languages->size; i++ ) {
+        LyricsLanguage_t *lang = view->lyrics_languages->data[i];
+        vec_destroy(lang->line_drawables);
+        vec_destroy(lang->line_read_hints);
+        free(lang->language_str);
+        free(lang);
+    }
+    vec_destroy(view->lyrics_languages);
     free(view);
 }
 

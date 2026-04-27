@@ -325,17 +325,24 @@ static JsonField_t *parse_field(const char *src, int32_t *idx, const size_t size
     *idx += skip;
 
     switch ( token ) {
-    case JSON_TOKEN_QUOTE:
+    case JSON_TOKEN_QUOTE: {
         const char *str_value = parse_string(src, idx, size);
         if ( str_value == NULL ) {
             json_field_free(field);
             return NULL;
         }
+        // Deduplicate: reuse an existing pooled string rather than keeping two copies
+        const char *existing = map_get(ctx->string_pool, str_value);
+        if ( existing != NULL ) {
+            free((void *)str_value);
+            str_value = existing;
+        } else {
+            map_put(ctx->string_pool, str_value, (void *)str_value);
+        }
         field->type = JSON_STRING;
         field->value.str_value = str_value;
-        // Add to the hashmap
-        map_put(ctx->string_pool, str_value, (void *)str_value);
         break;
+    }
     case JSON_TOKEN_NUM:
         double result = 0;
         if ( !parse_number(src, idx, size, &result) ) {

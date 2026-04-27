@@ -808,8 +808,11 @@ Background_t *render_make_background(const BackgroundType_t type) {
 }
 
 void render_destroy_background(Background_t *background) {
-    if ( background != NULL )
+    if ( background != NULL ) {
+        if ( background->null_tex != NULL )
+            render_destroy_texture(background->null_tex);
         free(background);
+    }
 }
 
 static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {

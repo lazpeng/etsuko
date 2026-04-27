@@ -769,6 +769,9 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
 
 void karaoke_finish(const Karaoke_t *state) {
     events_finish();
+    if ( state->drawables.lyrics_view != NULL )
+        ui_ex_destroy_lyrics_view(state->drawables.lyrics_view);
     ui_finish(state->ui);
+    song_destroy();
     audio_finish();
 }

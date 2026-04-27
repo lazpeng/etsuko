@@ -1513,6 +1513,8 @@ void ui_finish(Ui_t *ui) {
         free(ui->global_events->data[i]);
     }
     vec_destroy(ui->global_events);
+    vec_destroy(ui->opaque_containers);
+    render_destroy_texture(ui->null_texture);
     // Free z layers
     ZLayer_t *cur = ui->z_layers_head;
     while ( cur != NULL ) {
