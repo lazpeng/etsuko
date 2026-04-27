@@ -210,7 +210,7 @@ StrBuffer_t *str_buf_init(void) {
 }
 
 void str_buf_append(StrBuffer_t *buf, const char *str, const char *end) {
-    const size_t len = end != NULL ? (size_t)(end - str) : strnlen(str, MAX_STRLEN);
+    const size_t len = end != NULL ? (size_t)(end - str) : strlen(str);
     if ( buf->len + len + 1 > buf->cap ) {
         resize_str_buffer(buf, (buf->len + len + 1) * 2);
     }

@@ -914,7 +914,6 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
     AnimationDelta delta = {.final_bounds = drawable->bounds,
                             .final_alpha = drawable->alpha_mod,
                             .color_mod = drawable->color_mod,
-                            .draw_regions = {0},
                             .final_blur_radius = drawable->blur_radius};
     delta.draw_regions = drawable->draw_regions;
     apply_animations(drawable, &delta);

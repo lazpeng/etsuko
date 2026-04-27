@@ -1,5 +1,6 @@
 #include "repository.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@ void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uin
         const uint64_t new_cap = MAX(buffer->data_capacity * 2, buffer->data_capacity + data_size);
         unsigned char *new_buf = realloc(buffer->data, new_cap);
         if ( new_buf == NULL ) {
-            printf("Failed to realloc buffer at %llu bytes\n", new_cap);
+            printf("Failed to realloc buffer at %" PRIu64 " bytes\n", new_cap);
             error_abort("Failed to realloc resource buffer");
         }
         buffer->data = new_buf;

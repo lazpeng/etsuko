@@ -119,7 +119,9 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
                     if ( (int32_t)reading->start_ch_idx >= offset_info->start_char_idx + offset_info->num_chars )
                         break; // It's on the next line
 
-                    const int32_t index_on_this_line = MAX(0, reading->start_ch_idx - offset_info->start_char_idx);
+                    const int32_t index_on_this_line = reading->start_ch_idx > (size_t)offset_info->start_char_idx
+                                                           ? (int32_t)(reading->start_ch_idx - (size_t)offset_info->start_char_idx)
+                                                           : 0;
                     const CharOffsetInfo_t *character = offset_info->char_offsets->data[index_on_this_line];
                     const double char_padding = character->width * 0.1;
                     const double character_x = offset_info->start_x + char_padding + character->x;
@@ -935,7 +937,7 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
         LyricsLanguage_t *lang = view->lyrics_languages->data[i];
         vec_destroy(lang->line_drawables);
         vec_destroy(lang->line_read_hints);
-        free(lang->language_str);
+        free((void *)lang->language_str);
         free(lang);
     }
     vec_destroy(view->lyrics_languages);

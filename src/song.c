@@ -90,7 +90,7 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
 
 static void read_lyrics_opts(Song_Line_t *line, const char *opts) {
     const char *comma = strchr(opts, ',');
-    const size_t end = comma == NULL ? strlen(opts) : comma - opts;
+    const size_t end = comma == NULL ? strlen(opts) : (size_t)(comma - opts);
 
     if ( end == 0 )
         return;
@@ -131,7 +131,7 @@ static void read_lyrics(const Song_Language_t *lang, const char *buffer, const s
     }
 
     const char *hash = strchr(buffer, '#');
-    const size_t end = hash == NULL ? strlen(buffer) : (hash - buffer);
+    const size_t end = hash == NULL ? strlen(buffer) : (size_t)(hash - buffer);
     line->full_text = strndup(buffer, end);
     if ( hash != NULL ) {
         read_lyrics_opts(line, hash + 1);
@@ -162,7 +162,7 @@ static void read_timings(const Song_t *song, const Song_Language_t *lang, const 
     }
 
     const char *comma = strchr(buffer, ',');
-    const size_t start_len = comma == NULL ? strlen(buffer) : (comma - buffer);
+    const size_t start_len = comma == NULL ? strlen(buffer) : (size_t)(comma - buffer);
 
     line->base_start_time = convert_timing(buffer, start_len);
     if ( index > 0 ) {
