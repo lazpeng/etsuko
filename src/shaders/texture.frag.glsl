@@ -9,6 +9,7 @@ uniform vec2 u_rectSize;
 uniform float u_colorModFactor;
 uniform int u_num_regions;
 uniform vec4 u_regions[4];
+uniform vec2 u_region_fade[4];
 uniform int u_num_erase_regions;
 uniform vec4 u_erase_regions[64];
 
@@ -31,6 +32,8 @@ void main() {
         finalAlpha = finalAlpha - smoothstep(u_borderRadius - 1.0, u_borderRadius, dist);
     }
     bool in_region = u_num_regions == 0;
+    // x: fade width in pixels, y: ramp anchor in texture coords
+    vec2 region_fade = vec2(0.0);
 
     for (int i = 0; i < u_num_regions; i++) {
         vec2 region_start = u_regions[i].xy;
@@ -41,8 +44,17 @@ void main() {
                 && TexCoord.y >= region_start.y
                 && TexCoord.y <= region_end.y) {
             in_region = true;
+            region_fade = u_region_fade[i];
             break;
         }
+    }
+
+    // Soft reveal edge. The anchor can sit beyond this region's right edge (scaled segment
+    // redraws behind the moving edge), so the ramp stays continuous across draw calls. The
+    // host zeroes the width once a region is fully revealed, so completed lines stay crisp.
+    if (in_region && region_fade.x > 0.0) {
+        float fade_tex = region_fade.x / max(u_rectSize.x, 1.0);
+        finalAlpha *= 1.0 - smoothstep(region_fade.y - fade_tex, region_fade.y, TexCoord.x);
     }
 
     for (int i = 0; i < u_num_erase_regions; i++) {

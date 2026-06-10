@@ -793,6 +793,8 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
             // Naively consider that just the end indexes that are going to change
             const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
             // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
+            regions->regions[i].anim_x1_from_perc = data->draw_regions.regions[i].x1_perc;
+            regions->regions[i].anim_x1_to_perc = regions->regions[i].x1_perc;
             regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
             // TODO: Figure out a way to include animating the y axis but for now leave it commented
             // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
@@ -2553,6 +2555,13 @@ void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t 
     ui_drawable_set_draw_region_dur(drawable, draw_regions, (AnimatedSetOpts_t){.duration = duration});
 }
 
+static void copy_draw_regions_to_drawable(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
+    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        drawable->draw_regions.regions[i] = draw_regions->regions[i];
+    }
+    drawable->draw_regions.num_regions = draw_regions->num_regions;
+}
+
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
     Animation_t *animation = find_active_animation(drawable, ANIM_DRAW_REGION);
     if ( animation != NULL ) {
@@ -2561,13 +2570,7 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
         animation->elapsed = animation->duration;
     }
 
-    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-        drawable->draw_regions.regions[i].x0_perc = draw_regions->regions[i].x0_perc;
-        drawable->draw_regions.regions[i].x1_perc = draw_regions->regions[i].x1_perc;
-        drawable->draw_regions.regions[i].y0_perc = draw_regions->regions[i].y0_perc;
-        drawable->draw_regions.regions[i].y1_perc = draw_regions->regions[i].y1_perc;
-    }
-    drawable->draw_regions.num_regions = draw_regions->num_regions;
+    copy_draw_regions_to_drawable(drawable, draw_regions);
 }
 
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, AnimatedSetOpts_t opts) {
@@ -2596,19 +2599,10 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
             animation->duration = opts.duration;
             animation->delay = opts.delay;
 
-            // TODO: Refactor this piece of code is duplicated
-            // Copy the real values to the drawable
-            for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-                drawable->draw_regions.regions[i] = draw_regions->regions[i];
-            }
-            drawable->draw_regions.num_regions = draw_regions->num_regions;
+            copy_draw_regions_to_drawable(drawable, draw_regions);
         }
     } else {
-        // Copy the real values to the drawable
-        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
-            drawable->draw_regions.regions[i] = draw_regions->regions[i];
-        }
-        drawable->draw_regions.num_regions = draw_regions->num_regions;
+        copy_draw_regions_to_drawable(drawable, draw_regions);
     }
 }
 
@@ -2708,10 +2702,7 @@ void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, const float rad
 void ui_drawable_disable_draw_region(Drawable_t *drawable) {
     // Reset to defaults
     for ( int i = 0; i < MAX_DRAW_SUB_REGIONS; i++ ) {
-        drawable->draw_regions.regions[i].x0_perc = 0.f;
-        drawable->draw_regions.regions[i].x1_perc = 0.f;
-        drawable->draw_regions.regions[i].y0_perc = 0.f;
-        drawable->draw_regions.regions[i].y1_perc = 0.f;
+        drawable->draw_regions.regions[i] = (DrawRegionOpt_t){0};
     }
     drawable->draw_regions.num_regions = 0;
 }

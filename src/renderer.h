@@ -159,6 +159,14 @@ typedef struct CharBounds_t {
 typedef struct DrawRegionOpt_t {
     float x0_perc, x1_perc;
     float y0_perc, y1_perc;
+    // Target values for a draw region when it's applied via an animation.
+    // Enables a fade effect when non-zero so the reveal is smoother and truncates into the far end of the region
+    // as the current (passed) x1_perc reaches the target.
+    float anim_x1_from_perc, anim_x1_to_perc;
+    // Texture x where the reveal fade ramp is anchored. 0 means anchor at x1_perc. Scaled
+    // segment redraws set this to the owning row's reveal edge, which may lie beyond this
+    // region's own x1_perc, so the ramp stays continuous across per segment draw calls.
+    float fade_anchor_perc;
 } DrawRegionOpt_t;
 
 /**

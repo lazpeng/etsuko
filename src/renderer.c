@@ -44,6 +44,7 @@
 #define QUAD_VERTICES_SIZE (4 /*points*/ * 3 /*vertices per triangle*/ * 2 /*triangles*/)
 #define PROJECTION_MATRIX_SIZE (16)
 #define MAX_SCISSOR_STACK (16)
+#define REVEAL_FADE_EM (1.5)
 
 typedef struct FontData_t {
     stbtt_fontinfo ui_font_info, lyrics_font_info;
@@ -61,6 +62,7 @@ typedef struct TextureShaderData_t {
     GLint color_mod_loc;
     GLint num_regions_loc;
     GLint regions_loc;
+    GLint region_fade_loc;
     GLint num_erase_regions_loc;
     GLint erase_regions_loc;
     GLint blur_radius_loc;
@@ -285,6 +287,7 @@ static void draw_blurred_bg_at(const Bounds_t *bounds, const float blur_radius) 
     glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 0);
     glUniform1f(g_renderer->shaders.tex.color_mod_loc, 1.f);
     glUniform1i(g_renderer->shaders.tex.num_regions_loc, 0);
+    glUniform2f(g_renderer->shaders.tex.region_fade_loc, 0.f, 0.f);
     glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, 0);
     glUniform1f(g_renderer->shaders.tex.blur_radius_loc, blur_radius);
     glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, 0);
@@ -429,6 +432,7 @@ void render_init(void) {
     g_renderer->shaders.tex.color_mod_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_colorModFactor");
     g_renderer->shaders.tex.num_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_regions");
     g_renderer->shaders.tex.regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_regions");
+    g_renderer->shaders.tex.region_fade_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_region_fade");
     g_renderer->shaders.tex.num_erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_erase_regions");
     g_renderer->shaders.tex.erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_erase_regions");
     g_renderer->shaders.tex.blur_radius_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_blurRadius");
@@ -1570,12 +1574,23 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     }
 
     float regions[MAX_DRAW_SUB_REGIONS][4] = {0};
+    float region_fades[MAX_DRAW_SUB_REGIONS][2] = {0};
+    const float fade_width = (float)render_measure_pixels_from_em(REVEAL_FADE_EM);
     for ( int i = 0; i < num_draw_regions; i++ ) {
         const DrawRegionOpt_t *region = &opts->draw_regions->regions[i];
         regions[i][0] = region->x0_perc;
         regions[i][1] = region->y0_perc;
         regions[i][2] = region->x1_perc;
         regions[i][3] = region->y1_perc;
+        // The anchor may lie beyond this region's own x1 for scaled segment redraws that sit
+        // just behind the edge, keeping the ramp continuous across draw calls. The ramp is
+        // truncated so it never reaches behind the animation start nor past its target,
+        // growing from and shrinking back to zero width at the segment boundaries.
+        const float anchor = region->fade_anchor_perc > 0.f ? region->fade_anchor_perc : region->x1_perc;
+        const float travelled = (anchor - region->anim_x1_from_perc) * w;
+        const float remaining = (region->anim_x1_to_perc - anchor) * w;
+        region_fades[i][0] = MAX(0.f, MIN(fade_width, MIN(travelled, remaining)));
+        region_fades[i][1] = anchor;
     }
 
     int num_erase_regions = 0;
@@ -1609,6 +1624,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     if ( num_draw_regions > 0 ) {
         glUniform4fv(g_renderer->shaders.tex.regions_loc, MAX_DRAW_SUB_REGIONS, &regions[0][0]);
     }
+    glUniform2fv(g_renderer->shaders.tex.region_fade_loc, MAX_DRAW_SUB_REGIONS, &region_fades[0][0]);
     glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, num_erase_regions);
     if ( num_erase_regions > 0 ) {
         glUniform4fv(g_renderer->shaders.tex.erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
@@ -1691,11 +1707,19 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         scaled_region_opt->y0_perc = region->y0_perc;
         scaled_region_opt->y1_perc = region->y1_perc;
 
-        // Now iterate through the set draw regions and set it accordingly
+        // Clamp the scaled segment to the revealed portion of its draw region. The fade
+        // state is inherited from the owning row regardless of clamping: the ramp is
+        // anchored at the row's reveal edge, so a segment that finished just behind the
+        // still moving edge keeps its share of the ramp instead of snapping to opaque.
         for ( int dr = 0; dr < num_draw_regions; dr++ ) {
             const DrawRegionOpt_t *draw_region = &opts->draw_regions->regions[dr];
             if ( draw_region->y0_perc <= scaled_region_opt->y0_perc && draw_region->y1_perc >= scaled_region_opt->y1_perc ) {
-                scaled_region_opt->x1_perc = MIN(scaled_region_opt->x1_perc, draw_region->x1_perc);
+                scaled_region_opt->anim_x1_from_perc = draw_region->anim_x1_from_perc;
+                scaled_region_opt->anim_x1_to_perc = draw_region->anim_x1_to_perc;
+                scaled_region_opt->fade_anchor_perc = draw_region->x1_perc;
+                if ( scaled_region_opt->x1_perc > draw_region->x1_perc ) {
+                    scaled_region_opt->x1_perc = draw_region->x1_perc;
+                }
             }
         }
 
