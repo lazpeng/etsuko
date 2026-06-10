@@ -2,7 +2,6 @@
 #include <stdlib.h>
 
 #include "etsuko.h"
-#include "karaoke.h"
 #include "config.h"
 
 #ifdef __EMSCRIPTEN__
