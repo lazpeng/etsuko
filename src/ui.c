@@ -31,7 +31,7 @@ typedef struct EventDef_t {
     WEAK void *custom_data;
 } EventDef_t;
 
-struct Ui_t {
+typedef struct Ui_t {
     OWNING Container_t *root_container;
     OWNING Texture_t *null_texture;
     OWNING ZLayer_t *z_layers_head;
@@ -40,9 +40,9 @@ struct Ui_t {
     WEAK Drawable_t *current_hovered_drawable;
     WEAK Drawable_t *current_dragged_drawable;
     int32_t current_drag_grab_offset_x, current_drag_grab_offset_y;
-};
+} Ui_t;
 
-void internal_reposition_drawable(Drawable_t *drawable, bool animate);
+static void internal_reposition_drawable(Drawable_t *drawable, bool animate, MAYBE_NULL const AnimatedSetOpts_t *opts);
 
 static ZLayer_t *z_layer_init(const int index) {
     ZLayer_t *z_layer = calloc(1, sizeof(*z_layer));
@@ -436,7 +436,7 @@ void ui_begin_loop(Ui_t *ui) {
     render_clear();
 }
 
-static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds, int32_t alpha) {
+static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *bounds, const int32_t alpha) {
     const Drawable_RectangleData_t *data = drawable->custom_data;
 
     float border_radius = (float)data->border_radius_em;
@@ -709,21 +709,21 @@ static void apply_translation_animation(Animation_t *animation, Bounds_t *final_
         final_bounds->x = data->from_x;
         return;
     }
+
     double progress = (animation->elapsed - animation->delay) / animation->duration;
-
-    if ( progress < 1.0 ) {
-        progress = apply_ease_func(progress, animation->ease_func);
-        const double y_delta = data->to_y - data->from_y;
-        if ( fabs(y_delta) > 0.01 )
-            final_bounds->y = data->from_y + y_delta * progress;
-
-        const double x_delta = data->to_x - data->from_x;
-        if ( fabs(x_delta) > 0.01 )
-            final_bounds->x = data->from_x + x_delta * progress;
-
-    } else {
+    if ( progress >= 1.0 ) {
         animation->active = false;
+        return;
     }
+
+    progress = apply_ease_func(progress, animation->ease_func);
+    const double y_delta = data->to_y - data->from_y;
+    if ( fabs(y_delta) > 0.01 )
+        final_bounds->y = data->from_y + y_delta * progress;
+
+    const double x_delta = data->to_x - data->from_x;
+    if ( fabs(x_delta) > 0.01 )
+        final_bounds->x = data->from_x + x_delta * progress;
 }
 
 static void apply_fade_animation(Animation_t *animation, int32_t *final_alpha) {
@@ -1913,7 +1913,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
     result->texture = final_texture;
     result->layout = *layout;
     result->z_layer_index = layout->z_index + container->z_layer_index;
-    internal_reposition_drawable(result, false);
+    internal_reposition_drawable(result, false, NULL);
 
     if ( data->draw_shadow ) {
         const int32_t text_pixels = render_measure_pixels_from_em(data->em);
@@ -2057,7 +2057,7 @@ void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable) {
     free(drawable);
 }
 
-double ui_compute_relative_horizontal(double value, const Container_t *parent) { return parent->bounds.w * value; }
+double ui_compute_relative_horizontal(const double value, const Container_t *parent) { return parent->bounds.w * value; }
 
 Container_t *ui_make_container(const Ui_t *ui, Container_t *parent, const Layout_t *layout, const ContainerFlags_t flags) {
     Container_t *result = calloc(1, sizeof(*result));
@@ -2199,14 +2199,15 @@ void ui_recompute_drawable(Drawable_t *drawable) {
         if ( data->border_radius_em > 0 ) {
             drawable->texture->border_radius = (float)render_measure_pixels_from_em(data->border_radius_em);
         }
-        internal_reposition_drawable(drawable, false);
+        internal_reposition_drawable(drawable, false, NULL);
         if ( data->draw_shadow ) {
             apply_shadow_to_image(drawable);
         }
     } else if ( drawable->type == DRAW_TYPE_RECTANGLE ) {
-        internal_reposition_drawable(drawable, false);
+        internal_reposition_drawable(drawable, false, NULL);
     } else if ( drawable->type == DRAW_TYPE_CUSTOM_TEXTURE ) {
-        // It should recompute itself inside some loop() function somewhere
+        internal_reposition_drawable(drawable, false, NULL);
+        // The texture should recompute itself inside some loop() function somewhere
         drawable->pending_recompute = true;
     } else {
         error_abort("Invalid drawable type");
@@ -2398,7 +2399,7 @@ static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const
         // Reuse the current animation, just reset the elapsed
         existing->elapsed = 0.0;
         existing->active = true;
-        existing->sticky = true;
+        existing->sticky = apply_type == ANIM_APPLY_STICKY;
         return existing;
     }
     // duplicate the animation
@@ -2463,7 +2464,7 @@ static Animation_t *reapply_animation(const Drawable_t *drawable, const Animatio
     return internal_reapply_animation(drawable, base_anim, apply_type, 0);
 }
 
-void internal_reposition_drawable(Drawable_t *drawable, const bool animate) {
+void internal_reposition_drawable(Drawable_t *drawable, const bool animate, MAYBE_NULL const AnimatedSetOpts_t *opts) {
     const double old_x = drawable->bounds.x, old_y = drawable->bounds.y;
 
     measure_layout(&drawable->layout, drawable->parent, &drawable->bounds);
@@ -2478,15 +2479,39 @@ void internal_reposition_drawable(Drawable_t *drawable, const bool animate) {
 
         const Animation_t *base_anim = find_animation(drawable, ANIM_EASE_TRANSLATION);
         if ( base_anim != NULL ) {
-            Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
+            const int32_t unique_id = opts != NULL ? opts->unique_id : 0;
+            AnimationApplyType_t apply_type = opts != NULL ? opts->apply_type : base_anim->apply_type;
+            if ( apply_type == ANIM_APPLY_DEFAULT )
+                apply_type = base_anim->apply_type;
+
+            Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, unique_id);
             if ( animation != NULL ) {
+                animation->delay = opts != NULL ? opts->delay : 0.0;
+                animation->duration = opts != NULL ? opts->duration : base_anim->duration;
                 reapply_translate_animation(animation, old_x, old_y);
             }
         }
     }
 }
 
-void ui_reposition_drawable(Drawable_t *drawable) { internal_reposition_drawable(drawable, true); }
+void ui_reposition_drawable_dur(Drawable_t *drawable, const AnimatedSetOpts_t opts) {
+    internal_reposition_drawable(drawable, true, &opts);
+}
+
+void ui_reposition_drawable(Drawable_t *drawable) { internal_reposition_drawable(drawable, true, NULL); }
+
+static void internal_cancel_animation(Drawable_t *drawable, const AnimationType_t type) {
+    Animation_t *animation = NULL;
+    while ( (animation = find_active_animation(drawable, type)) ) {
+        animation->elapsed = animation->duration + animation->delay;
+        animation->active = false;
+    }
+}
+
+void ui_reposition_drawable_immediate(Drawable_t *drawable) {
+    internal_cancel_animation(drawable, ANIM_EASE_TRANSLATION);
+    internal_reposition_drawable(drawable, false, NULL);
+}
 
 void ui_drawable_set_scale_factor(Drawable_t *drawable, const float scale) {
     // Do this so that we can specify scale in a way that makes sense (that is, 1.0 for the default size, anything other as
@@ -2512,15 +2537,11 @@ void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, const float sc
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
 
-    Animation_t *animation = find_active_animation(drawable, ANIM_SCALE);
-    if ( animation != NULL ) {
-        animation->elapsed = animation->duration;
-        animation->active = false;
-    }
+    internal_cancel_animation(drawable, ANIM_SCALE);
     drawable->bounds.scale_mod = scale_mod;
 }
 
-void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, AnimatedSetOpts_t opts) {
+void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, const float scale, const AnimatedSetOpts_t opts) {
     const float scale_mod = scale - 1.f;
     if ( scale_mod == drawable->bounds.scale_mod )
         return;
@@ -2563,17 +2584,11 @@ static void copy_draw_regions_to_drawable(Drawable_t *drawable, const DrawRegion
 }
 
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions) {
-    Animation_t *animation = find_active_animation(drawable, ANIM_DRAW_REGION);
-    if ( animation != NULL ) {
-        // Cancel animation if it's active
-        animation->active = false;
-        animation->elapsed = animation->duration;
-    }
-
+    internal_cancel_animation(drawable, ANIM_DRAW_REGION);
     copy_draw_regions_to_drawable(drawable, draw_regions);
 }
 
-void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, AnimatedSetOpts_t opts) {
+void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const AnimatedSetOpts_t opts) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
         // If it's the same, do nothing
@@ -2664,12 +2679,7 @@ void ui_drawable_set_alpha_immediate(Drawable_t *drawable, const int32_t alpha) 
         return;
     }
 
-    Animation_t *fade_animation = find_active_animation(drawable, ANIM_FADE_IN_OUT);
-    if ( fade_animation != NULL ) {
-        // Cancel animation
-        fade_animation->elapsed = fade_animation->duration;
-        fade_animation->active = false;
-    }
+    internal_cancel_animation(drawable, ANIM_FADE_IN_OUT);
     drawable->alpha_mod = alpha;
 }
 
@@ -2691,11 +2701,8 @@ void ui_drawable_set_blur_radius(Drawable_t *drawable, const float radius) {
 void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, const float radius) {
     if ( radius == drawable->blur_radius )
         return;
-    Animation_t *anim = find_active_animation(drawable, ANIM_BLUR_RADIUS);
-    if ( anim != NULL ) {
-        anim->elapsed = anim->duration;
-        anim->active = false;
-    }
+
+    internal_cancel_animation(drawable, ANIM_BLUR_RADIUS);
     drawable->blur_radius = radius;
 }
 
@@ -2916,7 +2923,7 @@ void ui_container_animate_scroll_y(Container_t *container, const double duration
     vec_add(container->animations, result);
 }
 
-void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size) {
+void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, const size_t size) {
     ContainerAnimation_t *lerp_anim = NULL;
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *a = container->animations->data[i];
@@ -2948,7 +2955,7 @@ void ui_container_update_background_colors(const Container_t *container, const C
     }
 }
 
-void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size) {
+void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, const size_t size) {
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *a = container->animations->data[i];
         if ( a->type == ANIM_BACKGROUND_COLOR ) {
@@ -3098,7 +3105,7 @@ int ui_register_widget(const Container_t *parent, const c_reconfigure_widget rec
     return id;
 }
 
-void ui_unregister_widget(const Container_t *parent, int id) {
+void ui_unregister_widget(const Container_t *parent, const int id) {
     for ( size_t i = 0; i < parent->widgets->size; i++ ) {
         WidgetEntry_t *widget = parent->widgets->data[i];
         if ( widget->id == id ) {

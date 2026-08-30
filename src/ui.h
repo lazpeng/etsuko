@@ -519,7 +519,9 @@ Drawable_t *ui_make_image(const unsigned char *bytes, int length, const Drawable
 Drawable_t *ui_make_rectangle(Ui_t *ui, const Drawable_RectangleData_t *data, Container_t *container, const Layout_t *layout);
 Drawable_t *ui_make_custom(Ui_t *ui, Container_t *container, const Layout_t *layout);
 void ui_recompute_drawable(Drawable_t *drawable);
+void ui_reposition_drawable_dur(Drawable_t *drawable, AnimatedSetOpts_t opts);
 void ui_reposition_drawable(Drawable_t *drawable);
+void ui_reposition_drawable_immediate(Drawable_t *drawable);
 void ui_destroy_drawable(Ui_t *ui, Drawable_t *drawable);
 double ui_compute_relative_horizontal(double value, const Container_t *parent);
 void ui_drawable_set_image(Drawable_t *drawable, const unsigned char *bytes, int length);
