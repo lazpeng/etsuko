@@ -14,10 +14,10 @@
 #include <string.h>
 
 // This is very messy, could be refactored into something at least consistent with the naming
-#define LINE_SIZE_WITH_TIMINGS_EM (3.5)
+#define LINE_SIZE_WITH_TIMINGS_EM (3.0)
 #define LINE_SIZE_WITHOUT_TIMINGS_EM (1.5)
-#define LINE_VERTICAL_PADDING (0.015)
-#define LINE_VERTICAL_PADDING_WITH_READINGS (0.03)
+#define LINE_VERTICAL_PADDING (0.03)
+#define LINE_VERTICAL_PADDING_WITH_READINGS (0.05)
 #define LINE_FIRST_VERTICAL_OFFSET (0.35)
 #define TEXT_LINE_PADDING_WITH_READINGS (1.0)
 #define LINE_RIGHT_ALIGN_PADDING (-0.1)
@@ -41,17 +41,56 @@
 #define EMPHASIZE_EFFECT_X_OFFSET_EM (0)
 #define EMPHASIZE_EFFECT_MIN_DURATION (0.1)
 #define EMPHASIZE_EFFECT_MAX_DURATION (0.3)
+#define TRANSLATION_ANIMATION_DURATION (0.5)
+#define LINE_CASCADE_DELAY (0.05)
+#define LINE_CASCADE_ADD_DURATION (0.1)
+#define LINE_CASCADE_MAX_DISTANCE (4)
 
 static bool is_line_intermission(const LyricsView_t *view, const int32_t index) {
+    if ( index < 0 || index >= (int32_t)view->selected_language->song_language->lines->size ) {
+        return false;
+    }
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
     return str_is_empty(line->full_text) && line->base_duration > 5;
 }
 
-static void reposition_hint_for_line(const LyricsView_t *view, const int32_t index) {
-    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
-        Drawable_t *hint = view->selected_language->line_read_hints->data[index];
-        ui_reposition_drawable(hint);
+typedef enum CascadeDirection_t { CASCADE_AWAY = 0, CASCADE_TOWARDS } CascadeDirection_t;
+
+static void reposition_line_drawable(const LyricsView_t *view, Drawable_t *drawable, const int32_t distance,
+                                     const CascadeDirection_t direction) {
+    double delay = 0;
+    double duration = TRANSLATION_ANIMATION_DURATION;
+    if ( !view->user_did_seek ) {
+        if ( direction == CASCADE_TOWARDS ) {
+            delay = LINE_CASCADE_DELAY;
+            duration = duration + LINE_CASCADE_ADD_DURATION * (double)MIN(distance, LINE_CASCADE_MAX_DISTANCE);
+        } else if ( direction == CASCADE_AWAY ) {
+            duration = duration - LINE_CASCADE_DELAY * (double)MIN(__builtin_abs(distance), LINE_CASCADE_MAX_DISTANCE);
+        }
     }
+    const AnimatedSetOpts_t opts = {.delay = delay, .duration = duration};
+    ui_reposition_drawable_dur(drawable, opts);
+}
+
+static void reposition_hint_for_line(const LyricsView_t *view, const int32_t index, const int32_t distance,
+                                     const CascadeDirection_t direction) {
+    if ( index < (int32_t)view->selected_language->line_read_hints->size ) {
+        reposition_line_drawable(view, view->selected_language->line_read_hints->data[index], distance, direction);
+    }
+}
+
+static void chain_line_below(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
+    drawable->layout.relative_to = relative;
+    drawable->layout.offset_y = offset_y;
+    drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+    drawable->layout.flags &= ~LAYOUT_ANCHOR_BOTTOM_Y;
+}
+
+static void chain_line_above(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
+    drawable->layout.relative_to = relative;
+    drawable->layout.offset_y = offset_y;
+    drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
+    drawable->layout.flags &= ~LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 }
 
 static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
@@ -101,7 +140,7 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
                 continue;
 
             const int pixels = render_measure_pixels_from_em(0.8);
-            const Color_t white = {255, 255, 255, 255};
+            const Color_t white = {.r = 255, .g = 255, .b = 255, .a = 255};
 
             const Song_Line_t *line = language->song_language->lines->data[i];
 
@@ -119,9 +158,10 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
                     if ( (int32_t)reading->start_ch_idx >= offset_info->start_char_idx + offset_info->num_chars )
                         break; // It's on the next line
 
-                    const int32_t index_on_this_line = reading->start_ch_idx > (size_t)offset_info->start_char_idx
-                                                           ? (int32_t)(reading->start_ch_idx - (size_t)offset_info->start_char_idx)
-                                                           : 0;
+                    const int32_t index_on_this_line =
+                        reading->start_ch_idx > (size_t)offset_info->start_char_idx
+                            ? (int32_t)(reading->start_ch_idx - (size_t)offset_info->start_char_idx)
+                            : 0;
                     const CharOffsetInfo_t *character = offset_info->char_offsets->data[index_on_this_line];
                     const double char_padding = character->width * 0.1;
                     const double character_x = offset_info->start_x + char_padding + character->x;
@@ -177,7 +217,7 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
             }
             vec_destroy(entries);
 
-            reposition_hint_for_line(view, i);
+            ui_reposition_drawable_immediate(hint);
 
             hint->pending_recompute = false;
             hint->bounds.w = hint->texture->width;
@@ -278,6 +318,13 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         base_offset_x = LINE_RIGHT_ALIGN_PADDING;
     }
 
+    const Layout_t anchor_layout = {
+        .offset_y = LINE_FIRST_VERTICAL_OFFSET,
+        .offset_x = base_offset_x,
+        .flags = base_alignment_flags | LAYOUT_PROPORTIONAL_Y,
+    };
+    result->lyric_anchor = ui_make_custom(ui, view->container, &anchor_layout);
+
     Drawable_t *prev = NULL;
     for ( size_t i = 0; i < language->lines->size; i++ ) {
         const Song_Line_t *line = language->lines->data[i];
@@ -330,10 +377,10 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                     .compute_offsets = language->has_sub_timings || language->has_reading_info};
         const double vertical_padding = get_line_vertical_padding(view);
         const Layout_t layout = {
-            .offset_y = prev == NULL ? LINE_FIRST_VERTICAL_OFFSET : vertical_padding,
+            .offset_y = prev == NULL ? 0 : vertical_padding,
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
-            .relative_to = prev,
+            .relative_to = prev == NULL ? result->lyric_anchor : prev,
         };
         prev = ui_make_text(ui, &data, view->container, &layout);
         vec_add(result->line_drawables, prev);
@@ -345,6 +392,10 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, prev, on_line_event, view);
             ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, prev, on_line_event, view);
             ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, prev, on_line_event, view);
+
+            Animation_EaseTranslationData_t translation_data = {.duration = TRANSLATION_ANIMATION_DURATION,
+                                                                .ease_func = ANIM_EASE_OUT_CUBIC};
+            ui_animate_translation(prev, &translation_data);
 
             Animation_FadeInOutData_t fade_data = {.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC};
             ui_animate_fade(prev, &fade_data);
@@ -370,6 +421,8 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                 ui, view->container,
                 &(Layout_t){
                     .offset_x = 0, .offset_y = 0, .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y, .relative_to = prev});
+            ui_animate_translation(hint, &(Animation_EaseTranslationData_t){.duration = TRANSLATION_ANIMATION_DURATION,
+                                                                            .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_fade(hint,
                             &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
             ui_animate_scale(hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
@@ -400,7 +453,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                                 .em = 0.8,
                                                 .font_type = FONT_LYRICS,
                                                 .alignment = ALIGN_LEFT,
-                                                .color = {200, 200, 200, 255}},
+                                                .color = {.r = 200, .g = 200, .b = 200, .a = 255}},
                          view->container,
                          &(Layout_t){.offset_y = 0.01,
                                      .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
@@ -417,7 +470,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                                 .em = 0.8,
                                                 .font_type = FONT_UI,
                                                 .alignment = ALIGN_LEFT,
-                                                .color = {200, 200, 200, 255}},
+                                                .color = {.r = 200, .g = 200, .b = 200, .a = 255}},
                          view->container,
                          &(Layout_t){.offset_y = 0,
                                      .offset_x = 0.001,
@@ -666,7 +719,7 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Drawa
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, (AnimatedSetOpts_t){.duration = fill_duration});
 }
 
-static void set_line_active(const LyricsView_t *view, const int32_t index) {
+static void set_line_active(const LyricsView_t *view, const int32_t index, const int32_t prev_active) {
     Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     drawable->enabled = true;
@@ -679,6 +732,14 @@ static void set_line_active(const LyricsView_t *view, const int32_t index) {
     blur_hint_for_line(view, index);
 
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
+
+    if ( prev_active >= 0 && index > 0 ) {
+        chain_line_below(drawable, view->selected_language->line_drawables->data[index - 1], get_line_vertical_padding(view));
+    } else {
+        chain_line_below(drawable, view->selected_language->lyric_anchor, 0);
+    }
+    reposition_line_drawable(view, drawable, 0, CASCADE_TOWARDS);
+    reposition_hint_for_line(view, index, 0, CASCADE_TOWARDS);
 
     const LineState_t new_state = LINE_ACTIVE;
     if ( view->selected_language->line_states[index] != new_state ) {
@@ -706,21 +767,31 @@ static void set_line_active(const LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void set_line_inactive(const LyricsView_t *view, const int32_t index, const int32_t prev_active) {
+static void set_line_inactive(const LyricsView_t *view, const int32_t index, const int32_t prev_active, const bool chain) {
     Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     int32_t alpha = 200;
     float blur = 0.f;
+    int32_t distance = 0;
     if ( prev_active >= 0 && prev_active != (int32_t)index ) {
-        int32_t distance = calculate_distance(view, index, prev_active);
+        distance = calculate_distance(view, index, prev_active);
+        int32_t tmp_distance = distance;
 
         if ( is_line_intermission(view, prev_active) ) {
             // When the current line is an intermission between two segments, make every other line have min alpha
-            distance = LINE_FADE_MAX_DISTANCE;
+            tmp_distance = LINE_FADE_MAX_DISTANCE;
         }
-        alpha = calculate_alpha(distance);
-        blur = calculate_blur(distance);
+        alpha = calculate_alpha(tmp_distance);
+        blur = calculate_blur(tmp_distance);
     }
+
+    const Drawable_t *relative = view->selected_language->lyric_anchor;
+    if ( index > 0 && chain ) {
+        relative = view->selected_language->line_drawables->data[index - 1];
+    }
+    chain_line_below(drawable, relative, index == 0 ? 0 : get_line_vertical_padding(view));
+    reposition_line_drawable(view, drawable, distance, CASCADE_TOWARDS);
+    reposition_hint_for_line(view, index, distance, CASCADE_TOWARDS);
 
     // don't change the alpha if the user is hovering over the line
     if ( view->current_hovered_index == index ) {
@@ -769,7 +840,7 @@ static double get_lyric_line_scroll_position(const LyricsView_t *view, const int
     return 0;
 }
 
-static void set_line_hidden(const LyricsView_t *view, const int32_t index) {
+static Drawable_t *set_line_hidden(const LyricsView_t *view, const int32_t index) {
     Drawable_t *drawable = view->selected_language->line_drawables->data[index];
 
     const LineState_t new_state = LINE_HIDDEN;
@@ -793,8 +864,8 @@ static void set_line_hidden(const LyricsView_t *view, const int32_t index) {
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
-        if ( view->selected_language->current_active_index < 0 ||
-             is_line_intermission(view, view->selected_language->current_active_index) ) {
+        const bool is_intermission = is_line_intermission(view, view->selected_language->current_active_index);
+        if ( view->selected_language->current_active_index < 0 || is_intermission ) {
             distance = LINE_FADE_MAX_DISTANCE;
         } else {
             distance = calculate_distance(view, index, view->selected_language->current_active_index);
@@ -810,6 +881,25 @@ static void set_line_hidden(const LyricsView_t *view, const int32_t index) {
         fade_hint_for_line(view, index);
         blur_hint_for_line(view, index);
     }
+
+    return drawable;
+}
+
+static Drawable_t *collapse_hidden_lines(const LyricsView_t *view, const int32_t index, const int32_t boundary) {
+    if ( index >= boundary )
+        return view->selected_language->lyric_anchor;
+
+    const Drawable_t *relative = collapse_hidden_lines(view, index + 1, boundary);
+
+    Drawable_t *drawable = set_line_hidden(view, index);
+    chain_line_above(drawable, relative, -get_line_vertical_padding(view));
+
+    const int32_t distance = calculate_distance(view, index, boundary);
+    // Add negative delay
+    reposition_line_drawable(view, drawable, distance, CASCADE_AWAY);
+    reposition_hint_for_line(view, index, distance, CASCADE_AWAY);
+
+    return drawable;
 }
 
 static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index) {
@@ -864,6 +954,19 @@ static void update_credits_blur(const LyricsView_t *view) {
     ui_drawable_set_blur_radius(view->selected_language->credits_content, blur_radius);
 }
 
+static void reposition_credits(const LyricsView_t *view, const int32_t reference_index) {
+    if ( view->selected_language->credit_separator == NULL )
+        return;
+    int32_t distance = 0;
+    if ( reference_index >= 0 ) {
+        const int32_t last_index = (int32_t)view->selected_language->line_drawables->size - 1;
+        distance = calculate_distance(view, last_index, reference_index) + 1;
+    }
+    reposition_line_drawable(view, view->selected_language->credit_separator, distance, CASCADE_TOWARDS);
+    reposition_line_drawable(view, view->selected_language->credits_prefix, distance, CASCADE_TOWARDS);
+    reposition_line_drawable(view, view->selected_language->credits_content, distance, CASCADE_TOWARDS);
+}
+
 void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     if ( view == NULL ) {
         error_abort("loop: lyrics_view is NULL");
@@ -877,37 +980,53 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
 
     int32_t prev_active = -1;
     int32_t first_active = -1;
+    int32_t anchor_idx = -1;
     const double offset = view->song->time_offset;
     const double user_offset = settings_get()->global_audio_offset_ms / 1000.0;
     const double elapsed_time = audio_elapsed_time() + offset + user_offset;
+    const int32_t num_lines = (int32_t)view->selected_language->song_language->lines->size;
 
-    for ( int32_t i = 0; i < (int32_t)view->selected_language->song_language->lines->size; i++ ) {
+    view->user_did_seek = fabs(elapsed_time - view->prev_elapsed) > 1.0;
+
+    if ( view->language_changed ) {
+        view->selected_language->current_active_index = -1;
+    }
+
+    for ( int32_t i = 0; i < num_lines; i++ ) {
         const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
         if ( elapsed_time < line->base_start_time + line->base_duration ) {
             if ( elapsed_time >= line->base_start_time ) {
-                set_line_active(view, i);
-                if ( first_active < 0 )
+                set_line_active(view, i, prev_active);
+                if ( first_active < 0 ) {
                     first_active = i;
+                    anchor_idx = i;
+                }
                 prev_active = i;
             } else {
                 if ( prev_active < 0 ) {
                     prev_active = view->selected_language->current_active_index;
                 }
-                set_line_inactive(view, i, prev_active);
+                set_line_inactive(view, i, prev_active, anchor_idx >= 0);
             }
+
         } else {
-            // If the next line still hasn't reached its start time, don't completely vanish the line just yet
-            if ( i + 1 < (int32_t)view->selected_language->song_language->lines->size ) {
+            const bool is_last = i + 1 >= num_lines;
+            bool in_gap = false;
+            if ( !is_last ) {
                 const Song_Line_t *next_line = view->selected_language->song_language->lines->data[i + 1];
-                if ( elapsed_time < next_line->base_start_time ) {
-                    set_line_almost_hidden(view, i);
-                    continue;
-                }
+                in_gap = elapsed_time < next_line->base_start_time;
             }
-            // else just set it hidden (or afterward when it finally should disappear)
-            set_line_hidden(view, i);
+            if ( in_gap || (prev_active > 0 && prev_active < i) ) {
+                // If the next line still hasn't reached its start time, don't completely vanish the line just yet
+                set_line_almost_hidden(view, i);
+                if ( anchor_idx < 0 )
+                    anchor_idx = i;
+            }
         }
     }
+
+    collapse_hidden_lines(view, 0, anchor_idx < 0 ? num_lines - 1 : anchor_idx);
+    reposition_credits(view, prev_active >= 0 ? prev_active : anchor_idx);
 
     const bool active_changed = first_active != view->selected_language->current_first_active_index;
     const bool screen_changed = events_window_changed();
@@ -922,6 +1041,7 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     update_credits_blur(view);
 
     view->selected_language->current_active_index = prev_active;
+    view->prev_elapsed = elapsed_time;
 }
 
 void ui_ex_lyrics_view_on_screen_change(const LyricsView_t *view) {
@@ -947,8 +1067,8 @@ void ui_ex_destroy_lyrics_view(LyricsView_t *view) {
 void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view) {
     if ( !view->selected_language->song_language->has_timings )
         return;
-    const double position = get_lyric_line_scroll_position(view, view->selected_language->current_first_active_index);
-    ui_container_scroll_y_to_dur(view->container, position, (AnimatedSetOpts_t){.duration = SCROLL_ANIMATION_DURATION});
+    // Scroll to anchor
+    ui_container_scroll_y_to(view->container, 0);
 }
 
 static void set_lyrics_language_visible(const LyricsLanguage_t *target, const bool visible) {

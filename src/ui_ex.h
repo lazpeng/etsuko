@@ -42,6 +42,7 @@ typedef struct LyricsLanguage_t {
     int32_t current_first_active_index;
     LineState_t line_states[MAX_SONG_LINES];
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
+    OWNING Drawable_t *lyric_anchor;
     uint32_t active_line_segment_visited[MAX_TIMINGS_PER_LINE];
 } LyricsLanguage_t;
 
@@ -52,9 +53,10 @@ typedef struct etsuko_LyricsView_t {
     OWNING Vector_t *lyrics_languages;
     WEAK LyricsLanguage_t *selected_language;
     int32_t current_hovered_index;
-    bool language_changed;
+    bool language_changed, user_did_seek;
     LyricEffectSetting_t saved_lyric_effect_setting;
     LyricFillSetting_t saved_lyric_fill_setting;
+    double prev_elapsed;
 } LyricsView_t;
 
 // Initializes the lyric view
