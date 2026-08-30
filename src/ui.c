@@ -2167,7 +2167,7 @@ static Animation_t *internal_find_active_animation(const Drawable_t *drawable, c
     // Traverse backwards so we find the most recent animation
     for ( int32_t i = (int32_t)drawable->active_animations->size - 1; i >= 0; i-- ) {
         Animation_t *animation = drawable->active_animations->data[i];
-        if ( animation->type == type && animation->unique_id == unique_id ) {
+        if ( animation->type == type && animation->unique_id == unique_id && animation->active ) {
             return animation;
         }
     }
