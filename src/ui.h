@@ -264,6 +264,10 @@ typedef struct AnimatedSetOpts_t {
     double delay;
     AnimationApplyType_t apply_type;
     int32_t unique_id;
+    // If another animation of the same time was active when this one triggers (and the apply type is override),
+    // start the from values from the running animation instead of the given parameters.
+    // Does not apply to all types of animations
+    bool interpolate_if_active;
 } AnimatedSetOpts_t;
 
 // Options and custom data

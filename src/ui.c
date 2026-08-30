@@ -2484,11 +2484,32 @@ void internal_reposition_drawable(Drawable_t *drawable, const bool animate, MAYB
             if ( apply_type == ANIM_APPLY_DEFAULT )
                 apply_type = base_anim->apply_type;
 
+            double from_x = old_x, from_y = old_y;
+            // If we're in the middle of an animation, animate from its delta position instead of the given from positions
+            // so we don't snap the drawable into the new from position
+            const bool interpolate = opts != NULL && opts->interpolate_if_active && apply_type == ANIM_APPLY_OVERRIDE;
+            const Animation_t *running = find_active_animation(drawable, ANIM_EASE_TRANSLATION);
+            if ( running != NULL && interpolate ) {
+                const Animation_EaseTranslationData_t *data = running->custom_data;
+
+                from_y = data->from_y;
+                from_x = data->from_x;
+
+                double progress = (running->elapsed - running->delay) / running->duration;
+
+                progress = apply_ease_func(progress, running->ease_func);
+                const double y_delta = data->to_y - data->from_y;
+                const double x_delta = data->to_x - data->from_x;
+
+                from_x += x_delta * progress;
+                from_y += y_delta * progress;
+            }
+
             Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, unique_id);
             if ( animation != NULL ) {
                 animation->delay = opts != NULL ? opts->delay : 0.0;
                 animation->duration = opts != NULL ? opts->duration : base_anim->duration;
-                reapply_translate_animation(animation, old_x, old_y);
+                reapply_translate_animation(animation, from_x, from_y);
             }
         }
     }

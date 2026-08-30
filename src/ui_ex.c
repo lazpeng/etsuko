@@ -68,7 +68,7 @@ static void reposition_line_drawable(const LyricsView_t *view, Drawable_t *drawa
             duration = duration - LINE_CASCADE_DELAY * (double)MIN(__builtin_abs(distance), LINE_CASCADE_MAX_DISTANCE);
         }
     }
-    const AnimatedSetOpts_t opts = {.delay = delay, .duration = duration};
+    const AnimatedSetOpts_t opts = {.delay = delay, .duration = duration, .interpolate_if_active = true};
     ui_reposition_drawable_dur(drawable, opts);
 }
 
