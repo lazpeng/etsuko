@@ -456,7 +456,7 @@ void song_load(const char *filename, const char *src, const int src_size) {
         if ( current_block != BLOCK_HEADER && language == NULL ) {
             if ( g_song->language == NULL ) {
                 printf("Warning: language is not set in the header, using empty\n");
-                g_song->language = "";
+                g_song->language = strdup("");
             }
             language = select_language(g_song, g_song->language, true);
         }
