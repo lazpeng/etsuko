@@ -347,12 +347,12 @@ typedef struct Animation_ScaleRegionData_t {
     AnimationApplyType_t default_apply;
 } Animation_ScaleRegionData_t;
 
-typedef struct Animation_ColorLerpData_t {
+typedef struct Animation_ColorChangeData_t {
     Color_t from_colors[5];
     Color_t to_colors[5];
     double duration;
     AnimationEaseType_t ease_func;
-} Animation_ColorLerpData_t;
+} Animation_ColorChangeData_t;
 
 typedef struct Animation_ScrollYData_t {
     double from_amount, to_amount;
@@ -558,7 +558,7 @@ void ui_animate_blur(Drawable_t *target, const Animation_BlurRadiusData_t *data)
 void ui_drawable_set_blur_radius(Drawable_t *drawable, float radius);
 void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, float radius);
 void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
-void ui_container_animate_color_lerp(Container_t *container, double duration, AnimationEaseType_t ease_func);
+void ui_container_animate_color_change(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
 void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);

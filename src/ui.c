@@ -973,7 +973,7 @@ static void apply_container_animations(Container_t *container, Bounds_t *bounds)
             }
 
             if ( animation->type == ANIM_BACKGROUND_COLOR ) {
-                const Animation_ColorLerpData_t *data = animation->custom_data;
+                const Animation_ColorChangeData_t *data = animation->custom_data;
                 const double eased = apply_ease_func(progress, animation->ease_func);
                 Color_t *colors = container->background->colors;
                 for ( int c = 0; c < 5; c++ ) {
@@ -2433,7 +2433,7 @@ static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const
         animation->custom_data = dup_anim_blur_radius_data(base_anim->custom_data);
         break;
     case ANIM_BACKGROUND_COLOR:
-        error_abort("reapply_animation: ANIM_COLOR_LERP is container-only and cannot be reapplied as a drawable animation");
+        error_abort("reapply_animation: ANIM_COLOR_CHANGE is container-only and cannot be reapplied as a drawable animation");
         break;
     default:
         error_abort("reapply_animation: Unrecognized animation type");
@@ -2903,14 +2903,14 @@ void ui_container_animate_translation(Container_t *container, const Animation_Ea
     vec_add(container->animations, result);
 }
 
-void ui_container_animate_color_lerp(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
+void ui_container_animate_color_change(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
     ContainerAnimation_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
-        error_abort("Failed to allocate color lerp animation");
+        error_abort("Failed to allocate color change animation");
     }
-    Animation_ColorLerpData_t *data = calloc(1, sizeof(*data));
+    Animation_ColorChangeData_t *data = calloc(1, sizeof(*data));
     if ( data == NULL ) {
-        error_abort("Failed to allocate color lerp animation data");
+        error_abort("Failed to allocate color change animation data");
     }
     data->duration = duration;
     data->ease_func = ease_func;
@@ -2945,17 +2945,17 @@ void ui_container_animate_scroll_y(Container_t *container, const double duration
 }
 
 void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, const size_t size) {
-    ContainerAnimation_t *lerp_anim = NULL;
+    ContainerAnimation_t *color_anim = NULL;
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *a = container->animations->data[i];
         if ( a->type == ANIM_BACKGROUND_COLOR ) {
-            lerp_anim = a;
+            color_anim = a;
             break;
         }
     }
 
-    if ( lerp_anim != NULL ) {
-        Animation_ColorLerpData_t *data = lerp_anim->custom_data;
+    if ( color_anim != NULL ) {
+        Animation_ColorChangeData_t *data = color_anim->custom_data;
         for ( int i = 0; i < 5; i++ )
             data->from_colors[i] = container->background->colors[i];
         for ( int i = 0; i < 5; i++ ) {
@@ -2964,8 +2964,8 @@ void ui_container_update_background_colors(const Container_t *container, const C
             else
                 data->to_colors[i] = (Color_t){0, 0, 0, 255};
         }
-        lerp_anim->elapsed = 0.0;
-        lerp_anim->active = true;
+        color_anim->elapsed = 0.0;
+        color_anim->active = true;
     } else {
         for ( int i = 0; i < 5; i++ ) {
             if ( (size_t)i < size )
