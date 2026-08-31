@@ -363,7 +363,22 @@ bool str_ch_is_forbidden_line_start(const int32_t c) {
          c == 0x3087 || c == 0x308E || // ょ ゎ
          c == 0x3095 || c == 0x3096 )  // ゕ ゖ
         return true;
+    if ( c == 0x30FC || c == 0x3005 || // ー 々
+         c == 0x309D || c == 0x309E || // ゝ ゞ
+         c == 0x30FD || c == 0x30FE )  // ヽ ヾ
+        return true;
+    // Closing brackets, sentence-ending punctuation and spaces stay at the end of a line
+    if ( c == ')' || c == 0x300D || c == 0x300F || // 」 』
+         c == 0x3001 || c == 0x3002 ||             // 、 。
+         c == 0xFF01 || c == 0xFF1F ||             // ！ ？
+         c == ' ' || c == 0x3000 )
+        return true;
     return false;
+}
+
+bool str_ch_is_forbidden_line_end(const int32_t c) {
+    // Opening brackets should start the next line, not end the current one
+    return c == '(' || c == 0x300C || c == 0x300E; // 「 『
 }
 
 StrScriptClass_t str_ch_script_class(const int32_t c) {

@@ -148,10 +148,16 @@ bool str_ch_is_japanese_particle(int32_t c);
  */
 bool str_ch_is_japanese_punctuation(int32_t c);
 /**
- * Checks whether the given unicode codepoint is forbidden from starting a line (small kana, long vowel mark, etc.).
+ * Checks whether the given unicode codepoint is forbidden from starting a line (small kana, long vowel mark,
+ * closing brackets, sentence-ending punctuation, etc.).
  * Used by line-wrapping logic to avoid breaking immediately before these characters.
  */
 bool str_ch_is_forbidden_line_start(int32_t c);
+/**
+ * Checks whether the given unicode codepoint is forbidden from ending a line (opening brackets).
+ * Used by line-wrapping logic to avoid breaking immediately after these characters.
+ */
+bool str_ch_is_forbidden_line_end(int32_t c);
 
 typedef enum StrScriptClass_t { STR_SCRIPT_OTHER, STR_SCRIPT_KANJI, STR_SCRIPT_HIRAGANA, STR_SCRIPT_KATAKANA } StrScriptClass_t;
 /**

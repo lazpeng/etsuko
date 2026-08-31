@@ -1625,11 +1625,14 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
     /**
      * Wrap logic should be as follows:
      * - In regular, latin-script text, break on spaces (it is impossible for it to contain newlines in the first place)
-     * - In japanese text, try to break at the longest particle or punctuation point immediately after a kanji after we
-     * exceeded the maximum width. If that fails, break on the first kana (non-kanji) after we exceeded the max width.
-     * - As a last resort, break at the most recent script-class transition we passed, or hard-break at the last char
-     * that still fit within the container width — otherwise very long single-script runs (e.g. long katakana words)
-     * would overflow the container with no natural break point.
+     * - In japanese text, break at natural points (spaces, punctuation, brackets, a particle right after a
+     * kanji or katakana word), but only if that leaves the line reasonably filled; a near-empty line looks broken.
+     * - Failing that, break at the first kanji to kana boundary after we exceeded the max width, as long as that
+     * doesn't push the line past the container width.
+     * - As a last resort, break at the most recent script-class transition we passed (again only if filled enough),
+     * or hard-break at the last legal boundary before the max width. A boundary is legal if it doesn't put a
+     * forbidden line start (small kana, long vowel mark, closers, punctuation) at the start of the next line or a
+     * forbidden line end (openers) at the end of the current one.
      * Obs.: if the second line is too small, and the whole thing still fits in 95% of the container width (no matter the
      * max width that has been set), we don't break the line
      */
@@ -1641,12 +1644,20 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
         measure_pixels_size = render_measure_pixels_from_em(data->em);
     }
 
+    // Minimum fill a line must have before we accept a natural (space, punctuation, particle) or
+    // heuristic (script transition) break at it
+    const double min_natural_break_width = calculated_max_width * 0.3;
+    const double min_heuristic_break_width = calculated_max_width * 0.5;
+
     double current_line_width = 0;
     int32_t current_idx = start;
     int32_t last_safe_break_idx = -1;
     int32_t last_particle_break_idx = -1;
     int32_t last_script_transition_idx = -1;
-    int32_t last_fitting_break_idx = -1;
+    int32_t last_hard_break_idx = -1;
+    double width_at_safe_break = 0;
+    double width_at_particle_break = 0;
+    double width_at_script_transition = 0;
 
     int32_t prev_c = -1;
     StrScriptClass_t prev_script = STR_SCRIPT_OTHER;
@@ -1664,41 +1675,54 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
             }
         }
 
+        const bool legal_boundary =
+            char_start_idx > start && !str_ch_is_forbidden_line_start(c) && !str_ch_is_forbidden_line_end(prev_c);
+
         const StrScriptClass_t script = str_ch_script_class(c);
-        if ( prev_c != -1 && script != prev_script && !str_ch_is_forbidden_line_start(c) ) {
+        if ( script != prev_script && legal_boundary ) {
             last_script_transition_idx = char_start_idx;
+            width_at_script_transition = current_line_width;
         }
         prev_script = script;
 
-        CharBounds_t char_bounds;
-        render_measure_char_bounds(c, prev_c, measure_pixels_size, &char_bounds, data->font_type);
-
-        // Remember the last char boundary where the line still fits the full container width, so we can
-        // hard-break there if no natural break point exists.
-        if ( current_line_width + char_bounds.width > m_current_width && char_start_idx > start &&
-             !str_ch_is_forbidden_line_start(c) && last_fitting_break_idx == -1 ) {
-            last_fitting_break_idx = char_start_idx;
+        if ( legal_boundary ) {
+            last_hard_break_idx = char_start_idx;
         }
 
+        CharBounds_t char_bounds;
+        render_measure_char_bounds(c, prev_c, measure_pixels_size, &char_bounds, data->font_type);
         current_line_width += char_bounds.width;
 
-        if ( c == ' ' || c == '(' || c == ')' ) {
-            // If we're breaking on a space, keep it on the previous line so the alignment doesn't look weird
-            // but for a ( or ), push it onto the next line
-            if ( c == ' ' ) {
-                // 1 here is fine because this char is guaranteed 1 byte
-                last_safe_break_idx = char_start_idx + 1;
-            } else {
-                last_safe_break_idx = char_start_idx;
-            }
-        } else if ( str_ch_is_japanese_particle(c) || str_ch_is_japanese_punctuation(c) ) {
-            if ( str_ch_is_japanese_punctuation(c) ) {
-                // If we're breaking on a punctuation character, include it in the line as it looks weird if it's the first
-                // character on the following line
+        if ( str_ch_is_forbidden_line_start(c) ) {
+            // A break right before this char would put it at the start of the next line; pull it onto this line
+            if ( last_safe_break_idx == char_start_idx ) {
                 last_safe_break_idx = current_idx;
-            } else {
-                last_particle_break_idx = char_start_idx;
+                width_at_safe_break = current_line_width;
             }
+            if ( last_particle_break_idx == char_start_idx ) {
+                last_particle_break_idx = current_idx;
+                width_at_particle_break = current_line_width;
+            }
+        }
+
+        if ( c == ' ' ) {
+            // Keep the space on the previous line so the alignment doesn't look weird
+            // 1 here is fine because this char is guaranteed 1 byte
+            last_safe_break_idx = char_start_idx + 1;
+            width_at_safe_break = current_line_width;
+        } else if ( str_ch_is_forbidden_line_end(c) ) {
+            // Opening brackets go onto the next line
+            last_safe_break_idx = char_start_idx;
+            width_at_safe_break = current_line_width - char_bounds.width;
+        } else if ( c == ')' || c == 0x300D || c == 0x300F || str_ch_is_japanese_punctuation(c) ) {
+            // Closing brackets and punctuation stay at the end of the line
+            last_safe_break_idx = current_idx;
+            width_at_safe_break = current_line_width;
+        } else if ( str_ch_is_japanese_particle(c) && (str_ch_is_kanji(prev_c) || str_ch_is_katakana(prev_c)) ) {
+            // Only treat these kana as particles right after a kanji or katakana word, where they likely
+            // mark a phrase boundary; the break goes after the particle since it binds to the word before it
+            last_particle_break_idx = current_idx;
+            width_at_particle_break = current_line_width;
         }
 
         if ( current_line_width > calculated_max_width ) {
@@ -1706,45 +1730,77 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
                 return size;
             }
 
-            // Prefer to break on punctuation rather than particles if possible
-            if ( last_safe_break_idx != -1 && last_safe_break_idx > start ) {
-                return last_safe_break_idx;
+            if ( !is_japanese_context ) {
+                if ( last_safe_break_idx > start ) {
+                    return last_safe_break_idx;
+                }
+                // No space to break on: hard-break before the overflowing char, or after it if it's the
+                // only char on the line
+                return char_start_idx > start ? char_start_idx : current_idx;
             }
 
-            if ( is_japanese_context && last_particle_break_idx != -1 && last_particle_break_idx > start ) {
+            // Prefer to break on punctuation rather than particles if possible
+            if ( last_safe_break_idx > start && width_at_safe_break >= min_natural_break_width ) {
+                return last_safe_break_idx;
+            }
+            if ( last_particle_break_idx > start && width_at_particle_break >= min_natural_break_width ) {
                 return last_particle_break_idx;
             }
 
-            if ( is_japanese_context ) {
-                bool last_was_kanji = str_ch_is_kanji(c);
+            bool last_was_kanji = str_ch_is_kanji(c);
+            int32_t scan_prev_c = c;
+            double scan_width = current_line_width;
 
-                while ( current_idx < size ) {
-                    const int32_t prev_current_idx = current_idx;
-                    const int32_t next_c = str_u8_next(text, size, &current_idx);
-                    if ( next_c < 0 )
-                        break;
+            while ( current_idx < size ) {
+                const int32_t prev_current_idx = current_idx;
+                const int32_t next_c = str_u8_next(text, size, &current_idx);
+                if ( next_c < 0 )
+                    break;
 
-                    if ( last_was_kanji && str_ch_is_kana(next_c) ) {
+                render_measure_char_bounds(next_c, scan_prev_c, measure_pixels_size, &char_bounds, data->font_type);
+                scan_width += char_bounds.width;
+
+                if ( last_was_kanji && str_ch_is_kana(next_c) && !str_ch_is_forbidden_line_start(next_c) ) {
+                    if ( !str_ch_is_japanese_particle(next_c) || scan_width > m_current_width ) {
                         return prev_current_idx;
                     }
-
-                    last_was_kanji = str_ch_is_kanji(next_c);
+                    // The particle binds to the word before it, so break after it and after any particles
+                    // or forbidden line starts that follow, while the line still fits the container
+                    int32_t break_idx = current_idx;
+                    int32_t ext_prev_c = next_c;
+                    while ( current_idx < size ) {
+                        const int32_t ext_c = str_u8_next(text, size, &current_idx);
+                        if ( ext_c < 0 )
+                            break;
+                        if ( !str_ch_is_japanese_particle(ext_c) && !str_ch_is_forbidden_line_start(ext_c) )
+                            break;
+                        render_measure_char_bounds(ext_c, ext_prev_c, measure_pixels_size, &char_bounds, data->font_type);
+                        scan_width += char_bounds.width;
+                        if ( scan_width > m_current_width )
+                            break;
+                        break_idx = current_idx;
+                        ext_prev_c = ext_c;
+                    }
+                    return break_idx;
                 }
 
-                // Couldn't break in the transition from kanji to kana, try to break in the last transition between
-                // scripts (e.g. hiragana to katakana)
-                if ( last_script_transition_idx > start ) {
-                    return last_script_transition_idx;
-                }
-                // If all else fails, break at the last suitable character before the maximum width
-                if ( last_fitting_break_idx > start ) {
-                    return last_fitting_break_idx;
-                }
-                return size;
+                if ( scan_width > m_current_width )
+                    break;
+
+                last_was_kanji = str_ch_is_kanji(next_c);
+                scan_prev_c = next_c;
             }
 
-            // when not breaking japanese text
-            return char_start_idx > start ? char_start_idx - 1 : current_idx - 1;
+            // Couldn't break in the transition from kanji to kana, try to break in the last transition between
+            // scripts (e.g. hiragana to katakana)
+            if ( last_script_transition_idx > start && width_at_script_transition >= min_heuristic_break_width ) {
+                return last_script_transition_idx;
+            }
+            // If all else fails, break at the last legal boundary before the maximum width
+            if ( last_hard_break_idx > start ) {
+                return last_hard_break_idx;
+            }
+            return size;
         }
 
         prev_c = c;
@@ -1853,7 +1909,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
             total_h += texture->height;
 
             start = end;
-        } while ( start < text_size - 1 );
+        } while ( start < text_size );
 
         const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
         final_texture = target->texture;
