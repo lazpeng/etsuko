@@ -2174,10 +2174,6 @@ static Animation_t *internal_find_active_animation(const Drawable_t *drawable, c
     return NULL;
 }
 
-static Animation_t *find_active_animation(const Drawable_t *drawable, const AnimationType_t type) {
-    return internal_find_active_animation(drawable, type, 0);
-}
-
 void ui_recompute_drawable(Drawable_t *drawable) {
     const Container_t *container = drawable->parent;
     if ( drawable->type == DRAW_TYPE_TEXT ) {
@@ -2488,27 +2484,29 @@ void internal_reposition_drawable(Drawable_t *drawable, const bool animate, MAYB
             // If we're in the middle of an animation, animate from its delta position instead of the given from positions
             // so we don't snap the drawable into the new from position
             const bool interpolate = opts != NULL && opts->interpolate_if_active && apply_type == ANIM_APPLY_OVERRIDE;
-            const Animation_t *running = find_active_animation(drawable, ANIM_EASE_TRANSLATION);
+            const Animation_t *running = internal_find_active_animation(drawable, ANIM_EASE_TRANSLATION, unique_id);
             if ( running != NULL && interpolate ) {
                 const Animation_EaseTranslationData_t *data = running->custom_data;
 
                 from_y = data->from_y;
                 from_x = data->from_x;
 
-                double progress = (running->elapsed - running->delay) / running->duration;
+                if ( running->elapsed > running->delay ) {
+                    double progress = (running->elapsed - running->delay) / running->duration;
 
-                progress = apply_ease_func(progress, running->ease_func);
-                const double y_delta = data->to_y - data->from_y;
-                const double x_delta = data->to_x - data->from_x;
+                    progress = apply_ease_func(progress, running->ease_func);
+                    const double y_delta = data->to_y - data->from_y;
+                    const double x_delta = data->to_x - data->from_x;
 
-                from_x += x_delta * progress;
-                from_y += y_delta * progress;
+                    from_x += x_delta * progress;
+                    from_y += y_delta * progress;
+                }
             }
 
             Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, unique_id);
             if ( animation != NULL ) {
                 animation->delay = opts != NULL ? opts->delay : 0.0;
-                animation->duration = opts != NULL ? opts->duration : base_anim->duration;
+                animation->duration = opts != NULL && opts->duration > 0.0 ? opts->duration : base_anim->duration;
                 reapply_translate_animation(animation, from_x, from_y);
             }
         }
@@ -2521,9 +2519,11 @@ void ui_reposition_drawable_dur(Drawable_t *drawable, const AnimatedSetOpts_t op
 
 void ui_reposition_drawable(Drawable_t *drawable) { internal_reposition_drawable(drawable, true, NULL); }
 
-static void internal_cancel_animation(Drawable_t *drawable, const AnimationType_t type) {
-    Animation_t *animation = NULL;
-    while ( (animation = find_active_animation(drawable, type)) ) {
+static void internal_cancel_animation(const Drawable_t *drawable, const AnimationType_t type) {
+    for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+        Animation_t *animation = drawable->active_animations->data[i];
+        if ( animation->type != type || !animation->active )
+            continue;
         animation->elapsed = animation->duration + animation->delay;
         animation->active = false;
     }
