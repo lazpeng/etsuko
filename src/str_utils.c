@@ -9,7 +9,7 @@
 #define MAX_STRLEN (2048)
 #define STR_BUF_START_CAP (128)
 
-int32_t str_skip_whitespace(const char *src, int32_t start, int32_t max_len) {
+int32_t str_skip_whitespace(const char *src, const int32_t start, const int32_t max_len) {
     int32_t idx = start;
     while ( idx < max_len ) {
         int32_t tmp_idx = idx;
@@ -42,13 +42,13 @@ int32_t str_find(const char *src, const char c, const int32_t start, int32_t max
 int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, const int32_t max_len, const int32_t sub_len) {
     const int32_t sub_count = str_u8_count(sub, 0, sub_len);
     int32_t sub_i = 0;
-    int32_t first_sub_c = str_u8_next(sub, sub_len, &sub_i);
+    const int32_t first_sub_c = str_u8_next(sub, sub_len, &sub_i);
 
     int32_t i = 0;
     while ( i < max_len ) {
         const bool skip = i < start;
         const int32_t start_i = i;
-        int32_t c = str_u8_next(src, max_len, &i);
+        const int32_t c = str_u8_next(src, max_len, &i);
         if ( skip )
             continue;
 
@@ -62,8 +62,8 @@ int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, c
                     break;
                 }
 
-                int32_t cur_c = str_u8_next(src, max_len, &i);
-                int32_t sub_c = str_u8_next(sub, sub_len, &sub_i);
+                const int32_t cur_c = str_u8_next(src, max_len, &i);
+                const int32_t sub_c = str_u8_next(sub, sub_len, &sub_i);
 
                 if ( cur_c != sub_c || sub_c < 0 || cur_c < 0 ) {
                     sub_i = start_sub_i;
@@ -92,7 +92,7 @@ int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len
     return count;
 }
 
-int32_t str_u8_next(const char *const bytes, size_t size, int32_t *index) {
+int32_t str_u8_next(const char *const bytes, const size_t size, int32_t *index) {
     const int32_t i = *index;
     if ( i < 0 || (size_t)i >= size )
         return -1;
@@ -262,7 +262,7 @@ void str_buf_clear(StrBuffer_t *buf) {
     }
 }
 
-int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, size_t len, int32_t start) {
+int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, const size_t len, const int32_t start) {
     int32_t bytes = start, content_end = start;
     while ( (size_t)bytes < len ) {
         // i don't remember why i did this
