@@ -108,12 +108,8 @@ typedef enum BackgroundType_t {
     BACKGROUND_NONE = 0,
     // Static gradient between the two specified colors
     BACKGROUND_GRADIENT,
-    // A moving, cloud like gradient shader
-    BACKGROUND_SANDS_GRADIENT,
-    // A shader that cycles between multiple pre-defined colors
-    BACKGROUND_RANDOM_GRADIENT,
-    // A shader that imitates Apple Music's background effect
-    BACKGROUND_AM_LIKE_GRADIENT,
+    // Blurred, layered copies of an image drifting like smoke. Needs render_background_set_image
+    BACKGROUND_IMAGE_BLUR,
 } BackgroundType_t;
 
 /**
@@ -235,11 +231,24 @@ typedef struct DrawTextureOpts_t {
  */
 typedef struct Background_t {
     BackgroundType_t type;
-    Color_t colors[5];
+    Color_t primary_color, secondary_color;
     OWNING Texture_t *null_tex;
     double border_radius_em;
     bool blur;
+    OWNING MAYBE_NULL Texture_t *image_tex;
+    OWNING MAYBE_NULL Texture_t *image_prev_tex;
+    // Value between 0 and 1 to interpolate between the two (prev and current) background images
+    float image_fade;
 } Background_t;
+
+/**
+ * Downsampled and blurred version of an image, intended to be used as a background effect.
+ */
+typedef struct BlurredBackgroundImage_t {
+    int32_t width, height;
+    // RGBA, row major, alpha always opaque
+    OWNING unsigned char *pixels;
+} BlurredBackgroundImage_t;
 
 /**
  * Initializes the rendering backend with the creation of a window (in case of a desktop build), an OpenGL context and
@@ -294,12 +303,21 @@ double render_get_pixel_scale(void);
  */
 void render_set_window_title(const char *title);
 /**
- * Sample 5 colors from the given raw image data to be used in background effects.
- * Supported image types: JPEG, PNG
- * For effects that use less than 5 colors (static gradient, dynamic gradient, solid color), the first N colors will be used from
- * this sample
+ * Creates a smaller version of the given image with gaussian blur applied, intended for use with the background image blur
+ * option.
  */
-void render_sample_bg_colors_from_image(const unsigned char *bytes, int length, Color_t colors[5]);
+BlurredBackgroundImage_t *render_make_blurred_image(const unsigned char *bytes, int length);
+/**
+ * Frees a blurred image
+ */
+void render_destroy_blurred_image(MAYBE_NULL BlurredBackgroundImage_t *image);
+/**
+ * Set a previously generated blurred background image as the background for the given... background.
+ * The image itself is not altered and may be stored for further calls of this function with the same parameter.
+ * The previously active background image, if any, is stored and by controlling the fade factor, a transition between the two
+ * can be made at draw time.
+ */
+void render_background_set_image(Background_t *background, const BlurredBackgroundImage_t *image);
 /**
  * Set the blend mode to be used when calling render_draw_texture
  */

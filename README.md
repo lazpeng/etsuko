@@ -181,11 +181,12 @@ This repository includes code in the public domain from the following projects, 
 * nothings/stb: https://github.com/nothings/stb
 * lieff/minimp3: https://github.com/lieff/minimp3
 
-Also includes shaders written by Inigo Quilez, released under Creative Commons Attribution-NonCommercial-ShareAlike
-3.0 Unported License ([original](https://www.shadertoy.com/view/wdyczG)), slightly modified to work in the program's context
-and under the selected OpenGL version, and as such those modified shaders are available under the same license:
-* shaders/am gradient.frag.glsl
-* shaders/cloud gradient.frag.glsl
+The background shader (shaders/image blur.frag.glsl) builds on these published pieces, credited in the source as well:
+* the pcg2d hash from "Hash Functions for GPU Rendering" by Mark Jarzynski and Marc Olano, Journal of Computer Graphics
+Techniques vol. 9 no. 3, 2020 (https://jcgt.org/published/0009/03/02/), published under CC BY-ND 3.0
+* the OKLab color space conversions by Björn Ottosson (https://bottosson.github.io/posts/oklab/), public domain
+* interleaved gradient noise by Jorge Jimenez, from "Next Generation Post Processing in Call of Duty: Advanced Warfare",
+SIGGRAPH 2014
 
 This application bundles the Google Noto fonts in the assets directory, without any modification. Different fonts can be used
 instead by replacing the files inside that folder and replacing the correspoding setting inside config.c

@@ -37,9 +37,7 @@ typedef enum Song_LineAlignment_t { SONG_LINE_LEFT = 0, SONG_LINE_CENTER, SONG_L
 typedef enum Song_BgType_t {
     BG_SIMPLE_GRADIENT = 0,
     BG_SOLID,
-    BG_SANDS_GRADIENT,
-    BG_RANDOM_GRADIENT,
-    BG_AM_LIKE_GRADIENT,
+    BG_IMAGE_BLUR,
 } Song_BgType_t;
 
 // Represents a part of reading hint that gets assigned to a portion of text of the original lyric text

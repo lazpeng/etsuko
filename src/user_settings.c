@@ -393,10 +393,7 @@ static Container_t *create_container(const Ui_t *ui) {
 
     const Color_t bg_color = {.r = 30, .g = 30, .b = 30, .a = 240};
     const Color_t bg_color_secondary = {.r = 30, .g = 30, .b = 30, .a = 150};
-    static Color_t colors[2] = {0};
-    colors[0] = bg_color;
-    colors[1] = bg_color_secondary;
-    ui_container_update_background_colors_immediate(container, colors, 2);
+    ui_container_set_background_colors(container, bg_color, bg_color_secondary);
     container->background->type = BACKGROUND_GRADIENT;
     container->background->border_radius_em = 2.0;
     container->background->blur = true;

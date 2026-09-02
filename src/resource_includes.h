@@ -31,16 +31,8 @@ static const char incbin_gradient_frag_shader[] = {
 #embed "shaders/gradient.frag.glsl"
     ,'\0'
 };
-static const char incbin_dyn_gradient_frag_shader[] = {
-#embed "shaders/dynamic gradient.frag.glsl"
-    ,'\0'
-};
-static const char incbin_rand_gradient_frag_shader[] = {
-#embed "shaders/random gradient.frag.glsl"
-    ,'\0'
-};
-static const char incbin_am_gradient_frag_shader[] = {
-#embed "shaders/am gradient.frag.glsl"
+static const char incbin_image_blur_frag_shader[] = {
+#embed "shaders/image blur.frag.glsl"
     ,'\0'
 };
 

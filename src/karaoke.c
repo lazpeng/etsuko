@@ -143,12 +143,12 @@ static void on_song_loaded(const Resource_t *res) {
 
     Background_t *bg = ui_root_container(state->ui)->background;
     bg->type = BACKGROUND_GRADIENT;
-    bg->colors[0] = render_color_parse(song_get()->bg_color);
-    if ( bg->colors[0].a == 0 )
-        bg->colors[0].a = 255;
-    bg->colors[1] = render_color_parse(song_get()->bg_color_secondary);
-    if ( bg->colors[1].a == 0 )
-        bg->colors[1].a = 255;
+    bg->primary_color = render_color_parse(song_get()->bg_color);
+    if ( bg->primary_color.a == 0 )
+        bg->primary_color.a = 255;
+    bg->secondary_color = render_color_parse(song_get()->bg_color_secondary);
+    if ( bg->secondary_color.a == 0 )
+        bg->secondary_color.a = 255;
 
     state->loading.song_loaded = true;
 }
@@ -427,33 +427,31 @@ static void on_progress_bar_changed(Ui_t *, const ProgressBarWidget_t *, const d
 }
 
 static void setup_background(const Karaoke_t *state) {
-    BackgroundType_t bg_type = BACKGROUND_NONE;
+    BackgroundType_t bg_type;
     switch ( song_get()->bg_type ) {
     case BG_SIMPLE_GRADIENT:
         bg_type = BACKGROUND_GRADIENT;
         break;
-    case BG_SANDS_GRADIENT:
-        bg_type = BACKGROUND_SANDS_GRADIENT;
-        break;
-    case BG_RANDOM_GRADIENT:
-        bg_type = BACKGROUND_RANDOM_GRADIENT;
-        break;
-    case BG_AM_LIKE_GRADIENT:
-        bg_type = BACKGROUND_AM_LIKE_GRADIENT;
+    case BG_IMAGE_BLUR:
+        bg_type = BACKGROUND_IMAGE_BLUR;
         break;
     default:
+        printf("Background type %d is not implemented, using the image blur\n", song_get()->bg_type);
+        bg_type = BACKGROUND_IMAGE_BLUR;
         break;
     }
 
-    const ResourceBuffer_t *buffer = state->resources.album_art_buffer;
-    Color_t colors[5];
-    render_sample_bg_colors_from_image(buffer->data, (int)buffer->downloaded_bytes, colors);
-
     Background_t *bg = ui_root_container(state->ui)->background;
-    bg->type = bg_type;
-    for ( int i = 0; i < 5; i++ ) {
-        bg->colors[i] = colors[i];
+    if ( bg_type == BACKGROUND_IMAGE_BLUR ) {
+        const ResourceBuffer_t *buffer = state->resources.album_art_buffer;
+        BlurredBackgroundImage_t *image = render_make_blurred_image(buffer->data, (int)buffer->downloaded_bytes);
+        if ( image == NULL ) {
+            error_abort("Unable to create blurred album art image");
+        }
+        ui_container_set_background_image(ui_root_container(state->ui), image);
+        render_destroy_blurred_image(image);
     }
+    bg->type = bg_type;
 }
 
 static void update_lyric_language_toggle(const Karaoke_t *state) {

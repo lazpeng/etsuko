@@ -26,6 +26,7 @@
 #define SONG_ALBUM_SCALED_OFFSET_Y (0.01)
 #define PILL_REGULAR_OFFSET_Y (0.06)
 #define PILL_SCALED_OFFSET_Y (0.1)
+#define BACKGROUND_CHANGE_DURATION (0.6)
 
 // Prev comment: "This shit shouldn't be here"
 // but unfortunately the "ui" is too barebones to offer a generic solution for this problem, so
@@ -36,7 +37,7 @@ typedef struct GridLayoutInfo_t {
     double max_y;
 } GridLayoutInfo_t;
 
-struct MainMenu_t {
+typedef struct MainMenu_t {
     OWNING Ui_t *ui;
     OWNING Vector_t *menu_songs; // of song.h MenuSong_t
     OWNING Resource_t *load_ui_font, *load_song_list, *load_no_album_art;
@@ -44,10 +45,11 @@ struct MainMenu_t {
     OWNING HashMap_t *album_art_drawables; // of SongEntryDrawables_t
     OWNING Vector_t *album_art_loads;      // of Resource_t
     WEAK const char *selected_song;
+    WEAK const char *background_song;
     WEAK Container_t *container;
     bool album_data_dirty;
     GridLayoutInfo_t grid_layout_info;
-};
+} MainMenu_t;
 
 typedef struct SongEntryDrawables_t {
     WEAK Drawable_t *image, *title, *album;
@@ -63,23 +65,21 @@ typedef enum AlbumArtState_t { ART_NOT_LOADED = 0, ART_PENDING_DRAW = 1, ART_OK 
 typedef struct AlbumArtData_t {
     WEAK MainMenu_t *menu;
     WEAK const char *id;
-    Color_t sampled_colors[5];
+    OWNING BlurredBackgroundImage_t *blurred_art;
     OWNING unsigned char *image_data;
     uint64_t image_data_size;
     AlbumArtState_t state;
 } AlbumArtData_t;
 
 static void album_art_loaded(const Resource_t *res) {
-    // The user may click on a song before all the albums have finished loading, so if we already changed modes
-    // (and all the state for the main menu is gone), don't do anything
-    if ( global_active_mode() != APP_MODE_MENU )
-        return;
     AlbumArtData_t *data = res->custom_data;
 
     data->image_data = res->buffer->data;
     data->image_data_size = res->buffer->downloaded_bytes;
 
-    render_sample_bg_colors_from_image(res->buffer->data, (int)res->buffer->downloaded_bytes, data->sampled_colors);
+    data->blurred_art = render_make_blurred_image(res->buffer->data, (int)res->buffer->downloaded_bytes);
+    if ( data->blurred_art == NULL )
+        error_abort("Failed to blur album art image (main menu)");
 
     data->state = ART_PENDING_DRAW;
     if ( str_is_empty(data->menu->selected_song) )
@@ -339,7 +339,7 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
     return text;
 }
 
-static void update_background(const MainMenu_t *menu) {
+static void update_background(MainMenu_t *menu) {
     if ( str_is_empty(menu->selected_song) )
         return;
 
@@ -348,16 +348,15 @@ static void update_background(const MainMenu_t *menu) {
         return;
 
     const Container_t *root = ui_root_container(menu->ui);
-    Color_t sampled_colors[5];
-    for ( int i = 0; i < 5; i++ ) {
-        sampled_colors[i] = art->sampled_colors[i];
+    if ( art->blurred_art == NULL ) {
+        root->background->type = BACKGROUND_NONE;
+        return;
     }
-    if ( root->background->type == BACKGROUND_NONE )
-        ui_container_update_background_colors_immediate(root, sampled_colors, 5);
-    else
-        ui_container_update_background_colors(root, sampled_colors, 5);
-
-    root->background->type = BACKGROUND_AM_LIKE_GRADIENT;
+    if ( !str_equals(menu->background_song, art->id) ) {
+        ui_container_set_background_image(root, art->blurred_art);
+        menu->background_song = art->id;
+    }
+    root->background->type = BACKGROUND_IMAGE_BLUR;
 }
 
 static void destroy_resource_load(Resource_t **resource) {
@@ -431,7 +430,7 @@ static void setup_song(MainMenu_t *menu, const MenuSong_t *song) {
 }
 
 void menu_setup(MainMenu_t *menu) {
-    ui_container_animate_color_change(ui_root_container(menu->ui), 0.5, ANIM_EASE_NONE);
+    ui_container_animate_background_image(ui_root_container(menu->ui), BACKGROUND_CHANGE_DURATION, ANIM_EASE_OUT_SINE);
     // Set the initial background to the first album art loaded
     update_background(menu);
     etsuko_setup_version(menu->ui);
@@ -518,6 +517,7 @@ static void cleanup_album_art_data(const char *key, void *value, void *_) {
     if ( str_equals(key, NO_ART_KEY) ) {
         free(data->image_data);
     }
+    render_destroy_blurred_image(data->blurred_art);
     // The other ones are owned by the Resource_t which is freed separately
     free(data);
 }

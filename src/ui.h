@@ -171,7 +171,7 @@ typedef enum AnimationType_t {
     ANIM_SCALE,
     ANIM_DRAW_REGION,
     ANIM_SCALE_REGION,
-    ANIM_BACKGROUND_COLOR,
+    ANIM_BACKGROUND_IMAGE,
     ANIM_SCROLL_Y,
     ANIM_BLUR_RADIUS,
 } AnimationType_t;
@@ -346,13 +346,6 @@ typedef struct Animation_ScaleRegionData_t {
     AnimationEaseType_t ease_func;
     AnimationApplyType_t default_apply;
 } Animation_ScaleRegionData_t;
-
-typedef struct Animation_ColorChangeData_t {
-    Color_t from_colors[5];
-    Color_t to_colors[5];
-    double duration;
-    AnimationEaseType_t ease_func;
-} Animation_ColorChangeData_t;
 
 typedef struct Animation_ScrollYData_t {
     double from_amount, to_amount;
@@ -558,10 +551,13 @@ void ui_animate_blur(Drawable_t *target, const Animation_BlurRadiusData_t *data)
 void ui_drawable_set_blur_radius(Drawable_t *drawable, float radius);
 void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, float radius);
 void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
-void ui_container_animate_color_change(Container_t *container, double duration, AnimationEaseType_t ease_func);
+// Registers a crossfade on the container's background image, restarted by ui_container_set_background_image on every change
+void ui_container_animate_background_image(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);
-void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, size_t size);
-void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, size_t size);
+void ui_container_set_background_colors(const Container_t *container, Color_t primary, Color_t secondary);
+// Uploads the image drawn by a BACKGROUND_IMAGE_BLUR background. Crossfades from the previous one when the container has a
+// background image animation registered, otherwise cuts
+void ui_container_set_background_image(const Container_t *container, const BlurredBackgroundImage_t *image);
 void ui_clear_sticky_animations(const Drawable_t *drawable);
 // Widgets
 int ui_register_widget(const Container_t *parent, c_reconfigure_widget reconfigure_widget, c_destroy_widget destroy_callback,

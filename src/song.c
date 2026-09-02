@@ -65,14 +65,11 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
             song->bg_type = BG_SIMPLE_GRADIENT;
         } else if ( str_equals_right_sized(value, "solid") ) {
             song->bg_type = BG_SOLID;
-        } else if ( str_equals_right_sized(value, "sands") ) {
-            song->bg_type = BG_SANDS_GRADIENT;
-        } else if ( str_equals_right_sized(value, "randomGradient") ) {
-            song->bg_type = BG_RANDOM_GRADIENT;
-        } else if ( str_equals_right_sized(value, "amLike") ) {
-            song->bg_type = BG_AM_LIKE_GRADIENT;
+        } else if ( str_equals_right_sized(value, "imageBlur") || str_equals_right_sized(value, "amLike") ) {
+            song->bg_type = BG_IMAGE_BLUR;
         } else {
-            printf("Invalid background type: %s\n", value);
+            printf("Unknown background type '%s', using the image blur\n", value);
+            song->bg_type = BG_IMAGE_BLUR;
         }
         free(value);
     } else if ( str_equals_sized(buffer, "writtenBy", equals) ) {
@@ -402,6 +399,7 @@ static Song_Language_t *select_language(const Song_t *song, const char *language
 void song_load(const char *filename, const char *src, const int src_size) {
     g_song = calloc(1, sizeof(*g_song));
     g_song->languages = vec_init();
+    g_song->bg_type = BG_IMAGE_BLUR;
 
     g_song->id = strdup(filename);
 

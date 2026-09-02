@@ -88,50 +88,26 @@ typedef struct SimpleGradientShaderData_t {
     GLint projection_loc;
 } SimpleGradientShaderData_t;
 
-typedef struct RandomGradientShaderData_t {
+typedef struct ImageBlurShaderData_t {
     GLuint id;
-    GLint time_loc;
     GLint resolution_loc;
+    GLint time_loc;
+    GLint image_loc;
+    GLint image_prev_loc;
+    GLint image_fade_loc;
     GLint projection_loc;
     GLint use_bounds_loc;
     GLint bounds_loc;
     GLint border_radius_loc;
     GLint rect_size_loc;
-} RandomGradientShaderData_t;
-
-typedef struct DynamicGradientShaderData_t {
-    GLuint id;
-    GLint time_loc;
-    GLint noise_mag_loc;
-    GLint colors;
-    GLint resolution_loc;
-    GLint projection_loc;
-    GLint use_bounds_loc;
-    GLint bounds_loc;
-    GLint border_radius_loc;
-    GLint rect_size_loc;
-} DynamicGradientShaderData_t;
-
-typedef struct AmLikeShaderData_t {
-    GLuint id;
-    GLint resolution_loc;
-    GLint time_loc;
-    GLint colors_loc;
-    GLint projection_loc;
-    GLint use_bounds_loc;
-    GLint bounds_loc;
-    GLint border_radius_loc;
-    GLint rect_size_loc;
-} AmLikeShaderData_t;
+} ImageBlurShaderData_t;
 
 typedef struct ShaderData_t {
     GLuint active_shader_program;
     TextureShaderData_t tex;
     RectShaderData_t rect;
     SimpleGradientShaderData_t grad;
-    RandomGradientShaderData_t rand_grad;
-    DynamicGradientShaderData_t dyn_grad;
-    AmLikeShaderData_t am_like;
+    ImageBlurShaderData_t image_blur;
 } ShaderData_t;
 
 typedef struct BlurData_t {
@@ -414,12 +390,8 @@ void render_init(void) {
     g_renderer->shaders.rect.id = create_shader_program(buffer, incbin_default_vert_shader, incbin_rect_frag_shader, "rect");
     g_renderer->shaders.grad.id =
         create_shader_program(buffer, incbin_default_vert_shader, incbin_gradient_frag_shader, "gradient");
-    g_renderer->shaders.dyn_grad.id =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_dyn_gradient_frag_shader, "dyn_gradient");
-    g_renderer->shaders.am_like.id =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_am_gradient_frag_shader, "am_gradient");
-    g_renderer->shaders.rand_grad.id =
-        create_shader_program(buffer, incbin_default_vert_shader, incbin_rand_gradient_frag_shader, "rand_gradient");
+    g_renderer->shaders.image_blur.id =
+        create_shader_program(buffer, incbin_default_vert_shader, incbin_image_blur_frag_shader, "image_blur");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
@@ -453,35 +425,17 @@ void render_init(void) {
     g_renderer->shaders.grad.bottom_color_loc = glGetUniformLocation(g_renderer->shaders.grad.id, "u_bottomColor");
     g_renderer->shaders.grad.projection_loc = glGetUniformLocation(g_renderer->shaders.grad.id, "u_projection");
 
-    // Get uniform locations for the random gradient shader
-    g_renderer->shaders.rand_grad.time_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_time");
-    g_renderer->shaders.rand_grad.resolution_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_resolution");
-    g_renderer->shaders.rand_grad.projection_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_projection");
-    g_renderer->shaders.rand_grad.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_use_bounds");
-    g_renderer->shaders.rand_grad.bounds_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_bounds");
-    g_renderer->shaders.rand_grad.border_radius_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_borderRadius");
-    g_renderer->shaders.rand_grad.rect_size_loc = glGetUniformLocation(g_renderer->shaders.rand_grad.id, "u_rectSize");
-
-    // Get uniform locations for the dynamic gradient shader
-    g_renderer->shaders.dyn_grad.time_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_time");
-    g_renderer->shaders.dyn_grad.noise_mag_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_noise_magnitude");
-    g_renderer->shaders.dyn_grad.colors = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_colors");
-    g_renderer->shaders.dyn_grad.resolution_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_resolution");
-    g_renderer->shaders.dyn_grad.projection_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_projection");
-    g_renderer->shaders.dyn_grad.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_use_bounds");
-    g_renderer->shaders.dyn_grad.bounds_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_bounds");
-    g_renderer->shaders.dyn_grad.border_radius_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_borderRadius");
-    g_renderer->shaders.dyn_grad.rect_size_loc = glGetUniformLocation(g_renderer->shaders.dyn_grad.id, "u_rectSize");
-
-    // Get uniform locations for the AM-like shader
-    g_renderer->shaders.am_like.resolution_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iResolution");
-    g_renderer->shaders.am_like.time_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iTime");
-    g_renderer->shaders.am_like.colors_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "iColors");
-    g_renderer->shaders.am_like.projection_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_projection");
-    g_renderer->shaders.am_like.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_use_bounds");
-    g_renderer->shaders.am_like.bounds_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_bounds");
-    g_renderer->shaders.am_like.border_radius_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_borderRadius");
-    g_renderer->shaders.am_like.rect_size_loc = glGetUniformLocation(g_renderer->shaders.am_like.id, "u_rectSize");
+    // Get uniform locations for the image blur shader
+    g_renderer->shaders.image_blur.resolution_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_resolution");
+    g_renderer->shaders.image_blur.time_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_time");
+    g_renderer->shaders.image_blur.image_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image");
+    g_renderer->shaders.image_blur.image_prev_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image_prev");
+    g_renderer->shaders.image_blur.image_fade_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image_fade");
+    g_renderer->shaders.image_blur.projection_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_projection");
+    g_renderer->shaders.image_blur.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_use_bounds");
+    g_renderer->shaders.image_blur.bounds_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_bounds");
+    g_renderer->shaders.image_blur.border_radius_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_borderRadius");
+    g_renderer->shaders.image_blur.rect_size_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_rectSize");
 }
 
 void render_finish(void) {
@@ -499,9 +453,7 @@ void render_finish(void) {
     glDeleteProgram(g_renderer->shaders.tex.id);
     glDeleteProgram(g_renderer->shaders.rect.id);
     glDeleteProgram(g_renderer->shaders.grad.id);
-    glDeleteProgram(g_renderer->shaders.dyn_grad.id);
-    glDeleteProgram(g_renderer->shaders.rand_grad.id);
-    glDeleteProgram(g_renderer->shaders.am_like.id);
+    glDeleteProgram(g_renderer->shaders.image_blur.id);
 
     // Destroy GL context (GLFW destroys context with window)
     glfwDestroyWindow(g_renderer->window);
@@ -561,12 +513,17 @@ static void deconstruct_colors_opengl(const Color_t *color, float *r, float *g, 
         *a = (float)color->a / 255.0f;
 }
 
-static void draw_random_gradient_bg(const Background_t *background, const Bounds_t *bounds) {
+static void draw_image_blur_bg(Background_t *background, const Bounds_t *bounds) {
+    // Nothing to draw until render_background_set_image has been called
+    if ( background->image_tex == NULL )
+        return;
+
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     const float border_radius = resolve_background_border_radius(background, bounds);
     render_set_blend_mode(BLEND_MODE_BLEND);
 
-    set_shader_program(g_renderer->shaders.rand_grad.id);
+    const ImageBlurShaderData_t *shader = &g_renderer->shaders.image_blur;
+    set_shader_program(shader->id);
     glBindVertexArray(background->null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
 
@@ -577,100 +534,34 @@ static void draw_random_gradient_bg(const Background_t *background, const Bounds
         mark_texture_configured(background->null_tex, bounds);
     }
 
-    glUniformMatrix4fv(g_renderer->shaders.rand_grad.projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->shaders.rand_grad.use_bounds_loc, 1);
-    glUniform4f(g_renderer->shaders.rand_grad.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.rand_grad.border_radius_loc, border_radius);
-    glUniform2f(g_renderer->shaders.rand_grad.rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.rand_grad.time_loc, (float)events_get_elapsed_time());
-    glUniform2f(g_renderer->shaders.rand_grad.resolution_loc, (float)bounds->w, (float)bounds->h);
+    if ( background->image_prev_tex != NULL && background->image_fade >= 1.f ) {
+        render_destroy_texture(background->image_prev_tex);
+        background->image_prev_tex = NULL;
+    }
+    const float fade = background->image_prev_tex != NULL ? background->image_fade : 1.f;
+    const Texture_t *prev = background->image_prev_tex != NULL ? background->image_prev_tex : background->image_tex;
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, prev->id);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, background->image_tex->id);
+
+    glUniformMatrix4fv(shader->projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(shader->use_bounds_loc, 1);
+    glUniform4f(shader->bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
+    glUniform1f(shader->border_radius_loc, border_radius);
+    glUniform2f(shader->rect_size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(shader->time_loc, (float)events_get_elapsed_time());
+    glUniform2f(shader->resolution_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1i(shader->image_loc, 0);
+    glUniform1i(shader->image_prev_loc, 1);
+    glUniform1f(shader->image_fade_loc, fade);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    render_set_blend_mode(saved_blend);
-}
-
-static void draw_dynamic_gradient_bg(const Background_t *background, const Bounds_t *bounds) {
-    const BlendMode_t saved_blend = g_renderer->blend_mode;
-    const float border_radius = resolve_background_border_radius(background, bounds);
-    render_set_blend_mode(BLEND_MODE_BLEND);
-
-    set_shader_program(g_renderer->shaders.dyn_grad.id);
-
-    glBindVertexArray(background->null_tex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
-
-    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
-        float quad_vertices[QUAD_VERTICES_SIZE] = {0};
-        create_quad_vertices((float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h, quad_vertices);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), &quad_vertices, GL_STATIC_DRAW);
-        mark_texture_configured(background->null_tex, bounds);
-    }
-
-    glUniformMatrix4fv(g_renderer->shaders.dyn_grad.projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->shaders.dyn_grad.use_bounds_loc, 1);
-    glUniform4f(g_renderer->shaders.dyn_grad.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.dyn_grad.border_radius_loc, border_radius);
-    glUniform2f(g_renderer->shaders.dyn_grad.rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.dyn_grad.time_loc, (float)events_get_elapsed_time() / 5.f);
-    glUniform1f(g_renderer->shaders.dyn_grad.noise_mag_loc, 0.1f);
-    glUniform2f(g_renderer->shaders.dyn_grad.resolution_loc, (float)bounds->w, (float)bounds->h);
-
-    float colors[5][4];
-    for ( int i = 0; i < 5; i++ ) {
-        const Color_t *color = &background->colors[i];
-        float *r = &colors[i][0];
-        float *g = &colors[i][1];
-        float *b = &colors[i][2];
-        float *a = &colors[i][3];
-        deconstruct_colors_opengl(color, r, g, b, a);
-    }
-    glUniform4fv(g_renderer->shaders.dyn_grad.colors, 5, &colors[0][0]);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    render_set_blend_mode(saved_blend);
-}
-
-static void draw_am_like_bg(const Background_t *background, const Bounds_t *bounds) {
-    const BlendMode_t saved_blend = g_renderer->blend_mode;
-    const float border_radius = resolve_background_border_radius(background, bounds);
-    render_set_blend_mode(BLEND_MODE_BLEND);
-
-    set_shader_program(g_renderer->shaders.am_like.id);
-    glBindVertexArray(background->null_tex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
-
-    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
-        float quad_vertices[QUAD_VERTICES_SIZE] = {0};
-        create_quad_vertices((float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h, quad_vertices);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), &quad_vertices, GL_STATIC_DRAW);
-        mark_texture_configured(background->null_tex, bounds);
-    }
-
-    glUniformMatrix4fv(g_renderer->shaders.am_like.projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(g_renderer->shaders.am_like.use_bounds_loc, 1);
-    glUniform4f(g_renderer->shaders.am_like.bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.am_like.border_radius_loc, border_radius);
-    glUniform2f(g_renderer->shaders.am_like.rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(g_renderer->shaders.am_like.time_loc, (float)events_get_elapsed_time());
-    glUniform3f(g_renderer->shaders.am_like.resolution_loc, (float)bounds->w, (float)bounds->h, 0.f);
-
-    float colors[5][4];
-    for ( int i = 0; i < 5; i++ ) {
-        const Color_t *color = &background->colors[i];
-        float *r = &colors[i][0];
-        float *g = &colors[i][1];
-        float *b = &colors[i][2];
-        float *a = &colors[i][3];
-        deconstruct_colors_opengl(color, r, g, b, a);
-    }
-    glUniform4fv(g_renderer->shaders.am_like.colors_loc, 5, &colors[0][0]);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
 
     render_set_blend_mode(saved_blend);
 }
@@ -687,9 +578,9 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
     const float w = (float)width, h = (float)height;
 
     float r, g, b, a;
-    deconstruct_colors_opengl(&background->colors[0], &r, &g, &b, &a);
+    deconstruct_colors_opengl(&background->primary_color, &r, &g, &b, &a);
     glUniform4f(g_renderer->shaders.grad.top_color_loc, r, g, b, a);
-    deconstruct_colors_opengl(&background->colors[1], &r, &g, &b, &a);
+    deconstruct_colors_opengl(&background->secondary_color, &r, &g, &b, &a);
     glUniform4f(g_renderer->shaders.grad.bottom_color_loc, r, g, b, a);
     glUniformMatrix4fv(g_renderer->shaders.grad.projection_loc, 1, GL_FALSE, target->projection);
 
@@ -815,6 +706,10 @@ void render_destroy_background(Background_t *background) {
     if ( background != NULL ) {
         if ( background->null_tex != NULL )
             render_destroy_texture(background->null_tex);
+        if ( background->image_tex != NULL )
+            render_destroy_texture(background->image_tex);
+        if ( background->image_prev_tex != NULL )
+            render_destroy_texture(background->image_prev_tex);
         free(background);
     }
 }
@@ -860,14 +755,8 @@ void render_draw_background(Background_t *background, const Bounds_t *at) {
     case BACKGROUND_GRADIENT:
         draw_gradient_bg(background, at);
         break;
-    case BACKGROUND_SANDS_GRADIENT:
-        draw_dynamic_gradient_bg(background, at);
-        break;
-    case BACKGROUND_RANDOM_GRADIENT:
-        draw_random_gradient_bg(background, at);
-        break;
-    case BACKGROUND_AM_LIKE_GRADIENT:
-        draw_am_like_bg(background, at);
+    case BACKGROUND_IMAGE_BLUR:
+        draw_image_blur_bg(background, at);
         break;
     default:
         printf("Warning: Unrecognized background type\n");
@@ -1043,149 +932,140 @@ Color_t render_color_darken(Color_t color, const double amount) {
     return color;
 }
 
-static float calculate_color_luminance(const Color_t *color) {
-    return 0.299f * (float)color->r + 0.587f * (float)color->g + 0.114f * (float)color->b;
+// Side of the blurred copy. The shader magnifies it several times over, so anything larger is wasted
+#define BLURRED_IMAGE_SIZE (128)
+// Gaussian sigma of the blur as a fraction of the side
+#define BLURRED_IMAGE_SIGMA (0.09)
+
+// Index folded back into [0, n) the same way GL_MIRRORED_REPEAT will show the texture past its edges
+static int32_t mirror_index(int32_t i, const int32_t n) {
+    if ( i < 0 )
+        i = -i - 1;
+    if ( i >= n )
+        i = 2 * n - i - 1;
+    return i;
 }
 
-void render_sample_bg_colors_from_image(const unsigned char *bytes, const int length, Color_t colors[5]) {
-    int width, height, channels;
-    unsigned char *image_data = stbi_load_from_memory(bytes, length, &width, &height, &channels, 3);
+// Offset of element i along a row (horizontal) or column of a square RGB float image
+static size_t axis_offset(const int32_t line, const int32_t i, const int32_t size, const bool horizontal) {
+    return (size_t)(horizontal ? line * size + i : i * size + line) * 3;
+}
 
-    if ( !image_data ) {
-        fprintf(stderr, "Failed to load background image for color sampling\n");
-        return;
-    }
-
-    // Sample pixels from the image (use stride for large images)
-    const int total_pixels = width * height;
-    const int sample_stride = total_pixels > 10000 ? (int)sqrt(total_pixels / 10000.0) : 1;
-
-    Color_t *samples = malloc(sizeof(Color_t) * (total_pixels / (sample_stride * sample_stride) + 1000));
-    int sample_count = 0;
-
-    for ( int y = 0; y < height; y += sample_stride ) {
-        for ( int x = 0; x < width; x += sample_stride ) {
-            const int idx = (y * width + x) * 3;
-            const uint8_t r = image_data[idx + 0];
-            const uint8_t g = image_data[idx + 1];
-            const uint8_t b = image_data[idx + 2];
-
-            const float lum = calculate_color_luminance(&(Color_t){r, g, b, 0});
-
-            // Filter out very dark or very bright colors
-            if ( lum > 15.0f && lum < 240.0f ) {
-                samples[sample_count].r = r;
-                samples[sample_count].g = g;
-                samples[sample_count].b = b;
-                sample_count++;
+// One box blur pass along one axis. Three passes per axis are close enough to a Gaussian of the same sigma
+static void box_blur_pass(const float *src, float *dst, const int32_t size, const int32_t radius, const bool horizontal) {
+    const float inv = 1.f / (float)(2 * radius + 1);
+    for ( int32_t line = 0; line < size; line++ ) {
+        for ( int32_t c = 0; c < 3; c++ ) {
+            float sum = 0.f;
+            for ( int32_t i = -radius; i <= radius; i++ )
+                sum += src[axis_offset(line, mirror_index(i, size), size, horizontal) + c];
+            for ( int32_t i = 0; i < size; i++ ) {
+                dst[axis_offset(line, i, size, horizontal) + c] = sum * inv;
+                sum += src[axis_offset(line, mirror_index(i + radius + 1, size), size, horizontal) + c] -
+                       src[axis_offset(line, mirror_index(i - radius, size), size, horizontal) + c];
             }
         }
     }
+}
 
-    // If we filtered out too much, relax the constraint
-    if ( sample_count < 50 ) {
-        sample_count = 0;
-        for ( int y = 0; y < height; y += sample_stride ) {
-            for ( int x = 0; x < width; x += sample_stride ) {
-                const int idx = (y * width + x) * 3;
-                samples[sample_count].r = image_data[idx + 0];
-                samples[sample_count].g = image_data[idx + 1];
-                samples[sample_count].b = image_data[idx + 2];
-                sample_count++;
-            }
-        }
-    }
-
-    if ( sample_count == 0 ) {
-        free(samples);
-        stbi_image_free(image_data);
-        return;
-    }
-
-    // Find 5 dominant colors
-#define K 5
-    Color_t centroids[K];
-    int *assignments = calloc(1, sizeof(int) * sample_count);
-
-    // Initialize centroids by spreading them across the sample space
-    for ( int i = 0; i < K; i++ ) {
-        const int idx = (i * sample_count / K + sample_count / (K * 2)) % sample_count;
-        centroids[i] = samples[idx];
-    }
-
-    // Run k-means iterations
-    for ( int iter = 0; iter < 15; iter++ ) {
-        // Assignment step: assign each sample to nearest centroid
-        for ( int i = 0; i < sample_count; i++ ) {
-            int best_k = 0;
-            float best_dist = INFINITY;
-
-            for ( int k = 0; k < K; k++ ) {
-                const int dr = (int)samples[i].r - (int)centroids[k].r;
-                const int dg = (int)samples[i].g - (int)centroids[k].g;
-                const int db = (int)samples[i].b - (int)centroids[k].b;
-                const float dist = (float)(dr * dr + dg * dg + db * db);
-
-                if ( dist < best_dist ) {
-                    best_dist = dist;
-                    best_k = k;
+// Area-averaging downsample of an RGB byte image into a square float image. Non-square art gets stretched, which keeps
+// all of it in the texture and which the blur hides anyway
+static void downsample_box(const unsigned char *src, const int32_t w, const int32_t h, float *dst, const int32_t size) {
+    for ( int32_t oy = 0; oy < size; oy++ ) {
+        const int32_t y0 = oy * h / size;
+        const int32_t y1 = MAX(y0 + 1, (oy + 1) * h / size);
+        for ( int32_t ox = 0; ox < size; ox++ ) {
+            const int32_t x0 = ox * w / size;
+            const int32_t x1 = MAX(x0 + 1, (ox + 1) * w / size);
+            float sum[3] = {0.f, 0.f, 0.f};
+            for ( int32_t y = y0; y < y1; y++ ) {
+                for ( int32_t x = x0; x < x1; x++ ) {
+                    const unsigned char *p = src + ((size_t)y * w + x) * 3;
+                    sum[0] += (float)p[0];
+                    sum[1] += (float)p[1];
+                    sum[2] += (float)p[2];
                 }
             }
-            assignments[i] = best_k;
-        }
-
-        // Update step: recalculate centroids
-        float sums[K][3] = {{0}};
-        int counts[K] = {0};
-
-        for ( int i = 0; i < sample_count; i++ ) {
-            const int k = assignments[i];
-            sums[k][0] += (float)samples[i].r;
-            sums[k][1] += (float)samples[i].g;
-            sums[k][2] += (float)samples[i].b;
-            counts[k]++;
-        }
-
-        for ( int k = 0; k < K; k++ ) {
-            if ( counts[k] > 0 ) {
-                centroids[k].r = (unsigned char)(sums[k][0] / (float)counts[k] + 0.5f);
-                centroids[k].g = (unsigned char)(sums[k][1] / (float)counts[k] + 0.5f);
-                centroids[k].b = (unsigned char)(sums[k][2] / (float)counts[k] + 0.5f);
-                centroids[k].a = 0xFF;
-            }
+            const float inv = 1.f / (float)((y1 - y0) * (x1 - x0));
+            float *out = dst + ((size_t)oy * size + ox) * 3;
+            out[0] = sum[0] * inv;
+            out[1] = sum[1] * inv;
+            out[2] = sum[2] * inv;
         }
     }
+}
 
-    typedef struct {
-        Color_t color;
-        float luminance;
-    } ColorLum;
-
-    ColorLum sorted[K];
-    for ( int i = 0; i < K; i++ ) {
-        sorted[i].color = centroids[i];
-        sorted[i].luminance = calculate_color_luminance(&centroids[i]);
+BlurredBackgroundImage_t *render_make_blurred_image(const unsigned char *bytes, const int length) {
+    int w, h, channels;
+    unsigned char *decoded = stbi_load_from_memory(bytes, length, &w, &h, &channels, 3);
+    if ( decoded == NULL ) {
+        fprintf(stderr, "Failed to decode image for the blurred background\n");
+        return NULL;
     }
 
-    // bubble sort
-    for ( int i = 0; i < K - 1; i++ ) {
-        for ( int j = 0; j < K - 1 - i; j++ ) {
-            if ( sorted[j].luminance > sorted[j + 1].luminance ) {
-                const ColorLum temp = sorted[j];
-                sorted[j] = sorted[j + 1];
-                sorted[j + 1] = temp;
-            }
-        }
-    }
+    const int32_t size = BLURRED_IMAGE_SIZE;
+    float *img = malloc(sizeof(float) * (size_t)size * size * 3);
+    float *tmp = malloc(sizeof(float) * (size_t)size * size * 3);
+    if ( img == NULL || tmp == NULL )
+        error_abort("Failed to allocate blurred image buffers");
 
-    for ( int i = 0; i < K; i++ ) {
-        colors[i] = sorted[i].color;
-    }
+    downsample_box(decoded, w, h, img, size);
+    stbi_image_free(decoded);
 
-    // Cleanup
-    free(assignments);
-    free(samples);
-    stbi_image_free(image_data);
+    const int32_t radius = (int32_t)(BLURRED_IMAGE_SIGMA * size + 0.5);
+    for ( int pass = 0; pass < 3; pass++ ) {
+        box_blur_pass(img, tmp, size, radius, true);
+        box_blur_pass(tmp, img, size, radius, false);
+    }
+    free(tmp);
+
+    BlurredBackgroundImage_t *image = calloc(1, sizeof(*image));
+    if ( image == NULL )
+        error_abort("Failed to allocate blurred image");
+    image->width = size;
+    image->height = size;
+    image->pixels = malloc((size_t)size * size * 4);
+    if ( image->pixels == NULL )
+        error_abort("Failed to allocate blurred image pixels");
+    for ( size_t i = 0; i < (size_t)size * size; i++ ) {
+        image->pixels[i * 4 + 0] = (unsigned char)(img[i * 3 + 0] + 0.5f);
+        image->pixels[i * 4 + 1] = (unsigned char)(img[i * 3 + 1] + 0.5f);
+        image->pixels[i * 4 + 2] = (unsigned char)(img[i * 3 + 2] + 0.5f);
+        image->pixels[i * 4 + 3] = 0xFF;
+    }
+    free(img);
+
+    return image;
+}
+
+void render_destroy_blurred_image(BlurredBackgroundImage_t *image) {
+    if ( image == NULL )
+        return;
+    free(image->pixels);
+    free(image);
+}
+
+void render_background_set_image(Background_t *background, const BlurredBackgroundImage_t *image) {
+    Texture_t *texture = calloc(1, sizeof(*texture));
+    if ( texture == NULL )
+        error_abort("Failed to allocate background image texture");
+    texture->width = image->width;
+    texture->height = image->height;
+
+    glGenTextures(1, &texture->id);
+    glBindTexture(GL_TEXTURE_2D, texture->id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->width, image->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+
+    if ( background->image_prev_tex != NULL )
+        render_destroy_texture(background->image_prev_tex);
+    background->image_prev_tex = background->image_tex;
+    background->image_tex = texture;
+    background->image_fade = 1.f;
 }
 
 void render_set_blend_mode(const BlendMode_t mode) {

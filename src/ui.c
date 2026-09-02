@@ -132,7 +132,7 @@ static void animation_destroy(Animation_t *animation, const bool recursive) {
             animation_draw_region_data_destroy(animation->custom_data);
         } else if ( animation->type == ANIM_SCALE_REGION ) {
             animation_scale_region_data_destroy(animation->custom_data);
-        } else if ( animation->type == ANIM_BACKGROUND_COLOR || animation->type == ANIM_BLUR_RADIUS ) {
+        } else if ( animation->type == ANIM_BACKGROUND_IMAGE || animation->type == ANIM_BLUR_RADIUS ) {
             free(animation->custom_data);
         } else {
             error_abort("Unrecognized animation type for animation_destroy");
@@ -972,17 +972,9 @@ static void apply_container_animations(Container_t *container, Bounds_t *bounds)
                 bounds->y = data->from_y + delta_y * eased;
             }
 
-            if ( animation->type == ANIM_BACKGROUND_COLOR ) {
-                const Animation_ColorChangeData_t *data = animation->custom_data;
+            if ( animation->type == ANIM_BACKGROUND_IMAGE ) {
                 const double eased = apply_ease_func(progress, animation->ease_func);
-                Color_t *colors = container->background->colors;
-                for ( int c = 0; c < 5; c++ ) {
-                    const Color_t from = data->from_colors[c], to = data->to_colors[c];
-                    colors[c].r = (uint8_t)(from.r + (to.r - from.r) * eased);
-                    colors[c].g = (uint8_t)(from.g + (to.g - from.g) * eased);
-                    colors[c].b = (uint8_t)(from.b + (to.b - from.b) * eased);
-                    colors[c].a = (uint8_t)(from.a + (to.a - from.a) * eased);
-                }
+                container->background->image_fade = (float)MIN(MAX(eased, 0.0), 1.0);
             }
 
             if ( animation->type == ANIM_SCROLL_Y ) {
@@ -2484,8 +2476,8 @@ static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const
     case ANIM_BLUR_RADIUS:
         animation->custom_data = dup_anim_blur_radius_data(base_anim->custom_data);
         break;
-    case ANIM_BACKGROUND_COLOR:
-        error_abort("reapply_animation: ANIM_COLOR_CHANGE is container-only and cannot be reapplied as a drawable animation");
+    case ANIM_BACKGROUND_IMAGE:
+        error_abort("reapply_animation: ANIM_BACKGROUND_IMAGE is container-only and cannot be reapplied as a drawable animation");
         break;
     default:
         error_abort("reapply_animation: Unrecognized animation type");
@@ -2959,19 +2951,12 @@ void ui_container_animate_translation(Container_t *container, const Animation_Ea
     vec_add(container->animations, result);
 }
 
-void ui_container_animate_color_change(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
+void ui_container_animate_background_image(Container_t *container, const double duration, const AnimationEaseType_t ease_func) {
     ContainerAnimation_t *result = calloc(1, sizeof(*result));
     if ( result == NULL ) {
-        error_abort("Failed to allocate color change animation");
+        error_abort("Failed to allocate background image animation");
     }
-    Animation_ColorChangeData_t *data = calloc(1, sizeof(*data));
-    if ( data == NULL ) {
-        error_abort("Failed to allocate color change animation data");
-    }
-    data->duration = duration;
-    data->ease_func = ease_func;
-    result->type = ANIM_BACKGROUND_COLOR;
-    result->custom_data = data;
+    result->type = ANIM_BACKGROUND_IMAGE;
     result->target = container;
     result->duration = duration;
     result->active = false;
@@ -3000,51 +2985,25 @@ void ui_container_animate_scroll_y(Container_t *container, const double duration
     vec_add(container->animations, result);
 }
 
-void ui_container_update_background_colors(const Container_t *container, const Color_t *colors, const size_t size) {
-    ContainerAnimation_t *color_anim = NULL;
-    for ( size_t i = 0; i < container->animations->size; i++ ) {
-        ContainerAnimation_t *a = container->animations->data[i];
-        if ( a->type == ANIM_BACKGROUND_COLOR ) {
-            color_anim = a;
-            break;
-        }
-    }
-
-    if ( color_anim != NULL ) {
-        Animation_ColorChangeData_t *data = color_anim->custom_data;
-        for ( int i = 0; i < 5; i++ )
-            data->from_colors[i] = container->background->colors[i];
-        for ( int i = 0; i < 5; i++ ) {
-            if ( (size_t)i < size )
-                data->to_colors[i] = colors[i];
-            else
-                data->to_colors[i] = (Color_t){0, 0, 0, 255};
-        }
-        color_anim->elapsed = 0.0;
-        color_anim->active = true;
-    } else {
-        for ( int i = 0; i < 5; i++ ) {
-            if ( (size_t)i < size )
-                container->background->colors[i] = colors[i];
-            else
-                container->background->colors[i] = (Color_t){0, 0, 0, 255};
-        }
-    }
+void ui_container_set_background_colors(const Container_t *container, const Color_t primary, const Color_t secondary) {
+    container->background->primary_color = primary;
+    container->background->secondary_color = secondary;
 }
 
-void ui_container_update_background_colors_immediate(const Container_t *container, const Color_t *colors, const size_t size) {
+void ui_container_set_background_image(const Container_t *container, const BlurredBackgroundImage_t *image) {
+    Background_t *background = container->background;
+    render_background_set_image(background, image);
+
+    if ( background->image_prev_tex == NULL )
+        return;
     for ( size_t i = 0; i < container->animations->size; i++ ) {
         ContainerAnimation_t *a = container->animations->data[i];
-        if ( a->type == ANIM_BACKGROUND_COLOR ) {
-            a->active = false;
+        if ( a->type == ANIM_BACKGROUND_IMAGE ) {
+            background->image_fade = 0.f;
+            a->elapsed = 0.0;
+            a->active = true;
             break;
         }
-    }
-    for ( int i = 0; i < 5; i++ ) {
-        if ( (size_t)i < size )
-            container->background->colors[i] = colors[i];
-        else
-            container->background->colors[i] = (Color_t){0, 0, 0, 255};
     }
 }
 
