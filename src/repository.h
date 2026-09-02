@@ -8,6 +8,7 @@
 
 #include "constants.h"
 
+#include <stdatomic.h>
 #include <stdint.h>
 
 // The status of a resource load request
@@ -41,11 +42,13 @@ typedef void (*f_resource_loaded_ptr)(const struct Resource_t *res);
 
 // Represents a resource loaded from the local filesystem or from a remote server
 typedef struct Resource_t {
-    LoadStatus_t status;
+    _Atomic LoadStatus_t status;
     OWNING char *original_filename;
     OWNING ResourceBuffer_t *buffer;
     WEAK MAYBE_NULL f_resource_loaded_ptr on_resource_loaded;
     WEAK MAYBE_NULL void *custom_data;
+    // Set when the owner destroyed the resource while the load was still running
+    bool abandoned;
 } Resource_t;
 
 // Info needed to load a resource
@@ -76,7 +79,11 @@ Resource_t *repo_load_resource(const LoadRequest_t *request);
  * Only useful when another component wants to take ownership of the buffer for some reason
  */
 void repo_resource_buffer_leak(Resource_t *resource);
-// Frees data related to the resource, and its buffer if it was not leaked
+/**
+ * Frees data related to the resource, and its buffer if it was not leaked.
+ * If the load is still in progress the resource is abandoned instead and freed by the loader once it completes,
+ * and its callback will never be called
+ */
 void repo_resource_destroy(Resource_t *resource);
 // Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now
 void repo_resource_buffer_destroy(ResourceBuffer_t *buffer);

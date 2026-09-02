@@ -171,20 +171,44 @@ static void url_encode_path(const char *src, char *dst, size_t dst_size) {
     dst[i] = '\0';
 }
 
+// Serializes the completion of fetches against the owner destroying the resource
+static pthread_mutex_t g_fetch_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Publishes the result of a fetch. The callback runs before the status becomes visible so the owner never observes
+// a done resource whose callback is still running. If the owner abandoned the resource mid fetch, the callback is
+// skipped (its custom_data is likely gone) and the resource is freed here instead.
+// Callbacks must not destroy resources themselves, since that takes the same lock
+static void finish_fetch(Resource_t *resource, const LoadStatus_t result) {
+    pthread_mutex_lock(&g_fetch_lock);
+    const bool abandoned = resource->abandoned;
+    if ( !abandoned ) {
+        if ( result == LOAD_DONE && resource->on_resource_loaded ) {
+            resource->on_resource_loaded(resource);
+        }
+        resource->status = result;
+    }
+    pthread_mutex_unlock(&g_fetch_lock);
+
+    if ( abandoned ) {
+        repo_resource_destroy(resource);
+    }
+}
+
 static void *fetch_thread_func(void *arg) {
     FetchContext *ctx = (FetchContext *)arg;
     Resource_t *resource = ctx->resource;
     char *url = ctx->url;
+    // Only published to the resource at the very end, so the owner never sees a half finished load
+    LoadStatus_t result = LOAD_DONE;
 
     URLComponents components;
     if ( parse_url(url, &components) != 0 ) {
         printf("Error parsing URL: %s\n", url);
-        resource->status = LOAD_ERROR;
+        result = LOAD_ERROR;
         goto cleanup_ctx;
     }
 
-    struct addrinfo hints, *res, *p;
-    memset(&hints, 0, sizeof(hints));
+    struct addrinfo hints = {0}, *res;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
@@ -193,12 +217,12 @@ static void *fetch_thread_func(void *arg) {
 
     if ( getaddrinfo(components.host, port_str, &hints, &res) != 0 ) {
         printf("Error resolving host: %s\n", components.host);
-        resource->status = LOAD_ERROR;
+        result = LOAD_ERROR;
         goto cleanup_ctx;
     }
 
     int sockfd = -1;
-    for ( p = res; p != NULL; p = p->ai_next ) {
+    for ( struct addrinfo *p = res; p != NULL; p = p->ai_next ) {
         if ( (sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1 ) {
             continue;
         }
@@ -215,13 +239,13 @@ static void *fetch_thread_func(void *arg) {
 
     if ( sockfd == -1 ) {
         perror("Connection failed");
-        resource->status = LOAD_ERROR;
+        result = LOAD_ERROR;
         goto cleanup_ctx;
     }
 
     SSL_CTX *ssl_ctx = NULL;
     SSL *ssl = NULL;
-    int is_https = (strcmp(components.protocol, "https") == 0);
+    const int is_https = (strcmp(components.protocol, "https") == 0);
 
     if ( is_https ) {
         SSL_library_init();
@@ -232,7 +256,7 @@ static void *fetch_thread_func(void *arg) {
         if ( !ssl_ctx ) {
             printf("SSL_CTX creation failed\n");
             close(sockfd);
-            resource->status = LOAD_ERROR;
+            result = LOAD_ERROR;
             goto cleanup_ctx;
         }
         ssl = SSL_new(ssl_ctx);
@@ -246,7 +270,7 @@ static void *fetch_thread_func(void *arg) {
             SSL_free(ssl);
             SSL_CTX_free(ssl_ctx);
             close(sockfd);
-            resource->status = LOAD_ERROR;
+            result = LOAD_ERROR;
             goto cleanup_ctx;
         }
     }
@@ -262,7 +286,7 @@ static void *fetch_thread_func(void *arg) {
              "\r\n",
              encoded_path, components.host);
 
-    int sent_bytes = 0;
+    int64_t sent_bytes = 0;
     if ( is_https ) {
         sent_bytes = SSL_write(ssl, request, strlen(request));
     } else {
@@ -277,12 +301,12 @@ static void *fetch_thread_func(void *arg) {
             SSL_CTX_free(ssl_ctx);
         }
         close(sockfd);
-        resource->status = LOAD_ERROR;
+        result = LOAD_ERROR;
         goto cleanup_ctx;
     }
 
     char buffer[BUFFER_SIZE];
-    int bytes_received;
+    int64_t bytes_received;
     int header_ended = 0;
     int is_chunked = 0;
 
@@ -324,7 +348,7 @@ static void *fetch_thread_func(void *arg) {
                         if ( sscanf(header_accum, "%*s %d", &status_code) == 1 ) {
                             if ( status_code != 200 ) {
                                 printf("Fetch failed for '%s': HTTP Status %d\n", url, status_code);
-                                resource->status = LOAD_ERROR;
+                                result = LOAD_ERROR;
                                 free(header_accum);
                                 header_accum = NULL;
                                 header_accum_size = 0;
@@ -345,7 +369,7 @@ static void *fetch_thread_func(void *arg) {
                         break;
                     }
                 }
-                if ( resource->status == LOAD_ERROR )
+                if ( result == LOAD_ERROR )
                     break;
             }
         }
@@ -361,16 +385,11 @@ static void *fetch_thread_func(void *arg) {
     }
     close(sockfd);
 
-    if ( resource->status != LOAD_ERROR ) {
-        if ( is_chunked )
-            decode_chunked_body(resource->buffer);
-        resource->status = LOAD_DONE;
-        if ( resource->on_resource_loaded ) {
-            resource->on_resource_loaded(resource);
-        }
-    }
+    if ( result == LOAD_DONE && is_chunked )
+        decode_chunked_body(resource->buffer);
 
 cleanup_ctx:
+    finish_fetch(resource, result);
     if ( ctx->url )
         free(ctx->url);
     free(ctx);
@@ -399,4 +418,14 @@ void remote_load_resource(const char *path, Resource_t *resource) {
     } else {
         pthread_detach(thread);
     }
+}
+
+bool remote_resource_abandon(Resource_t *resource) {
+    pthread_mutex_lock(&g_fetch_lock);
+    // Already abandoned means the fetch thread finished and is the one destroying it now
+    const bool in_flight = resource->status == LOAD_IN_PROGRESS && !resource->abandoned;
+    if ( in_flight )
+        resource->abandoned = true;
+    pthread_mutex_unlock(&g_fetch_lock);
+    return in_flight;
 }

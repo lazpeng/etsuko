@@ -38,6 +38,16 @@ void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uin
     buffer->downloaded_bytes += data_size;
 }
 
+static void resource_free(Resource_t *resource) {
+    if ( resource->buffer != NULL ) {
+        repo_resource_buffer_destroy(resource->buffer);
+    }
+    if ( resource->original_filename != NULL ) {
+        free(resource->original_filename);
+    }
+    free(resource);
+}
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten/fetch.h>
 
@@ -47,21 +57,28 @@ void append_data_to_buffer(ResourceBuffer_t *buffer, const char *data, const uin
 
 static void on_fetch_success(emscripten_fetch_t *fetch) {
     Resource_t *resource = fetch->userData;
-    if ( fetch->numBytes > 0 ) {
-        append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
-        if ( resource->on_resource_loaded != NULL ) {
-            resource->on_resource_loaded(resource);
+    if ( resource->abandoned ) {
+        resource_free(resource);
+    } else {
+        if ( fetch->numBytes > 0 ) {
+            append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
+            if ( resource->on_resource_loaded != NULL ) {
+                resource->on_resource_loaded(resource);
+            }
         }
+        resource->status = LOAD_DONE;
     }
-
-    resource->status = LOAD_DONE;
     emscripten_fetch_close(fetch);
 }
 
 static void on_fetch_failure(emscripten_fetch_t *fetch) {
     Resource_t *resource = fetch->userData;
-    resource->status = LOAD_ERROR;
-    printf("Fetch failed for '%s': %s\n", resource->original_filename, fetch->statusText);
+    if ( resource->abandoned ) {
+        resource_free(resource);
+    } else {
+        resource->status = LOAD_ERROR;
+        printf("Fetch failed for '%s': %s\n", resource->original_filename, fetch->statusText);
+    }
     emscripten_fetch_close(fetch);
 }
 
@@ -185,15 +202,19 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
 void repo_resource_buffer_leak(Resource_t *resource) { resource->buffer = NULL; }
 
 void repo_resource_destroy(Resource_t *resource) {
-    if ( resource != NULL ) {
-        if ( resource->buffer != NULL ) {
-            repo_resource_buffer_destroy(resource->buffer);
-        }
-        if ( resource->original_filename != NULL ) {
-            free(resource->original_filename);
-        }
-        free(resource);
+    if ( resource == NULL )
+        return;
+    // A load still in flight keeps using the resource, so hand it over to the loader to free once it completes
+#if defined(__EMSCRIPTEN__)
+    if ( resource->status == LOAD_IN_PROGRESS ) {
+        resource->abandoned = true;
+        return;
     }
+#elif !defined(DISABLE_REMOTE_FETCH)
+    if ( remote_resource_abandon(resource) )
+        return;
+#endif
+    resource_free(resource);
 }
 
 void repo_resource_buffer_destroy(ResourceBuffer_t *buffer) {

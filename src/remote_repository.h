@@ -11,4 +11,10 @@
  */
 void remote_load_resource(const char *path, Resource_t *resource);
 
+/**
+ * Marks a resource whose fetch is still running as abandoned, so the fetch thread frees it when done instead of
+ * calling the callback. Returns false if no fetch is running on it, in which case the caller frees it as usual
+ */
+bool remote_resource_abandon(Resource_t *resource);
+
 #endif
