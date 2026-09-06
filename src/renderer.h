@@ -7,7 +7,6 @@
 
 #include "constants.h"
 
-#include <stdbool.h>
 #include <stdint.h>
 
 // The max number of sub regions that can be specified when drawing portions of a texture
@@ -424,11 +423,13 @@ void render_target_unbind(RenderTarget_t *render_target);
  * Detaches the target texture from the render target, leaving it in an un-bindable state until it's reconfigured or destroyed.
  * After detaching, the responsibility of destroying the texture is on the caller, as destroying this render target will not
  * destroy the (previously) associated texture.
- * Calling this function on an already detached render target will lead to an error.
+ * Calling this function on an already detached render target, or on one that is anywhere in the binding stack, will lead
+ * to an error.
  */
 [[nodiscard]] Texture_t *render_target_detach_texture(RenderTarget_t *render_target);
 /**
- * Destroys the render target and its associated data, including the texture unless it was previously detached
+ * Destroys the render target and its associated data, including the texture unless it was previously detached.
+ * Destroying a render target that is anywhere in the binding stack will lead to an error.
  */
 void render_destroy_render_target(RenderTarget_t *render_target);
 /**

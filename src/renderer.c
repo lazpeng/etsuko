@@ -627,11 +627,20 @@ bool render_target_ensure_configured(RenderTarget_t *render_target, const int32_
     return true;
 }
 
-void render_target_bind(RenderTarget_t *render_target) {
-    assert(render_target->texture != NULL);
-
+static bool render_target_in_binding_stack(const RenderTarget_t *render_target) {
     for ( const RenderTarget_t *bound = g_renderer->render_target; bound != NULL; bound = bound->previous ) {
-        assert(bound != render_target);
+        if ( bound == render_target )
+            return true;
+    }
+    return false;
+}
+
+void render_target_bind(RenderTarget_t *render_target) {
+    if ( render_target->texture == NULL ) {
+        error_abort("render_target_bind: Cannot bind a render target with no texture attached");
+    }
+    if ( render_target_in_binding_stack(render_target) ) {
+        error_abort("render_target_bind: Render target is already in the binding stack");
     }
 
     render_target->previous = g_renderer->render_target;
@@ -650,8 +659,9 @@ void render_target_unbind(RenderTarget_t *render_target) {
 }
 
 Texture_t *render_target_detach_texture(RenderTarget_t *render_target) {
-    assert(g_renderer->render_target != render_target);
-    // TODO: Check if it's on the render target stack, not only the current bound target
+    if ( render_target_in_binding_stack(render_target) ) {
+        error_abort("render_target_detach_texture: Cannot detach the texture of a render target that is currently bound");
+    }
 
     Texture_t *texture = render_target->texture;
     if ( texture == NULL ) {
@@ -668,7 +678,11 @@ Texture_t *render_target_detach_texture(RenderTarget_t *render_target) {
 
 void render_destroy_render_target(RenderTarget_t *render_target) {
     if ( render_target == NULL )
-        return;
+        error_abort("render_target_detach_texture: Render target is null");
+
+    if ( render_target_in_binding_stack(render_target) ) {
+        error_abort("render_destroy_render_target: Cannot destroy a render target that is currently bound");
+    }
 
     if ( render_target->texture != NULL )
         render_destroy_texture(render_target->texture);
