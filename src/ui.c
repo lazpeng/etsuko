@@ -2638,11 +2638,8 @@ void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t 
     double duration = 0.0;
     const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
-        const Animation_t *animation = reapply_animation(drawable, base_anim, base_anim->apply_type);
-        if ( animation != NULL ) {
-            const Animation_DrawRegionData_t *data = animation->custom_data;
-            duration = data->duration;
-        }
+        const Animation_DrawRegionData_t *data = base_anim->custom_data;
+        duration = data->duration;
     }
 
     ui_drawable_set_draw_region_dur(drawable, draw_regions, (AnimatedSetOpts_t){.duration = duration});
