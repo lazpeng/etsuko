@@ -678,7 +678,7 @@ Texture_t *render_target_detach_texture(RenderTarget_t *render_target) {
 
 void render_destroy_render_target(RenderTarget_t *render_target) {
     if ( render_target == NULL )
-        error_abort("render_target_detach_texture: Render target is null");
+        error_abort("render_destroy_render_target: Render target is null");
 
     if ( render_target_in_binding_stack(render_target) ) {
         error_abort("render_destroy_render_target: Cannot destroy a render target that is currently bound");
@@ -939,9 +939,12 @@ void render_destroy_background(Background_t *background) {
             render_destroy_texture(background->image_tex);
         if ( background->image_prev_tex != NULL )
             render_destroy_texture(background->image_prev_tex);
-        render_destroy_render_target(background->gradient_target);
-        render_destroy_render_target(background->low_res_target);
-        render_destroy_render_target(background->noise_target);
+        if ( background->gradient_target != NULL )
+            render_destroy_render_target(background->gradient_target);
+        if ( background->low_res_target != NULL )
+            render_destroy_render_target(background->low_res_target);
+        if ( background->noise_target != NULL )
+            render_destroy_render_target(background->noise_target);
         free(background);
     }
 }
