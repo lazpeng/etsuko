@@ -4,10 +4,11 @@
 // None of them carries more than a handful of cycles across the screen, so evaluating the fbm once per
 // texel here and sampling this bilinearly costs a fraction of evaluating it once per output pixel.
 // Each field is remapped from [-1, 1] to [0, 1] for the 8 bit target; the rare tail beyond that range
-// is clamped on write, which a flow field does not notice. The precision statement overrides the
-// mediump default on GLES; desktop GLSL ignores it. It is required here: pcg2d needs true 32 bit
-// unsigned integers, and mediump uint is only 16 bits.
+// is clamped on write, which a flow field does not notice. The precision statements override the
+// mediump defaults on GLES; desktop GLSL ignores them. The int one is required here: pcg2d needs
+// true 32 bit unsigned integers, and mediump uint is only 16 bits.
 precision highp float;
+precision highp int;
 
 out vec4 FragColor;
 in vec2 FragPos;

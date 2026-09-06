@@ -767,7 +767,7 @@ static void draw_image_blur_bg(Background_t *background, const Bounds_t *bounds)
     glUniform1i(shader->noise_loc, 2);
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, background->low_res_target->texture->id);
+    glBindTexture(GL_TEXTURE_2D, background->noise_target->texture->id);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, prev->id);
     glActiveTexture(GL_TEXTURE0);
@@ -850,7 +850,6 @@ static Texture_t *internal_create_gradient_background_texture(Background_t *back
 
     render_target_unbind(background->gradient_target);
     Texture_t *texture = render_target_detach_texture(background->gradient_target);
-    render_destroy_render_target(background->gradient_target);
 
     render_set_blend_mode(saved_blend);
     return texture;
@@ -926,6 +925,7 @@ void render_destroy_background(Background_t *background) {
             render_destroy_texture(background->image_tex);
         if ( background->image_prev_tex != NULL )
             render_destroy_texture(background->image_prev_tex);
+        render_destroy_render_target(background->gradient_target);
         render_destroy_render_target(background->low_res_target);
         render_destroy_render_target(background->noise_target);
         free(background);
