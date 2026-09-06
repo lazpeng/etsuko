@@ -778,11 +778,13 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, con
     int32_t alpha = 200;
     float blur = 0.f;
     int32_t distance = 0;
-    if ( prev_active >= 0 && prev_active != (int32_t)index ) {
-        distance = calculate_distance(view, index, prev_active);
+    if ( prev_active != (int32_t)index ) {
+        if ( prev_active >= 0 ) {
+            distance = calculate_distance(view, index, prev_active);
+        }
         int32_t tmp_distance = distance;
 
-        if ( is_line_intermission(view, prev_active) ) {
+        if ( prev_active < 0 || is_line_intermission(view, prev_active) ) {
             // When the current line is an intermission between two segments, make every other line have min alpha
             tmp_distance = LINE_FADE_MAX_DISTANCE;
         }
@@ -1012,6 +1014,8 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
                     prev_active = view->selected_language->current_active_index;
                 }
                 set_line_inactive(view, i, prev_active, anchor_idx >= 0);
+                if ( anchor_idx < 0 )
+                    anchor_idx = i;
             }
 
         } else {
