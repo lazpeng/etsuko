@@ -34,6 +34,18 @@ typedef struct Texture_t {
     int32_t left_bearing_offset;
 } Texture_t;
 
+typedef struct RenderTarget_t {
+    // The texture associated with this target is destroyed alongside it, unless you call render_target_detach_texture
+    OWNING MAYBE_NULL Texture_t *texture;
+    // Previous bound render target
+    WEAK MAYBE_NULL struct RenderTarget_t *previous;
+    // Sizes this target was created at
+    int32_t width, height;
+    // Framebuffer object associated with this render target
+    unsigned int fbo;
+    float projection[16];
+} RenderTarget_t;
+
 /**
  * Basic definition of a color
  */
@@ -79,25 +91,6 @@ typedef struct Shadow_t {
     // Applies to both the x and y axis at the same time.
     int32_t offset;
 } Shadow_t;
-
-/**
- * A texture render target used to generate a single texture from (possibly) multiple sources or
- * a combination of multiple operations.
- * It holds a texture with the result of all the draw operations that must be freed after it's been used,
- * or assigned to a struct that will own it (and later free it), like a Drawable
- */
-typedef struct RenderTarget_t {
-    // Resulting texture. Must be freed separately from the target
-    WEAK Texture_t *texture;
-    // Points to the previous render target or NULL if none existed when this render target was created
-    WEAK struct RenderTarget_t *prev_target;
-    // Framebuffer object associated with this render target
-    unsigned int fbo;
-    // Configured viewport
-    int viewport[4];
-    // Projection matrix
-    float projection[16];
-} RenderTarget_t;
 
 /**
  * Defines different types of fullscreen backgrounds that can be used and will be applied automatically
@@ -234,11 +227,16 @@ typedef struct Background_t {
     Color_t primary_color, secondary_color;
     OWNING Texture_t *null_tex;
     double border_radius_em;
+    OWNING MAYBE_NULL RenderTarget_t *gradient_target;
     bool blur;
     OWNING MAYBE_NULL Texture_t *image_tex;
     OWNING MAYBE_NULL Texture_t *image_prev_tex;
     // Value between 0 and 1 to interpolate between the two (prev and current) background images
     float image_fade;
+    // Offscreen buffer for the reduced resolution background effect before being scaled up
+    OWNING MAYBE_NULL RenderTarget_t *low_res_target;
+    // Offscreen buffer that guides the background image blur effect
+    OWNING MAYBE_NULL RenderTarget_t *noise_target;
 } Background_t;
 
 /**
@@ -246,7 +244,10 @@ typedef struct Background_t {
  */
 typedef struct BlurredBackgroundImage_t {
     int32_t width, height;
-    // RGBA, row major, alpha always opaque
+    /**
+     * Row major, alpha always opaque. each pixel holds an OKLab color encoded as
+     * (L, a * k + 0.5, b * k + 0.5), for use with the image blur shader.
+     */
     OWNING unsigned char *pixels;
 } BlurredBackgroundImage_t;
 
@@ -303,8 +304,7 @@ double render_get_pixel_scale(void);
  */
 void render_set_window_title(const char *title);
 /**
- * Creates a smaller version of the given image with gaussian blur applied, intended for use with the background image blur
- * option.
+ * Creates a smaller version of the given image with gaussian blur applied, intended for use with the background image blur.
  */
 BlurredBackgroundImage_t *render_make_blurred_image(const unsigned char *bytes, int length);
 /**
@@ -397,22 +397,40 @@ void render_destroy_shadow(Shadow_t *shadow);
  */
 void render_destroy_texture(Texture_t *texture);
 /**
- * Creates a texture render target with the given width and height.
- * The provided dimensions will be the final size of the resulting texture.
- * Any draw operations called between this function call and render_restore_texture_target will be drawn to *A* render target
- * instead of the framebuffer. Texture render targets can be accumulated and the most recent call to this function will set the
- * active target to be drawn to.
+ * Create a persistent render target for drawing outside the root framebuffer.
+ * Creating a render target does not automatically bind it.
  */
-const RenderTarget_t *render_make_texture_target(int32_t width, int32_t height);
+RenderTarget_t *render_make_render_target(int32_t width, int32_t height);
 /**
- * Restores the currently active render target, or aborts with an error if no target is active (i.e., we're currently drawing to
- * the framebuffer. it's arguably better to return an error code, but if this situation ever happens it's something that needs to
- * be resolved in the application code so it's better to be pretty explicit about this one case). If a render target was already
- * active when another one was created, it is saved and restored when this function is called, so that render targets can stack on
- * top of each other. This function also returns the texture associated with the created framebuffer, which must be freed
- * separately.
+ * Checks if the render target needs reconfiguring (i.e. the given size changed, which is only useful if the call site that uses
+ * it passes it a size dependant on the screen or some other factor).
+ * If it does reconfigure, a new texture with updated dimensions is created, and the old contents copied over and re-scaled.
+ * If called after a texture detach, regardless of it the size remained the same, a new texture will be created.
+ * @return true if the render target was reconfigured, in case the caller needs to redraw their contents from scratch
  */
-Texture_t *render_restore_texture_target(void);
+bool render_target_ensure_configured(RenderTarget_t *render_target, int32_t width, int32_t height);
+/**
+ * Binds the render target for drawing.
+ * It must not be already bound somewhere in the render target chain, and it must not be in a detached state.
+ */
+void render_target_bind(RenderTarget_t *render_target);
+/**
+ * Essentially, unbinds the currently bound render target. The parameter only serves as a check to ensure the caller is the
+ * one it's supposed to be (i.e. the one drawing to the current bound target).
+ * Restores either the previous render target or the root framebuffer if none existed.
+ */
+void render_target_unbind(RenderTarget_t *render_target);
+/**
+ * Detaches the target texture from the render target, leaving it in an un-bindable state until it's reconfigured or destroyed.
+ * After detaching, the responsibility of destroying the texture is on the caller, as destroying this render target will not
+ * destroy the (previously) associated texture.
+ * Calling this function on an already detached render target will lead to an error.
+ */
+[[nodiscard]] Texture_t *render_target_detach_texture(RenderTarget_t *render_target);
+/**
+ * Destroys the render target and its associated data, including the texture unless it was previously detached
+ */
+void render_destroy_render_target(RenderTarget_t *render_target);
 /**
  * Draws a rounded rect to the screen, using the bounds parameter as both location and dimension parameters, using the given color
  * and border radius. A null texture (created using render_make_null) is needed because a vertex array object and buffer object

@@ -45,6 +45,9 @@
 #define PROJECTION_MATRIX_SIZE (16)
 #define MAX_SCISSOR_STACK (16)
 #define REVEAL_FADE_EM (1.5)
+#define BACKGROUND_RENDER_DIVISOR (3)
+#define NOISE_FIELD_SHORT_AXIS (192)
+#define IMAGE_BLUR_TIME_PERIOD (2000.0 * M_PI)
 
 typedef struct FontData_t {
     stbtt_fontinfo ui_font_info, lyrics_font_info;
@@ -92,15 +95,35 @@ typedef struct ImageBlurShaderData_t {
     GLuint id;
     GLint resolution_loc;
     GLint time_loc;
+    GLint noise_loc;
     GLint image_loc;
     GLint image_prev_loc;
     GLint image_fade_loc;
     GLint projection_loc;
     GLint use_bounds_loc;
     GLint bounds_loc;
+} ImageBlurShaderData_t;
+
+typedef struct NoiseFieldShaderData_t {
+    GLuint id;
+    GLint resolution_loc;
+    GLint extent_loc;
+    GLint time_loc;
+    GLint projection_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+} NoiseFieldShaderData_t;
+
+typedef struct BackgroundUpscaleShaderData_t {
+    GLuint id;
+    GLint texture_loc;
+    GLint grain_offset_loc;
     GLint border_radius_loc;
     GLint rect_size_loc;
-} ImageBlurShaderData_t;
+    GLint projection_loc;
+    GLint use_bounds_loc;
+    GLint bounds_loc;
+} BackgroundUpscaleShaderData_t;
 
 typedef struct ShaderData_t {
     GLuint active_shader_program;
@@ -108,6 +131,8 @@ typedef struct ShaderData_t {
     RectShaderData_t rect;
     SimpleGradientShaderData_t grad;
     ImageBlurShaderData_t image_blur;
+    NoiseFieldShaderData_t noise_field;
+    BackgroundUpscaleShaderData_t bg_upscale;
 } ShaderData_t;
 
 typedef struct BlurData_t {
@@ -120,7 +145,7 @@ typedef struct BlurData_t {
 typedef struct Renderer_t {
     GLFWwindow *window;
     Bounds_t viewport;
-    RenderTarget_t *render_target;
+    WEAK MAYBE_NULL RenderTarget_t *render_target;
     float projection_matrix[PROJECTION_MATRIX_SIZE];
     BlendMode_t blend_mode;
     double window_pixel_scale;
@@ -392,6 +417,10 @@ void render_init(void) {
         create_shader_program(buffer, incbin_default_vert_shader, incbin_gradient_frag_shader, "gradient");
     g_renderer->shaders.image_blur.id =
         create_shader_program(buffer, incbin_default_vert_shader, incbin_image_blur_frag_shader, "image_blur");
+    g_renderer->shaders.noise_field.id =
+        create_shader_program(buffer, incbin_default_vert_shader, incbin_noise_field_frag_shader, "noise_field");
+    g_renderer->shaders.bg_upscale.id =
+        create_shader_program(buffer, incbin_default_vert_shader, incbin_background_upscale_frag_shader, "bg_upscale");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
@@ -431,11 +460,27 @@ void render_init(void) {
     g_renderer->shaders.image_blur.image_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image");
     g_renderer->shaders.image_blur.image_prev_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image_prev");
     g_renderer->shaders.image_blur.image_fade_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_image_fade");
+    g_renderer->shaders.image_blur.noise_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_noise");
     g_renderer->shaders.image_blur.projection_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_projection");
     g_renderer->shaders.image_blur.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_use_bounds");
     g_renderer->shaders.image_blur.bounds_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_bounds");
-    g_renderer->shaders.image_blur.border_radius_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_borderRadius");
-    g_renderer->shaders.image_blur.rect_size_loc = glGetUniformLocation(g_renderer->shaders.image_blur.id, "u_rectSize");
+
+    // Get uniform locations for the noise field shader
+    g_renderer->shaders.noise_field.resolution_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_resolution");
+    g_renderer->shaders.noise_field.extent_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_extent");
+    g_renderer->shaders.noise_field.time_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_time");
+    g_renderer->shaders.noise_field.projection_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_projection");
+    g_renderer->shaders.noise_field.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_use_bounds");
+    g_renderer->shaders.noise_field.bounds_loc = glGetUniformLocation(g_renderer->shaders.noise_field.id, "u_bounds");
+
+    // Get uniform locations for the background upscale shader
+    g_renderer->shaders.bg_upscale.texture_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_texture");
+    g_renderer->shaders.bg_upscale.grain_offset_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_grainOffset");
+    g_renderer->shaders.bg_upscale.border_radius_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_borderRadius");
+    g_renderer->shaders.bg_upscale.rect_size_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_rectSize");
+    g_renderer->shaders.bg_upscale.projection_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_projection");
+    g_renderer->shaders.bg_upscale.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_use_bounds");
+    g_renderer->shaders.bg_upscale.bounds_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_bounds");
 }
 
 void render_finish(void) {
@@ -454,6 +499,8 @@ void render_finish(void) {
     glDeleteProgram(g_renderer->shaders.rect.id);
     glDeleteProgram(g_renderer->shaders.grad.id);
     glDeleteProgram(g_renderer->shaders.image_blur.id);
+    glDeleteProgram(g_renderer->shaders.noise_field.id);
+    glDeleteProgram(g_renderer->shaders.bg_upscale.id);
 
     // Destroy GL context (GLFW destroys context with window)
     glfwDestroyWindow(g_renderer->window);
@@ -513,26 +560,158 @@ static void deconstruct_colors_opengl(const Color_t *color, float *r, float *g, 
         *a = (float)color->a / 255.0f;
 }
 
+static void restore_render_target_binding(void) {
+    const RenderTarget_t *render_target = g_renderer->render_target;
+    if ( render_target == NULL ) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, (int32_t)g_renderer->viewport.w, (int32_t)g_renderer->viewport.h);
+    } else {
+        glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+        glViewport(0, 0, render_target->width, render_target->height);
+    }
+}
+
+static void configure_render_target(RenderTarget_t *render_target, const int32_t width, const int32_t height) {
+    assert(width > 0 && height > 0);
+    assert(render_target->texture == NULL);
+
+    render_target->width = width;
+    render_target->height = height;
+    render_target->texture = render_make_empty(width, height);
+    create_orthographic_matrix(0.f, (float)width, 0.f, (float)height, render_target->projection);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, render_target->texture->id, 0);
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    restore_render_target_binding();
+}
+
+RenderTarget_t *render_make_render_target(const int32_t width, const int32_t height) {
+    RenderTarget_t *render_target = calloc(1, sizeof(*render_target));
+    if ( render_target == NULL ) {
+        error_abort("Failed to allocate render target");
+    }
+
+    glGenFramebuffers(1, &render_target->fbo);
+    configure_render_target(render_target, width, height);
+
+    return render_target;
+}
+
+bool render_target_ensure_configured(RenderTarget_t *render_target, const int32_t width, const int32_t height) {
+    if ( render_target->texture != NULL && render_target->width == width && render_target->height == height )
+        return false;
+
+    Texture_t *previous = render_target->texture;
+    render_target->texture = NULL;
+    configure_render_target(render_target, width, height);
+
+    if ( previous != NULL ) {
+        // Copy old contents over to the new texture
+        const BlendMode_t saved_blend = g_renderer->blend_mode;
+        render_set_blend_mode(BLEND_MODE_NONE);
+        render_target_bind(render_target);
+
+        const Bounds_t at = {.x = 0, .y = 0, .w = width, .h = height};
+        const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
+        render_draw_texture(previous, &at, &opts);
+
+        render_target_unbind(render_target);
+        render_set_blend_mode(saved_blend);
+        render_destroy_texture(previous);
+    }
+
+    return true;
+}
+
+void render_target_bind(RenderTarget_t *render_target) {
+    assert(render_target->texture != NULL);
+
+    for ( const RenderTarget_t *bound = g_renderer->render_target; bound != NULL; bound = bound->previous ) {
+        assert(bound != render_target);
+    }
+
+    render_target->previous = g_renderer->render_target;
+    g_renderer->render_target = render_target;
+    restore_render_target_binding();
+}
+
+void render_target_unbind(RenderTarget_t *render_target) {
+    if ( g_renderer->render_target != render_target ) {
+        error_abort("Unbinding a render target that is not the currently bound one");
+    }
+
+    g_renderer->render_target = render_target->previous;
+    render_target->previous = NULL;
+    restore_render_target_binding();
+}
+
+Texture_t *render_target_detach_texture(RenderTarget_t *render_target) {
+    assert(g_renderer->render_target != render_target);
+    // TODO: Check if it's on the render target stack, not only the current bound target
+
+    Texture_t *texture = render_target->texture;
+    if ( texture == NULL ) {
+        error_abort("render_target_detach_texture: Texture was already detached from the target");
+    }
+    render_target->texture = NULL;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    restore_render_target_binding();
+
+    return texture;
+}
+
+void render_destroy_render_target(RenderTarget_t *render_target) {
+    if ( render_target == NULL )
+        return;
+
+    if ( render_target->texture != NULL )
+        render_destroy_texture(render_target->texture);
+    if ( render_target->fbo != 0 )
+        glDeleteFramebuffers(1, &render_target->fbo);
+    free(render_target);
+}
+
+static void draw_background_buffer_quad(Texture_t *texture, const int32_t width, const int32_t height) {
+    const Bounds_t at = {.x = 0, .y = 0, .w = width, .h = height};
+
+    glBindVertexArray(texture->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, texture->vbo);
+    if ( texture_needs_reconfigure(texture, &at) ) {
+        float vertices[QUAD_VERTICES_SIZE] = {0};
+        create_quad_vertices(0.f, 0.f, (float)width, (float)height, vertices);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
+        mark_texture_configured(texture, &at);
+    }
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
 static void draw_image_blur_bg(Background_t *background, const Bounds_t *bounds) {
     // Nothing to draw until render_background_set_image has been called
     if ( background->image_tex == NULL )
         return;
 
-    const BlendMode_t saved_blend = g_renderer->blend_mode;
-    const float border_radius = resolve_background_border_radius(background, bounds);
-    render_set_blend_mode(BLEND_MODE_BLEND);
+    const int32_t width = (int32_t)bounds->w, height = (int32_t)bounds->h;
+    if ( width <= 0 || height <= 0 )
+        return;
 
-    const ImageBlurShaderData_t *shader = &g_renderer->shaders.image_blur;
-    set_shader_program(shader->id);
-    glBindVertexArray(background->null_tex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
+    const int32_t low_w = MAX(1, width / BACKGROUND_RENDER_DIVISOR);
+    const int32_t low_h = MAX(1, height / BACKGROUND_RENDER_DIVISOR);
 
-    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
-        float quad_vertices[QUAD_VERTICES_SIZE] = {0};
-        create_quad_vertices((float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h, quad_vertices);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), &quad_vertices, GL_STATIC_DRAW);
-        mark_texture_configured(background->null_tex, bounds);
+    // Matched to the background's aspect so the baked fields resolve the same on both axes
+    int32_t noise_w = NOISE_FIELD_SHORT_AXIS, noise_h = NOISE_FIELD_SHORT_AXIS;
+    if ( width >= height ) {
+        noise_w = (int32_t)((double)NOISE_FIELD_SHORT_AXIS * width / height + 0.5);
+    } else {
+        noise_h = (int32_t)((double)NOISE_FIELD_SHORT_AXIS * height / width + 0.5);
     }
+    noise_w = MAX(1, MIN(noise_w, low_w));
+    noise_h = MAX(1, MIN(noise_h, low_h));
 
     if ( background->image_prev_tex != NULL && background->image_fade >= 1.f ) {
         render_destroy_texture(background->image_prev_tex);
@@ -541,37 +720,113 @@ static void draw_image_blur_bg(Background_t *background, const Bounds_t *bounds)
     const float fade = background->image_prev_tex != NULL ? background->image_fade : 1.f;
     const Texture_t *prev = background->image_prev_tex != NULL ? background->image_prev_tex : background->image_tex;
 
+    const double elapsed = events_get_elapsed_time();
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
+    // Both offscreen passes write every pixel of their own target, so there is nothing to blend with
+    render_set_blend_mode(BLEND_MODE_NONE);
+
+    // Pass 1: bake the flow, swirl and smoke fields
+    if ( background->noise_target == NULL ) {
+        background->noise_target = render_make_render_target(noise_w, noise_h);
+    } else {
+        render_target_ensure_configured(background->noise_target, noise_w, noise_h);
+    }
+    render_target_bind(background->noise_target);
+
+    const NoiseFieldShaderData_t *noise = &g_renderer->shaders.noise_field;
+    set_shader_program(noise->id);
+    glUniformMatrix4fv(noise->projection_loc, 1, GL_FALSE, background->noise_target->projection);
+    glUniform1i(noise->use_bounds_loc, 1);
+    glUniform4f(noise->bounds_loc, 0.f, 0.f, (float)noise_w, (float)noise_h);
+    glUniform2f(noise->resolution_loc, (float)noise_w, (float)noise_h);
+    // The field domain belongs to the background, not to this buffer: short axis spanning one unit
+    const float short_axis = (float)MIN(width, height);
+    glUniform2f(noise->extent_loc, (float)width / short_axis, (float)height / short_axis);
+    glUniform1f(noise->time_loc, (float)elapsed);
+    draw_background_buffer_quad(background->noise_target->texture, noise_w, noise_h);
+    render_target_unbind(background->noise_target);
+
+    // Pass 2: the effect itself, at a fraction of the final size
+    if ( background->low_res_target == NULL ) {
+        background->low_res_target = render_make_render_target(low_w, low_h);
+    } else {
+        render_target_ensure_configured(background->low_res_target, low_w, low_h);
+    }
+    render_target_bind(background->low_res_target);
+
+    const ImageBlurShaderData_t *shader = &g_renderer->shaders.image_blur;
+    set_shader_program(shader->id);
+    glUniformMatrix4fv(shader->projection_loc, 1, GL_FALSE, background->low_res_target->projection);
+    glUniform1i(shader->use_bounds_loc, 1);
+    glUniform4f(shader->bounds_loc, 0.f, 0.f, (float)low_w, (float)low_h);
+    glUniform2f(shader->resolution_loc, (float)low_w, (float)low_h);
+    glUniform1f(shader->time_loc, (float)fmod(elapsed, IMAGE_BLUR_TIME_PERIOD));
+    glUniform1f(shader->image_fade_loc, fade);
+    glUniform1i(shader->image_loc, 0);
+    glUniform1i(shader->image_prev_loc, 1);
+    glUniform1i(shader->noise_loc, 2);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, background->low_res_target->texture->id);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, prev->id);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, background->image_tex->id);
 
-    glUniformMatrix4fv(shader->projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1i(shader->use_bounds_loc, 1);
-    glUniform4f(shader->bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
-    glUniform1f(shader->border_radius_loc, border_radius);
-    glUniform2f(shader->rect_size_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1f(shader->time_loc, (float)events_get_elapsed_time());
-    glUniform2f(shader->resolution_loc, (float)bounds->w, (float)bounds->h);
-    glUniform1i(shader->image_loc, 0);
-    glUniform1i(shader->image_prev_loc, 1);
-    glUniform1f(shader->image_fade_loc, fade);
+    draw_background_buffer_quad(background->low_res_target->texture, low_w, low_h);
 
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
 
+    render_target_unbind(background->low_res_target);
+
+    // Pass 3: scale the result up onto whatever was being drawn into
+    render_set_blend_mode(BLEND_MODE_BLEND);
+
+    const BackgroundUpscaleShaderData_t *upscale = &g_renderer->shaders.bg_upscale;
+    set_shader_program(upscale->id);
+    glUniformMatrix4fv(upscale->projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(upscale->use_bounds_loc, 1);
+    glUniform4f(upscale->bounds_loc, (float)bounds->x, (float)bounds->y, (float)width, (float)height);
+    glUniform1f(upscale->border_radius_loc, resolve_background_border_radius(background, bounds));
+    glUniform2f(upscale->rect_size_loc, (float)width, (float)height);
+    // Only shifts the dither from frame to frame, so any bounded value that keeps moving will do
+    glUniform1f(upscale->grain_offset_loc, 71.f * (float)(elapsed * 0.37 - floor(elapsed * 0.37)));
+    glUniform1i(upscale->texture_loc, 0);
+
+    glBindTexture(GL_TEXTURE_2D, background->low_res_target->texture->id);
+
+    glBindVertexArray(background->null_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, background->null_tex->vbo);
+    if ( texture_needs_reconfigure(background->null_tex, bounds) ) {
+        float vertices[QUAD_VERTICES_SIZE] = {0};
+        create_quad_vertices((float)bounds->x, (float)bounds->y, (float)width, (float)height, vertices);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
+        mark_texture_configured(background->null_tex, bounds);
+    }
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     render_set_blend_mode(saved_blend);
 }
 
-static Texture_t *internal_create_gradient_background_texture(const Background_t *background, const Bounds_t *bounds) {
+static Texture_t *internal_create_gradient_background_texture(Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t saved_blend = g_renderer->blend_mode;
     render_set_blend_mode(BLEND_MODE_NONE);
 
     const int32_t width = (int32_t)bounds->w, height = (int32_t)bounds->h;
-    const RenderTarget_t *target = render_make_texture_target(width, height); // TODO: Avoid recreating this
+    if ( background->gradient_target == NULL ) {
+        background->gradient_target = render_make_render_target(width, height);
+    } else {
+        render_target_ensure_configured(background->gradient_target, width, height);
+    }
+    render_target_bind(background->gradient_target);
 
     set_shader_program(g_renderer->shaders.grad.id);
 
@@ -582,18 +837,21 @@ static Texture_t *internal_create_gradient_background_texture(const Background_t
     glUniform4f(g_renderer->shaders.grad.top_color_loc, r, g, b, a);
     deconstruct_colors_opengl(&background->secondary_color, &r, &g, &b, &a);
     glUniform4f(g_renderer->shaders.grad.bottom_color_loc, r, g, b, a);
-    glUniformMatrix4fv(g_renderer->shaders.grad.projection_loc, 1, GL_FALSE, target->projection);
+    glUniformMatrix4fv(g_renderer->shaders.grad.projection_loc, 1, GL_FALSE, background->gradient_target->projection);
 
     float quadVertices[QUAD_VERTICES_SIZE] = {0};
     create_quad_vertices(0, 0, w, h, quadVertices);
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    glBindVertexArray(target->texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, target->texture->vbo);
+    glBindVertexArray(background->gradient_target->texture->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, background->gradient_target->texture->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    Texture_t *texture = render_restore_texture_target();
+    render_target_unbind(background->gradient_target);
+    Texture_t *texture = render_target_detach_texture(background->gradient_target);
+    render_destroy_render_target(background->gradient_target);
+
     render_set_blend_mode(saved_blend);
     return texture;
 }
@@ -646,48 +904,6 @@ static void ensure_fb_snapshot(void) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-static const RenderTarget_t *set_render_target(const GLuint fbo, Texture_t *target_texture) {
-    RenderTarget_t *target = calloc(1, sizeof(*target));
-    if ( target == NULL ) {
-        error_abort("Failed to allocate render target");
-    }
-
-    target->fbo = fbo;
-    target->texture = target_texture;
-
-    const BlendMode_t saved_blend = g_renderer->blend_mode;
-    render_set_blend_mode(BLEND_MODE_NONE);
-
-    target->prev_target = g_renderer->render_target;
-    g_renderer->render_target = target;
-
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->texture->id, 0);
-
-    const int32_t width = target_texture->width, height = target_texture->height;
-    glViewport(0, 0, width, height);
-    create_orthographic_matrix(0.0f, (float)width, 0.0f, (float)height, target->projection);
-    render_set_blend_mode(saved_blend);
-
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    return target;
-}
-
-const RenderTarget_t *render_make_texture_target(const int32_t width, const int32_t height) {
-    Texture_t *texture = render_make_empty(width, height);
-
-    GLuint fbo;
-    glGenFramebuffers(1, &fbo);
-
-    const RenderTarget_t *target = set_render_target(fbo, texture);
-
-    return target;
-}
-
 void render_clear(void) {
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -710,6 +926,8 @@ void render_destroy_background(Background_t *background) {
             render_destroy_texture(background->image_tex);
         if ( background->image_prev_tex != NULL )
             render_destroy_texture(background->image_prev_tex);
+        render_destroy_render_target(background->low_res_target);
+        render_destroy_render_target(background->noise_target);
         free(background);
     }
 }
@@ -877,36 +1095,6 @@ static float *get_projection_matrix(void) {
     return g_renderer->render_target->projection;
 }
 
-Texture_t *render_restore_texture_target(void) {
-    if ( g_renderer->render_target == NULL ) {
-        error_abort("No render target to restore");
-    }
-
-    RenderTarget_t *current = g_renderer->render_target;
-    RenderTarget_t *prev = current->prev_target;
-    g_renderer->render_target = prev;
-
-    // Bind appropriate framebuffer
-    if ( prev == NULL ) {
-        glViewport(0, 0, (int32_t)g_renderer->viewport.w, (int32_t)g_renderer->viewport.h);
-        // Restore default framebuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    } else {
-        glViewport(prev->viewport[0], prev->viewport[1], prev->viewport[2], prev->viewport[3]);
-        // Bind previous FBO
-        glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->render_target->fbo);
-    }
-
-    Texture_t *texture = current->texture;
-
-    glDeleteFramebuffers(1, &current->fbo);
-    // Assume the texture is going to be freed on its own, or else there's no point to making a
-    // render target in the first place.
-    free(current);
-
-    return texture;
-}
-
 void render_destroy_texture(Texture_t *texture) {
     if ( texture->id != 0 )
         glDeleteTextures(1, &texture->id);
@@ -932,8 +1120,10 @@ Color_t render_color_darken(Color_t color, const double amount) {
     return color;
 }
 
-// Side of the blurred copy. The shader magnifies it several times over, so anything larger is wasted
+// Size of the blurred copy.
 #define BLURRED_IMAGE_SIZE (128)
+// Half-width of the OKLab a/b range the blurred image is encoded over. Must match AB_RANGE in the image blur shader.
+#define OKLAB_AB_RANGE (0.32f)
 // Gaussian sigma of the blur as a fraction of the side
 #define BLURRED_IMAGE_SIGMA (0.09)
 
@@ -995,6 +1185,31 @@ static void downsample_box(const unsigned char *src, const int32_t w, const int3
     }
 }
 
+// Encodes one 0..255 sRGB pixel as the OKLab the image blur shader samples
+static void encode_oklab_pixel(const float *rgb255, unsigned char *out) {
+    float linear[3];
+    for ( int c = 0; c < 3; c++ ) {
+        const float v = rgb255[c] / 255.f;
+        linear[c] = powf(v < 0.f ? 0.f : (v > 1.f ? 1.f : v), 2.2f);
+    }
+
+    // OKLab conversion by Bjorn Ottosson, https://bottosson.github.io/posts/oklab/ (public domain, MIT as an alternative)
+    const float r = linear[0], g = linear[1], b = linear[2];
+    const float l = cbrtf(0.4122214708f * r + 0.5363325363f * g + 0.0514459929f * b);
+    const float m = cbrtf(0.2119034982f * r + 0.6806995451f * g + 0.1073969566f * b);
+    const float s = cbrtf(0.0883024619f * r + 0.2817188376f * g + 0.6299787005f * b);
+
+    const float encoded[3] = {
+        0.2104542553f * l + 0.7936177850f * m - 0.0040720468f * s,
+        (1.9779984951f * l - 2.4285922050f * m + 0.4505937099f * s) / (2.f * OKLAB_AB_RANGE) + 0.5f,
+        (0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s) / (2.f * OKLAB_AB_RANGE) + 0.5f,
+    };
+    for ( int c = 0; c < 3; c++ ) {
+        const float v = encoded[c] * 255.f + 0.5f;
+        out[c] = (unsigned char)(v < 0.f ? 0.f : (v > 255.f ? 255.f : v));
+    }
+}
+
 BlurredBackgroundImage_t *render_make_blurred_image(const unsigned char *bytes, const int length) {
     int w, h, channels;
     unsigned char *decoded = stbi_load_from_memory(bytes, length, &w, &h, &channels, 3);
@@ -1028,9 +1243,7 @@ BlurredBackgroundImage_t *render_make_blurred_image(const unsigned char *bytes, 
     if ( image->pixels == NULL )
         error_abort("Failed to allocate blurred image pixels");
     for ( size_t i = 0; i < (size_t)size * size; i++ ) {
-        image->pixels[i * 4 + 0] = (unsigned char)(img[i * 3 + 0] + 0.5f);
-        image->pixels[i * 4 + 1] = (unsigned char)(img[i * 3 + 1] + 0.5f);
-        image->pixels[i * 4 + 2] = (unsigned char)(img[i * 3 + 2] + 0.5f);
+        encode_oklab_pixel(&img[i * 3], &image->pixels[i * 4]);
         image->pixels[i * 4 + 3] = 0xFF;
     }
     free(img);
@@ -1618,7 +1831,9 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     const int32_t padding = offset / 2; // Leave some pixels for the blur
     const int32_t width = (int32_t)src_bounds->w + offset + padding, height = (int32_t)src_bounds->h + offset + padding;
 
-    render_make_texture_target(width, height);
+    RenderTarget_t *render_target = render_make_render_target(width, height);
+    render_target_bind(render_target);
+
     Bounds_t bounds = {.x = offset, .y = offset, .w = src_bounds->w, .h = src_bounds->h};
     DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 0.f};
     render_draw_texture(texture, &bounds, &opts);
@@ -1632,20 +1847,28 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
 
     render_set_blend_mode(saved_blend);
 
-    Texture_t *result = render_restore_texture_target();
+    render_target_unbind(render_target);
+    Texture_t *result = render_target_detach_texture(render_target);
 
     result->border_radius = texture->border_radius;
 
     const float blur_r = (float)offset / 2.f;
     if ( blur_r > 0.f ) {
-        render_make_texture_target(width, height);
+        // Recreate texture on the render target
+        render_target_ensure_configured(render_target, width, height);
+        render_target_bind(render_target);
+
         const Bounds_t blur_bounds = {.x = 0, .y = 0, .w = width, .h = height};
         const DrawTextureOpts_t blur_opts = {.alpha_mod = 255, .color_mod = 1.f, .blur_radius = blur_r};
         render_draw_texture(result, &blur_bounds, &blur_opts);
         render_destroy_texture(result);
-        result = render_restore_texture_target();
+
+        render_target_unbind(render_target);
+        result = render_target_detach_texture(render_target);
         result->border_radius = texture->border_radius;
     }
+
+    render_destroy_render_target(render_target);
 
     Shadow_t *shadow = calloc(1, sizeof(*shadow));
     shadow->offset = offset;

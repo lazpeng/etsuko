@@ -1903,8 +1903,8 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
             start = end;
         } while ( start < text_size );
 
-        const RenderTarget_t *target = render_make_texture_target(max_w, total_h);
-        final_texture = target->texture;
+        RenderTarget_t *render_target = render_make_render_target(max_w, total_h);
+        render_target_bind(render_target);
 
         const DrawTextureOpts_t opts = {.color_mod = 1.f, .alpha_mod = 255};
         double x, y = 0;
@@ -1941,7 +1941,9 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
         }
 
         vec_destroy(textures_vec);
-        render_restore_texture_target();
+        render_target_unbind(render_target);
+        final_texture = render_target_detach_texture(render_target);
+        render_destroy_render_target(render_target);
     } else {
         const int32_t pixels_size = render_measure_pixels_from_em(data->em);
         final_texture = render_make_text(data->text, pixels_size, &data->color, data->font_type);

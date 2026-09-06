@@ -188,7 +188,8 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
             }
 
             if ( entries->size > 0 ) {
-                render_make_texture_target((int32_t)ceil(max_w), (int32_t)ceil(max_h));
+                RenderTarget_t *render_target = render_make_render_target((int32_t)ceil(max_w), (int32_t)ceil(max_h));
+                render_target_bind(render_target);
                 const BlendMode_t blend_mode = render_get_blend_mode();
                 render_set_blend_mode(BLEND_MODE_NONE);
 
@@ -200,14 +201,18 @@ static void ensure_read_hints_initialized(const LyricsView_t *view, const Lyrics
                     render_draw_texture(entry->texture, &bounds, &opts);
                 }
 
-                hint->texture = render_restore_texture_target();
+                render_target_unbind(render_target);
+                hint->texture = render_target_detach_texture(render_target);
+                render_destroy_render_target(render_target);
                 render_set_blend_mode(blend_mode);
             } else {
                 // Make an empty texture because otherwise it'll be invalid and cause errors
                 // as of now, the hint vector is fixed size and 1:1 with the lyric drawables, so there's not
                 // much room to mark a hint as "non-existent" or empty
-                render_make_texture_target((int32_t)drawable->bounds.w, (int32_t)drawable->bounds.h);
-                hint->texture = render_restore_texture_target();
+                RenderTarget_t *render_target =
+                    render_make_render_target((int32_t)drawable->bounds.w, (int32_t)drawable->bounds.h);
+                hint->texture = render_target_detach_texture(render_target);
+                render_destroy_render_target(render_target);
             }
 
             for ( size_t li = 0; li < entries->size; li++ ) {

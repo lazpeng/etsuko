@@ -35,6 +35,14 @@ static const char incbin_image_blur_frag_shader[] = {
 #embed "shaders/image blur.frag.glsl"
     ,'\0'
 };
+static const char incbin_noise_field_frag_shader[] = {
+#embed "shaders/noise field.frag.glsl"
+    ,'\0'
+};
+static const char incbin_background_upscale_frag_shader[] = {
+#embed "shaders/background upscale.frag.glsl"
+    ,'\0'
+};
 
 #endif
 
