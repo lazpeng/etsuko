@@ -12,6 +12,7 @@
 
 #include "json.h"
 #include "str_utils.h"
+#include "ui_widgets.h"
 
 #define MODAL_SETTING_INITIAL_VERTICAL_OFFSET (0.075)
 #define MODAL_SETTING_VERTICAL_OFFSET (0.075)

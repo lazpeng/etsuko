@@ -2,8 +2,8 @@
 
 #include "config.h"
 #include "error.h"
-#include "fps_counter.h"
 #include "events.h"
+#include "fps_counter.h"
 #include "main_menu.h"
 #include "repository.h"
 #include "secret.h"
@@ -11,6 +11,7 @@
 #include "song_list.h"
 #include "str_utils.h"
 #include "ui.h"
+#include "ui_widgets.h"
 #include "user_settings.h"
 
 #include <stdio.h>

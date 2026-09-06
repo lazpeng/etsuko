@@ -2,8 +2,8 @@
 #include "audio.h"
 #include "config.h"
 #include "error.h"
-#include "fps_counter.h"
 #include "events.h"
+#include "fps_counter.h"
 #include "repository.h"
 #include "song.h"
 #include "ui.h"
@@ -13,12 +13,13 @@
 #define RESOURCE_INCLUDE_IMAGES
 #include "resource_includes.h"
 #include "str_utils.h"
+#include "ui_widgets.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-struct Karaoke_t {
+typedef struct Karaoke_t {
     Ui_t *ui;
     struct {
         Drawable_t *song_name_text;
@@ -55,7 +56,7 @@ struct Karaoke_t {
         ProgressBarWidget_t *progress_bar;
         Drawable_t *loading_text;
     } loading;
-};
+} Karaoke_t;
 
 Karaoke_t *karaoke_init(void) {
     Karaoke_t *karaoke = calloc(1, sizeof(*karaoke));
