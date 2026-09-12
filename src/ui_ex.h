@@ -5,8 +5,6 @@
 #ifndef ETSUKO_RENDERER_EX_H
 #define ETSUKO_RENDERER_EX_H
 
-#include <stdint.h>
-
 #include "constants.h"
 #include "container_utils.h"
 #include "song.h"
@@ -29,25 +27,25 @@ typedef enum LineState_t {
      * it sits slightly faded (the same as the first inactive line) in the same place
      */
     LINE_ALMOST_HIDDEN,
-    // Lines that have passed and replaced by another active line. Depending on config, this could mean it stacks on top of the current line, or disappears completely
+    /**
+     * Lines that have passed and replaced by another active line. Depending on config, this could mean it stacks on top of the
+     * current line, or disappears completely
+     */
     LINE_HIDDEN,
 } LineState_t;
 
 typedef struct LyricsLanguage_t {
     OWNING const char *language_str;
     WEAK Song_Language_t *song_language;
-    OWNING Vector_t *line_drawables;
-    OWNING Vector_t *line_read_hints;
+    OWNING Vector_t *lyric_widgets; // of LyricLineWidget_t*
     int32_t current_active_index;
     int32_t current_first_active_index;
-    LineState_t line_states[MAX_SONG_LINES];
     OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
     OWNING Drawable_t *lyric_anchor;
-    uint32_t active_line_segment_visited[MAX_TIMINGS_PER_LINE];
 } LyricsLanguage_t;
 
 // Holds the state for the karaoke lyric container
-typedef struct etsuko_LyricsView_t {
+typedef struct LyricsView_t {
     OWNING Container_t *container;
     WEAK const Song_t *song;
     OWNING Vector_t *lyrics_languages;
@@ -63,8 +61,8 @@ typedef struct etsuko_LyricsView_t {
 LyricsView_t *ui_ex_make_lyrics_view(Ui_t *ui, Container_t *parent, const Song_t *song);
 // Updates the lyric line state machine, computing timing and effects like the dynamic fill and pulse
 void ui_ex_lyrics_view_loop(LyricsView_t *view);
-// Called when the screen's dimensions change
-void ui_ex_lyrics_view_on_screen_change(const LyricsView_t *view);
+// Called when the reading hint visibility setting changed, so the hints can be shown or hidden
+void ui_ex_lyrics_view_on_read_hints_changed(const LyricsView_t *view);
 // Frees data related to the lyrics view
 void ui_ex_destroy_lyrics_view(LyricsView_t *view);
 // Reset container scroll to the active line
