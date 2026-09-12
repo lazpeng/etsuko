@@ -467,6 +467,11 @@ static void update_lyric_language_toggle(const Karaoke_t *state) {
     }
 }
 
+static void on_album_art_clicked(const UiEventOpts_t *opts, Drawable_t *_, void *custom_data) {
+    const Karaoke_t *state = custom_data;
+    toggle_pause(state);
+}
+
 void karaoke_setup(Karaoke_t *state) {
     if ( state->ui != NULL ) {
         ui_finish(state->ui);
@@ -523,6 +528,7 @@ void karaoke_setup(Karaoke_t *state) {
             .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
             .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
             .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
+    ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.album_image, on_album_art_clicked, state);
     // Set up the background shaders using the song's album art
     setup_background(state);
     repo_resource_buffer_destroy(state->resources.album_art_buffer);
