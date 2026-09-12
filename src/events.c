@@ -65,8 +65,22 @@ static void key_callback(GLFWwindow *, const int key, int, const int action, int
     }
 }
 
-static void mouse_button_callback(GLFWwindow *, const int button, const int action, int) {
+static void update_mouse_position(GLFWwindow *window, const double x_pos, const double y_pos) {
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    if ( x_pos < 0.0 || x_pos > width || y_pos < 0.0 || y_pos > height )
+        return;
+    g_events.mouse.x = (int32_t)(x_pos * g_events.window.pixel_scale);
+    g_events.mouse.y = (int32_t)(y_pos * g_events.window.pixel_scale);
+}
+
+static void mouse_button_callback(GLFWwindow *window, const int button, const int action, int) {
     if ( button == GLFW_MOUSE_BUTTON_LEFT ) {
+        // For emscripten
+        double x_pos, y_pos;
+        glfwGetCursorPos(window, &x_pos, &y_pos);
+        update_mouse_position(window, x_pos, y_pos);
+
         if ( action == GLFW_PRESS ) {
             g_events.mouse.clicked = true;
             g_events.mouse.mouse_button_down = true;
@@ -77,12 +91,7 @@ static void mouse_button_callback(GLFWwindow *, const int button, const int acti
 }
 
 static void cursor_position_callback(GLFWwindow *window, const double x_pos, const double y_pos) {
-    int width, height;
-    glfwGetWindowSize(window, &width, &height);
-    if ( x_pos < 0.0 || x_pos > width || y_pos < 0.0 || y_pos > height )
-        return;
-    g_events.mouse.x = (int32_t)(x_pos * g_events.window.pixel_scale);
-    g_events.mouse.y = (int32_t)(y_pos * g_events.window.pixel_scale);
+    update_mouse_position(window, x_pos, y_pos);
 }
 
 static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_events.mouse.scrolled = y_offset; }

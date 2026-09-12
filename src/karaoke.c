@@ -738,6 +738,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     audio_loop();
 
     const LyricLanguageSetting_t old_setting = settings_get()->lyric_language;
+    const ReadHintSetting_t old_read_hints = settings_get()->read_hints_visibility;
 
     ui_begin_loop(state->ui);
     // Recalculate dynamic elements
@@ -746,8 +747,6 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     fps_counter_update();
     update_song_progressbar(state);
     // Update the lyrics view
-    if ( events_window_changed() )
-        ui_ex_lyrics_view_on_screen_change(state->drawables.lyrics_view);
     ui_ex_lyrics_view_loop(state->drawables.lyrics_view);
 
     // Clear events after all checking has been done because under emscripten the events aren't polled inside glfw
@@ -760,6 +759,10 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
 
     if ( old_setting != settings_get()->lyric_language ) {
         update_lyric_language_toggle(state);
+    }
+
+    if ( old_read_hints != settings_get()->read_hints_visibility ) {
+        ui_ex_lyrics_view_on_read_hints_changed(state->drawables.lyrics_view);
     }
 
     global_update();
