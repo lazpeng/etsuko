@@ -44,7 +44,8 @@
 #define EMPHASIZE_EFFECT_MIN_DURATION (0.1)
 #define EMPHASIZE_EFFECT_MAX_DURATION (0.3)
 #define TRANSLATION_ANIMATION_DURATION (0.5)
-#define LINE_CASCADE_DELAY (0.075)
+#define LINE_CASCADE_DELAY (0.05)
+#define LINE_CASCADE_SUB_DURATION (0.75)
 #define LINE_CASCADE_ADD_DURATION (0.1)
 #define LINE_CASCADE_MAX_DISTANCE (4)
 
@@ -107,7 +108,7 @@ static void reposition_line_drawable(const LyricsView_t *view, Drawable_t *drawa
             delay = LINE_CASCADE_DELAY;
             duration = duration + LINE_CASCADE_ADD_DURATION * (double)MIN(distance, LINE_CASCADE_MAX_DISTANCE);
         } else if ( direction == CASCADE_AWAY ) {
-            duration = duration - LINE_CASCADE_DELAY * (double)MIN(__builtin_abs(distance), LINE_CASCADE_MAX_DISTANCE);
+            duration = duration - LINE_CASCADE_SUB_DURATION * (double)MIN(__builtin_abs(distance), LINE_CASCADE_MAX_DISTANCE);
         }
     }
     const AnimatedSetOpts_t opts = {.delay = delay, .duration = duration, .interpolate_if_active = true};
@@ -122,18 +123,54 @@ static void reposition_hint_for_line(const LyricsView_t *view, const int32_t ind
     }
 }
 
-static void chain_line_below(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
+static void chain_line_below_drawable(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
     drawable->layout.relative_to = relative;
     drawable->layout.offset_y = offset_y;
     drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
     drawable->layout.flags &= ~LAYOUT_ANCHOR_BOTTOM_Y;
 }
 
-static void chain_line_above(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
+static void chain_line_above_drawable(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
     drawable->layout.relative_to = relative;
     drawable->layout.offset_y = offset_y;
     drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
     drawable->layout.flags &= ~LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
+}
+
+// Pins a drawable on top of its chained counterpart, so the pair moves as a single block
+static void pin_line_drawable(Drawable_t *drawable, const Drawable_t *relative) {
+    drawable->layout.relative_to = relative;
+    drawable->layout.offset_x = 0;
+    drawable->layout.offset_y = 0;
+    drawable->layout.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y;
+}
+
+static void chain_line_below(Drawable_t *target, const LyricLineWidget_t *widget) {
+    const Drawable_t *relative = widget->line;
+    if ( widget->reading_hint != NULL && widget->reading_hint->enabled ) {
+        relative = widget->reading_hint;
+    }
+    chain_line_below_drawable(target, relative, LINE_VERTICAL_PADDING);
+}
+
+static void chain_line_above(const LyricsView_t *view, const Drawable_t *relative, const int32_t index, const int32_t distance) {
+    const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
+    if ( widget->reading_hint != NULL && widget->reading_hint->enabled ) {
+        // The hint is taller than its line, so it is the one that gets chained, leaving room for the readings
+        chain_line_above_drawable(widget->reading_hint, relative, -LINE_VERTICAL_PADDING);
+        pin_line_drawable(widget->line, widget->reading_hint);
+
+        reposition_hint_for_line(view, index, distance, CASCADE_AWAY);
+        reposition_line_drawable(view, widget->line, distance, CASCADE_AWAY);
+    } else {
+        // No readings to make room for, so the line chains directly and the hint just follows it
+        chain_line_above_drawable(widget->line, relative, -LINE_VERTICAL_PADDING);
+        if ( widget->reading_hint != NULL )
+            pin_line_drawable(widget->reading_hint, widget->line);
+
+        reposition_line_drawable(view, widget->line, distance, CASCADE_AWAY);
+        reposition_hint_for_line(view, index, distance, CASCADE_AWAY);
+    }
 }
 
 static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
@@ -324,13 +361,6 @@ static LyricLineWidget_t *make_line_widget(Ui_t *ui, const LyricLineWidgetOpts_t
     return widget;
 }
 
-static double get_line_vertical_padding(const LyricsView_t *view) {
-    const bool enabled_in_config = config_get()->karaoke.enable_reading_hints;
-    const bool has_hints = view->selected_language->song_language->has_reading_info;
-
-    return has_hints && enabled_in_config ? LINE_VERTICAL_PADDING_WITH_READINGS : LINE_VERTICAL_PADDING;
-}
-
 static float get_inactive_line_scale() {
     return config_get()->karaoke.enlarge_active_line ? LINE_SCALE_FACTOR_INACTIVE : LINE_SCALE_FACTOR_ACTIVE;
 }
@@ -468,9 +498,8 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                     .alignment = alignment,
                                     .draw_shadow = config_get()->karaoke.draw_lyric_shadow,
                                     .compute_offsets = language->has_sub_timings || language->has_reading_info};
-        const double vertical_padding = get_line_vertical_padding(view);
         const Layout_t layout = {
-            .offset_y = prev == NULL ? 0 : vertical_padding,
+            .offset_y = prev == NULL ? 0 : LINE_VERTICAL_PADDING,
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
             .relative_to = prev == NULL ? result->lyric_anchor : prev,
@@ -519,7 +548,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
     if ( !str_is_empty(view->song->credits) && prev != NULL ) {
         result->credit_separator =
             ui_make_rectangle(ui, &(Drawable_RectangleData_t){.color = {.r = 200, .g = 200, .b = 200, .a = 150}}, view->container,
-                              &(Layout_t){.offset_y = 0.02 + get_line_vertical_padding(view),
+                              &(Layout_t){.offset_y = 0.02 + LINE_VERTICAL_PADDING,
                                           .offset_x = 0,
                                           .width = 0.8,
                                           .height = 1,
@@ -817,9 +846,10 @@ static void set_line_active(const LyricsView_t *view, const int32_t index, Lyric
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
 
     if ( state->anchor >= 0 ) {
-        chain_line_below(drawable, get_line_drawable_by_index(view, index - 1), get_line_vertical_padding(view));
+        const LyricLineWidget_t *target = view->selected_language->lyric_widgets->data[index - 1];
+        chain_line_below(drawable, target);
     } else {
-        chain_line_below(drawable, view->selected_language->lyric_anchor, 0);
+        chain_line_below_drawable(drawable, view->selected_language->lyric_anchor, 0);
         state->anchor = index;
     }
     if ( state->first_active < 0 )
@@ -877,9 +907,10 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
     blur = calculate_blur(tmp_distance);
 
     if ( state->anchor >= 0 ) {
-        chain_line_below(drawable, get_line_drawable_by_index(view, index - 1), get_line_vertical_padding(view));
+        const LyricLineWidget_t *target = view->selected_language->lyric_widgets->data[index - 1];
+        chain_line_below(drawable, target);
     } else {
-        chain_line_below(drawable, view->selected_language->lyric_anchor, 0);
+        chain_line_below_drawable(drawable, view->selected_language->lyric_anchor, 0);
         state->anchor = index;
     }
     reposition_line_drawable(view, drawable, distance, CASCADE_TOWARDS);
@@ -931,7 +962,7 @@ static double get_lyric_line_scroll_position(const LyricsView_t *view, const int
     return 0;
 }
 
-static Drawable_t *set_line_hidden(const LyricsView_t *view, const int32_t index, const LyricsState_t *state) {
+static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_t index, const LyricsState_t *state) {
     LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     Drawable_t *drawable = widget->line;
 
@@ -974,7 +1005,7 @@ static Drawable_t *set_line_hidden(const LyricsView_t *view, const int32_t index
         blur_hint_for_line(view, index);
     }
 
-    return drawable;
+    return widget;
 }
 
 static Drawable_t *collapse_hidden_lines(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
@@ -986,15 +1017,11 @@ static Drawable_t *collapse_hidden_lines(const LyricsView_t *view, const int32_t
     if ( state->anchor < 0 )
         state->anchor = index;
 
-    Drawable_t *drawable = set_line_hidden(view, index, state);
-    chain_line_above(drawable, relative, -get_line_vertical_padding(view));
-
+    const LyricLineWidget_t *widget = set_line_hidden(view, index, state);
     const int32_t distance = calculate_distance(view, index, boundary);
-    // Add negative delay
-    reposition_line_drawable(view, drawable, distance, CASCADE_AWAY);
-    reposition_hint_for_line(view, index, distance, CASCADE_AWAY);
+    chain_line_above(view, relative, index, distance);
 
-    return drawable;
+    return widget->line;
 }
 
 static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
