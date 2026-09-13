@@ -1053,7 +1053,6 @@ static void reposition_credits(const LyricsView_t *view, const int32_t reference
     int32_t distance = 0;
     if ( reference_index >= 0 ) {
         const int32_t last_index = (int32_t)view->selected_language->lyric_widgets->size - 1;
-        // TODO: Review this
         distance = calculate_distance(view, last_index, reference_index) + 1;
     }
     reposition_line_drawable(view, view->selected_language->credit_separator, distance, CASCADE_TOWARDS);
