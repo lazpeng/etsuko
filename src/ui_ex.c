@@ -830,6 +830,9 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
             x1 += (float)segment_fill_contribution;
             last_segment_remaining = duration - elapsed_since_segment;
         }
+        if ( i >= MAX_DRAW_SUB_REGIONS ) {
+            error_abort("calculate_sub_region_for_active_line: i >= MAX_DRAW_SUB_REGIONS");
+        }
         draw_regions.regions[i].x1_perc = MIN(1.f, x1);
 
         // x0 is always at the beginning
