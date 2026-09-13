@@ -595,10 +595,10 @@ static void on_effect_changed(Ui_t *, const ToggleWidget_t *, const int selected
     UserSettings_t *settings = settings_get();
     switch ( selected ) {
     case 0:
-        settings->lyric_effect = SET_LYRIC_EFFECT_PULSE;
+        settings->lyric_effect = SET_LYRIC_EFFECT_EMPHASIZE;
         break;
     case 1:
-        settings->lyric_effect = SET_LYRIC_EFFECT_EMPHASIZE;
+        settings->lyric_effect = SET_LYRIC_EFFECT_PULSE;
         break;
     default:
         break;
@@ -627,7 +627,7 @@ static Drawable_t *create_effect_setting(Ui_t *ui, Drawable_t *prev) {
         .offset_x = MODAL_SETTING_VALUE_X_POS,
         .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
     };
-    const char *opts[] = {"Pulse", "Emphasize"};
+    const char *opts[] = {"Emphasize", "Pulse"};
     const ToggleWidgetOpts_t toggle_opts = {
         .opts = opts,
         .num_opts = sizeof(opts) / sizeof(const char *),
