@@ -42,8 +42,7 @@
 #define LINE_BLUR_FACTOR (1.f)
 #define EMPHASIZE_EFFECT_Y_OFFSET_EM (0.3)
 #define EMPHASIZE_EFFECT_X_OFFSET_EM (0)
-#define EMPHASIZE_EFFECT_MIN_DURATION (0.1)
-#define EMPHASIZE_EFFECT_MAX_DURATION (0.3)
+#define EMPHASIZE_EFFECT_MIN_DURATION (0.4)
 #define TRANSLATION_ANIMATION_DURATION (0.5)
 #define LINE_CASCADE_DELAY (0.05)
 #define LINE_CASCADE_SUB_DURATION (0.75)
@@ -819,8 +818,7 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
                         .pos_y_offset = -emphasize_offset_y,
                         .pos_x_offset = -emphasize_offset_x,
                     };
-                    const double final_duration =
-                        MIN(MAX(duration, EMPHASIZE_EFFECT_MIN_DURATION), EMPHASIZE_EFFECT_MAX_DURATION);
+                    const double final_duration = MAX(duration, EMPHASIZE_EFFECT_MIN_DURATION);
                     const AnimatedSetOpts_t up_anim_opts = {
                         .duration = final_duration, .apply_type = ANIM_APPLY_STICKY, .unique_id = timing->start_char_idx};
                     ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
