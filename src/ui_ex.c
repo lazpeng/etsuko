@@ -90,7 +90,10 @@ static void apply_read_hint_visibility(const LyricLineWidget_t *widget) {
     if ( widget->reading_hint == NULL )
         return;
     widget->reading_hint->enabled = widget->line->enabled;
-    ui_drawable_set_alpha(widget->reading_hint, hint_target_alpha(widget));
+    const AnimatedSetOpts_t opts = {
+        .duration = HINT_TOGGLE_FADE_ANIMATION_DURATION
+    };
+    ui_drawable_set_alpha_dur(widget->reading_hint, hint_target_alpha(widget), opts);
 }
 
 static Drawable_t *get_line_drawable_by_index(const LyricsView_t *view, const int32_t index) {
