@@ -2,8 +2,8 @@
  * ui_ex.h - Extensions with business logic to the routines defined in ui.h
  */
 
-#ifndef ETSUKO_RENDERER_EX_H
-#define ETSUKO_RENDERER_EX_H
+#ifndef ETSUKO_UI_EX_H
+#define ETSUKO_UI_EX_H
 
 #include "constants.h"
 #include "container_utils.h"
@@ -40,8 +40,8 @@ typedef struct LyricsLanguage_t {
     OWNING Vector_t *lyric_widgets; // of LyricLineWidget_t*
     int32_t current_active_index;
     int32_t current_first_active_index;
-    OWNING Drawable_t *credit_separator, *credits_prefix, *credits_content;
-    OWNING Drawable_t *lyric_anchor;
+    WEAK Drawable_t *credit_separator, *credits_prefix, *credits_content;
+    WEAK Drawable_t *lyric_anchor;
 } LyricsLanguage_t;
 
 // Holds the state for the karaoke lyric container
@@ -70,4 +70,4 @@ void ui_ex_lyrics_view_scroll_to_active(const LyricsView_t *view);
 // Change the current language of the displayed lyrics
 void ui_ex_lyrics_view_set_language(LyricsView_t *view, const char *language);
 
-#endif // ETSUKO_RENDERER_EX_H
+#endif // ETSUKO_UI_EX_H
