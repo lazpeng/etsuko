@@ -156,12 +156,22 @@ static void pin_line_drawable(Drawable_t *drawable, const Drawable_t *relative) 
     drawable->layout.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y;
 }
 
-static void chain_line_below(Drawable_t *target, const LyricLineWidget_t *widget) {
-    const Drawable_t *relative = widget->line;
-    if ( is_hint_enabled(widget) ) {
-        relative = widget->reading_hint;
+static void chain_line_below(const LyricLineWidget_t *widget, const Drawable_t *relative, const double offset_y) {
+    if ( widget->reading_hint != NULL )
+        pin_line_drawable(widget->reading_hint, widget->line);
+    chain_line_below_drawable(widget->line, relative, offset_y);
+}
+
+static void chain_line_under_previous(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
+    const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
+    if ( state->anchor >= 0 ) {
+        const LyricLineWidget_t *target = view->selected_language->lyric_widgets->data[index - 1];
+        const Drawable_t *relative = is_hint_enabled(target) ? target->reading_hint : target->line;
+        chain_line_below(widget, relative, LINE_VERTICAL_PADDING);
+    } else {
+        chain_line_below(widget, view->selected_language->lyric_anchor, 0);
+        state->anchor = index;
     }
-    chain_line_below_drawable(target, relative, LINE_VERTICAL_PADDING);
 }
 
 static void chain_line_above(const LyricsView_t *view, const Drawable_t *relative, const int32_t index, const int32_t distance) {
@@ -194,9 +204,7 @@ static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
 static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     if ( widget->reading_hint != NULL ) {
-        const AnimatedSetOpts_t opts = {
-            .duration = HINT_TOGGLE_FADE_ANIMATION_DURATION
-        };
+        const AnimatedSetOpts_t opts = {.duration = HINT_TOGGLE_FADE_ANIMATION_DURATION};
         ui_drawable_set_alpha_dur(widget->reading_hint, hint_target_alpha(widget), opts);
     }
 }
@@ -856,13 +864,7 @@ static void set_line_active(const LyricsView_t *view, const int32_t index, Lyric
 
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
 
-    if ( state->anchor >= 0 ) {
-        const LyricLineWidget_t *target = view->selected_language->lyric_widgets->data[index - 1];
-        chain_line_below(drawable, target);
-    } else {
-        chain_line_below_drawable(drawable, view->selected_language->lyric_anchor, 0);
-        state->anchor = index;
-    }
+    chain_line_under_previous(view, index, state);
     if ( state->first_active < 0 )
         state->first_active = index;
     state->current_active = index;
@@ -917,13 +919,7 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
     alpha = calculate_alpha(tmp_distance);
     blur = calculate_blur(tmp_distance);
 
-    if ( state->anchor >= 0 ) {
-        const LyricLineWidget_t *target = view->selected_language->lyric_widgets->data[index - 1];
-        chain_line_below(drawable, target);
-    } else {
-        chain_line_below_drawable(drawable, view->selected_language->lyric_anchor, 0);
-        state->anchor = index;
-    }
+    chain_line_under_previous(view, index, state);
     reposition_line_drawable(view, drawable, distance, CASCADE_TOWARDS);
     reposition_hint_for_line(view, index, distance, CASCADE_TOWARDS);
 
@@ -1039,8 +1035,9 @@ static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index
     LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     Drawable_t *drawable = widget->line;
 
-    if ( state->anchor < 0 )
-        state->anchor = index;
+    chain_line_under_previous(view, index, state);
+    reposition_line_drawable(view, drawable, 0, CASCADE_TOWARDS);
+    reposition_hint_for_line(view, index, 0, CASCADE_TOWARDS);
 
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( widget->state != new_state ) {
