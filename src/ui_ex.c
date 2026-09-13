@@ -1018,20 +1018,21 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
     return widget;
 }
 
-static Drawable_t *collapse_hidden_lines(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
+static void collapse_hidden_lines(const LyricsView_t *view, LyricsState_t *state) {
     const int32_t boundary = state->anchor >= 0 ? state->anchor : state->num_lines;
-    if ( index >= boundary )
-        return view->selected_language->lyric_anchor;
+    const Drawable_t *relative = view->selected_language->lyric_anchor;
 
-    const Drawable_t *relative = collapse_hidden_lines(view, index + 1, state);
-    if ( state->anchor < 0 )
-        state->anchor = index;
+    for ( int32_t index = boundary - 1; index >= 0; index-- ) {
+        if ( state->anchor < 0 )
+            state->anchor = index;
 
-    const LyricLineWidget_t *widget = set_line_hidden(view, index, state);
-    const int32_t distance = calculate_distance(view, index, boundary);
-    chain_line_above(view, relative, index, distance);
+        const LyricLineWidget_t *widget = set_line_hidden(view, index, state);
+        const int32_t distance = calculate_distance(view, index, boundary);
+        chain_line_above(view, relative, index, distance);
 
-    return widget->line;
+        // Chain the next line on top of whichever drawable of this pair actually got anchored
+        relative = is_hint_enabled(widget) ? widget->reading_hint : widget->line;
+    }
 }
 
 static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
