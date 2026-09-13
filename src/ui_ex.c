@@ -32,6 +32,7 @@
 #define LINE_SCALE_FACTOR_INACTIVE_DURATION (0.2)
 #define SCALE_ANIMATION_DURATION (0.1)
 #define FADE_ANIMATION_DURATION (1.0)
+#define HINT_TOGGLE_FADE_ANIMATION_DURATION (0.5)
 #define SCALE_ANIMATION_OUT_DURATION (0.3)
 #define SCROLL_ANIMATION_DURATION (0.3)
 #define SCALE_REGION_UP_DURATION (0.15)
@@ -75,10 +76,21 @@ static bool read_hints_should_be_visible() {
     return enabled_in_config && enabled_in_settings;
 }
 
+static int32_t hint_target_alpha(const LyricLineWidget_t *widget) {
+    if ( !read_hints_should_be_visible() )
+        return 0;
+    return widget->line->alpha_mod;
+}
+
+static bool is_hint_enabled(const LyricLineWidget_t *widget) {
+    return widget->reading_hint != NULL && widget->reading_hint->enabled && widget->reading_hint->alpha_mod > 0;
+}
+
 static void apply_read_hint_visibility(const LyricLineWidget_t *widget) {
     if ( widget->reading_hint == NULL )
         return;
-    widget->reading_hint->enabled = widget->line->enabled && read_hints_should_be_visible();
+    widget->reading_hint->enabled = widget->line->enabled;
+    ui_drawable_set_alpha(widget->reading_hint, hint_target_alpha(widget));
 }
 
 static Drawable_t *get_line_drawable_by_index(const LyricsView_t *view, const int32_t index) {
@@ -137,7 +149,6 @@ static void chain_line_above_drawable(Drawable_t *drawable, const Drawable_t *re
     drawable->layout.flags &= ~LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 }
 
-// Pins a drawable on top of its chained counterpart, so the pair moves as a single block
 static void pin_line_drawable(Drawable_t *drawable, const Drawable_t *relative) {
     drawable->layout.relative_to = relative;
     drawable->layout.offset_x = 0;
@@ -147,7 +158,7 @@ static void pin_line_drawable(Drawable_t *drawable, const Drawable_t *relative) 
 
 static void chain_line_below(Drawable_t *target, const LyricLineWidget_t *widget) {
     const Drawable_t *relative = widget->line;
-    if ( widget->reading_hint != NULL && widget->reading_hint->enabled ) {
+    if ( is_hint_enabled(widget) ) {
         relative = widget->reading_hint;
     }
     chain_line_below_drawable(target, relative, LINE_VERTICAL_PADDING);
@@ -155,15 +166,13 @@ static void chain_line_below(Drawable_t *target, const LyricLineWidget_t *widget
 
 static void chain_line_above(const LyricsView_t *view, const Drawable_t *relative, const int32_t index, const int32_t distance) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
-    if ( widget->reading_hint != NULL && widget->reading_hint->enabled ) {
-        // The hint is taller than its line, so it is the one that gets chained, leaving room for the readings
+    if ( is_hint_enabled(widget) ) {
         chain_line_above_drawable(widget->reading_hint, relative, -LINE_VERTICAL_PADDING);
         pin_line_drawable(widget->line, widget->reading_hint);
 
         reposition_hint_for_line(view, index, distance, CASCADE_AWAY);
         reposition_line_drawable(view, widget->line, distance, CASCADE_AWAY);
     } else {
-        // No readings to make room for, so the line chains directly and the hint just follows it
         chain_line_above_drawable(widget->line, relative, -LINE_VERTICAL_PADDING);
         if ( widget->reading_hint != NULL )
             pin_line_drawable(widget->reading_hint, widget->line);
@@ -185,9 +194,10 @@ static void scale_hint_for_line(const LyricsView_t *view, const int32_t index) {
 static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     if ( widget->reading_hint != NULL ) {
-        const Drawable_t *drawable = widget->line;
-        Drawable_t *hint = widget->reading_hint;
-        ui_drawable_set_alpha(hint, drawable->alpha_mod);
+        const AnimatedSetOpts_t opts = {
+            .duration = HINT_TOGGLE_FADE_ANIMATION_DURATION
+        };
+        ui_drawable_set_alpha_dur(widget->reading_hint, hint_target_alpha(widget), opts);
     }
 }
 
@@ -273,6 +283,7 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
         ui_animate_scale(widget->reading_hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
         ui_animate_blur(widget->reading_hint,
                         &(Animation_BlurRadiusData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_drawable_set_alpha_immediate(widget->reading_hint, hint_target_alpha(widget));
     } else if ( widget->reading_hint->texture != NULL ) {
         render_destroy_texture(widget->reading_hint->texture);
         widget->reading_hint->texture = NULL;
