@@ -467,7 +467,7 @@ static void update_lyric_language_toggle(const Karaoke_t *state) {
     }
 }
 
-static void on_album_art_clicked(const UiEventOpts_t *opts, Drawable_t *_, void *custom_data) {
+static void on_album_art_clicked(const UiEventOpts_t *, Drawable_t *, void *custom_data) {
     const Karaoke_t *state = custom_data;
     toggle_pause(state);
 }
