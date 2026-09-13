@@ -1008,23 +1008,6 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
     return widget;
 }
 
-static void collapse_hidden_lines(const LyricsView_t *view, LyricsState_t *state) {
-    const int32_t boundary = state->anchor >= 0 ? state->anchor : state->num_lines;
-    const Drawable_t *relative = view->selected_language->lyric_anchor;
-
-    for ( int32_t index = boundary - 1; index >= 0; index-- ) {
-        if ( state->anchor < 0 )
-            state->anchor = index;
-
-        const LyricLineWidget_t *widget = set_line_hidden(view, index, state);
-        const int32_t distance = calculate_distance(view, index, boundary);
-        chain_line_above(view, relative, index, distance);
-
-        // Chain the next line on top of whichever drawable of this pair actually got anchored
-        relative = is_hint_enabled(widget) ? widget->reading_hint : widget->line;
-    }
-}
-
 static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index, LyricsState_t *state) {
     LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     Drawable_t *drawable = widget->line;
@@ -1044,6 +1027,24 @@ static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index
             fade_hint_for_line(view, index);
         }
         widget->state = new_state;
+    }
+}
+
+static void collapse_hidden_lines(const LyricsView_t *view, LyricsState_t *state) {
+    if ( state->anchor < 0 ) {
+        // Keep the last line in place, also indirectly update the anchor to a non-zero value
+        set_line_almost_hidden(view, state->num_lines - 1, state);
+    }
+
+    const int32_t boundary = state->anchor;
+    const Drawable_t *relative = view->selected_language->lyric_anchor;
+
+    for ( int32_t index = boundary - 1; index >= 0; index-- ) {
+        const LyricLineWidget_t *widget = set_line_hidden(view, index, state);
+        const int32_t distance = calculate_distance(view, index, boundary);
+        chain_line_above(view, relative, index, distance);
+
+        relative = is_hint_enabled(widget) ? widget->reading_hint : widget->line;
     }
 }
 
@@ -1074,6 +1075,9 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     const double user_offset = settings_get()->global_audio_offset_ms / 1000.0;
     const double elapsed_time = audio_elapsed_time() + offset + user_offset;
     const int32_t num_lines = (int32_t)view->selected_language->song_language->lines->size;
+
+    if ( num_lines <= 0 )
+        return;
 
     LyricsState_t state = {.current_active = -1, .first_active = -1, .anchor = -1, .num_lines = num_lines};
 
