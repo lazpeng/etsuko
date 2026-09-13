@@ -241,6 +241,10 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
         const TextOffsetInfo_t *offset_info = lyric_data->line_offsets->data[off_i];
         const double y = offset_info->start_y + offset_info->height;
 
+        // The hint drawable is what the next line is chained under (when it's shown), so it has to span the whole text block
+        // even when the wrapped lines at the bottom have no readings of their own
+        max_h = MAX(max_h, y);
+
         double x = 0;
         for ( ; read_i < line->readings->size; read_i++ ) {
             const Song_LineReading_t *reading = line->readings->data[read_i];
