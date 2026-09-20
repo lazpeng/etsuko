@@ -173,7 +173,6 @@ typedef enum AnimationType_t {
     ANIM_SCALE_REGION,
     ANIM_BACKGROUND_IMAGE,
     ANIM_SCROLL_Y,
-    ANIM_BLUR_RADIUS,
 } AnimationType_t;
 
 /**
@@ -353,12 +352,6 @@ typedef struct Animation_ScrollYData_t {
     AnimationEaseType_t ease_func;
 } Animation_ScrollYData_t;
 
-typedef struct Animation_BlurRadiusData_t {
-    float from_radius, to_radius;
-    double duration;
-    AnimationEaseType_t ease_func;
-} Animation_BlurRadiusData_t;
-
 typedef enum UiEvent_t {
     UI_EVENT_NONE = 0,
     UI_EVENT_MOUSE_MOVE,
@@ -432,6 +425,7 @@ void ui_drawable_set_scale_factor(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_immediate(Drawable_t *drawable, float scale);
 void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, float scale, AnimatedSetOpts_t opts);
 void ui_drawable_set_color_mod(Drawable_t *drawable, float color_mod);
+void ui_drawable_set_blur_radius(Drawable_t *drawable, float radius);
 void ui_drawable_set_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions);
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, AnimatedSetOpts_t opts);
@@ -449,9 +443,6 @@ void ui_animate_fade(Drawable_t *target, const Animation_FadeInOutData_t *data);
 void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data);
 void ui_animate_draw_region(Drawable_t *target, const Animation_DrawRegionData_t *data);
 void ui_animate_scale_region(Drawable_t *target, const Animation_ScaleRegionData_t *data);
-void ui_animate_blur(Drawable_t *target, const Animation_BlurRadiusData_t *data);
-void ui_drawable_set_blur_radius(Drawable_t *drawable, float radius);
-void ui_drawable_set_blur_radius_immediate(Drawable_t *drawable, float radius);
 void ui_container_animate_translation(Container_t *container, const Animation_EaseTranslationData_t *data);
 void ui_container_animate_background_image(Container_t *container, double duration, AnimationEaseType_t ease_func);
 void ui_container_animate_scroll_y(Container_t *container, double duration, AnimationEaseType_t ease_func);

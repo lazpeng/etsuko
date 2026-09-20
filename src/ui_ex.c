@@ -207,16 +207,10 @@ static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void blur_hint_for_line(const LyricsView_t *view, const int32_t index, const bool immediate) {
+static void blur_hint_for_line(const LyricsView_t *view, const int32_t index) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
-    if ( widget->reading_hint != NULL ) {
-        const Drawable_t *drawable = widget->line;
-        Drawable_t *hint = widget->reading_hint;
-        if ( immediate )
-            ui_drawable_set_blur_radius_immediate(hint, drawable->blur_radius);
-        else
-            ui_drawable_set_blur_radius(hint, drawable->blur_radius);
-    }
+    if ( widget->reading_hint != NULL )
+        ui_drawable_set_blur_radius(widget->reading_hint, widget->line->blur_radius);
 }
 
 typedef struct ReadingEntry_t {
@@ -294,8 +288,6 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
         ui_animate_fade(widget->reading_hint,
                         &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(widget->reading_hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
-        ui_animate_blur(widget->reading_hint,
-                        &(Animation_BlurRadiusData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_drawable_set_alpha_immediate(widget->reading_hint, hint_target_alpha(widget));
     } else if ( widget->reading_hint->texture != NULL ) {
         render_destroy_texture(widget->reading_hint->texture);
@@ -530,9 +522,6 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             Animation_FadeInOutData_t fade_data = {.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC};
             ui_animate_fade(prev, &fade_data);
 
-            Animation_BlurRadiusData_t blur_data = {.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC};
-            ui_animate_blur(prev, &blur_data);
-
             Animation_ScaleData_t scale_data = {.duration = SCALE_ANIMATION_DURATION};
             ui_animate_scale(prev, &scale_data);
 
@@ -591,7 +580,6 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         ui_drawable_set_alpha_immediate(result->credits_prefix, 150);
         ui_animate_translation(result->credits_prefix,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_blur(result->credits_prefix, &(Animation_BlurRadiusData_t){.duration = 0.3});
 
         result->credits_content =
             ui_make_text(ui,
@@ -609,7 +597,6 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
         ui_drawable_set_alpha_immediate(result->credits_content, 200);
         ui_animate_translation(result->credits_content,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
-        ui_animate_blur(result->credits_content, &(Animation_BlurRadiusData_t){.duration = 0.3});
     }
 
     return result;
@@ -860,13 +847,13 @@ static void set_line_active(const LyricsView_t *view, const int32_t index, Lyric
     Drawable_t *drawable = widget->line;
 
     drawable->enabled = true;
-    ui_drawable_set_blur_radius_immediate(drawable, 0.f);
+    ui_drawable_set_blur_radius(drawable, 0.f);
     ui_drawable_set_alpha_immediate(drawable, 0xFF);
 
     ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
-    blur_hint_for_line(view, index, true);
+    blur_hint_for_line(view, index);
 
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
 
@@ -932,8 +919,8 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
     // don't change the alpha if the user is hovering over the line
     if ( view->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
-        ui_drawable_set_blur_radius_immediate(drawable, 0.f);
-        blur_hint_for_line(view, index, true);
+        ui_drawable_set_blur_radius(drawable, 0.f);
+        blur_hint_for_line(view, index);
     } else {
         if ( alpha != drawable->alpha_mod ) {
             ui_drawable_set_alpha(drawable, alpha);
@@ -941,7 +928,7 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
         }
         if ( blur != drawable->blur_radius ) {
             ui_drawable_set_blur_radius(drawable, blur);
-            blur_hint_for_line(view, index, false);
+            blur_hint_for_line(view, index);
         }
     }
 
@@ -1010,13 +997,13 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
         const bool hovered = view->current_hovered_index == index;
         if ( hovered ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
-            ui_drawable_set_blur_radius_immediate(drawable, 0.f);
+            ui_drawable_set_blur_radius(drawable, 0.f);
         } else {
             ui_drawable_set_alpha(drawable, calculate_alpha(distance));
             ui_drawable_set_blur_radius(drawable, calculate_blur(distance));
         }
         fade_hint_for_line(view, index);
-        blur_hint_for_line(view, index, hovered);
+        blur_hint_for_line(view, index);
     }
 
     return widget;
