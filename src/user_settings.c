@@ -26,6 +26,31 @@ struct SettingsModal_t;
 static UserSettings_t *g_settings = NULL;
 static struct SettingsModal_t *g_modal = NULL;
 
+static const UserSettings_t g_default_settings = {
+    .read_hints_visibility = SET_READ_HINTS_SHOWN,
+    .lyric_fill = SET_LYRIC_FILL_WITH_EFFECT,
+    .lyric_effect = SET_LYRIC_EFFECT_EMPHASIZE,
+    .lyric_language = SET_LYRIC_LANGUAGE_PREFER_ORIGINAL,
+    .auto_play = SET_AUTO_PLAY_DISABLED,
+    .global_audio_offset_ms = 0.0,
+    .volume = 100,
+};
+
+static UserSettings_t settings_defaults(void) {
+    UserSettings_t settings = g_default_settings;
+    const KaraokeOpts_t *karaoke = &config_get()->karaoke;
+    settings.blur_lyrics = karaoke->blur_lyrics;
+    settings.past_language_visibility = karaoke->hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
+    return settings;
+}
+
+static UserSettings_t *alloc_default_settings(void) {
+    UserSettings_t *settings = calloc(1, sizeof(*settings));
+    if ( settings != NULL )
+        *settings = settings_defaults();
+    return settings;
+}
+
 static const char *read_hints_to_string(const ReadHintSetting_t value) {
     return value == SET_READ_HINTS_HIDDEN ? "hidden" : "shown";
 }
@@ -119,15 +144,12 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         return NULL;
     }
 
-    UserSettings_t *settings = calloc(1, sizeof(*settings));
+    UserSettings_t *settings = alloc_default_settings();
     if ( settings == NULL ) {
         json_obj_destroy(root_obj);
         json_ctx_destroy(ctx);
         return NULL;
     }
-
-    settings->volume = 100;
-    settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
 
     const char *read_hints = json_get_string(json_obj_get(root_obj, "read_hints_visibility"));
     const char *lyric_fill = json_get_string(json_obj_get(root_obj, "lyric_fill"));
@@ -313,30 +335,24 @@ bool settings_ensure_loaded(void) {
         return false;
     }
     if ( state < 0 ) {
-        g_settings = calloc(1, sizeof(*g_settings));
-        g_settings->volume = 100;
-        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
-        g_settings->past_language_visibility =
-            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
+        g_settings = alloc_default_settings();
+        if ( g_settings == NULL )
+            error_abort("Failed to allocate the user settings");
         return true;
     }
     g_settings = read_settings_emscripten();
     if ( g_settings == NULL ) {
-        g_settings = calloc(1, sizeof(*g_settings));
-        g_settings->volume = 100;
-        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
-        g_settings->past_language_visibility =
-            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
+        g_settings = alloc_default_settings();
+        if ( g_settings == NULL )
+            error_abort("Failed to allocate the user settings");
     }
     return true;
 #else
     g_settings = read_settings_from_user_json();
     if ( g_settings == NULL ) {
-        g_settings = calloc(1, sizeof(*g_settings));
-        g_settings->volume = 100;
-        g_settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
-        g_settings->past_language_visibility =
-            config_get()->karaoke.hide_past_lyrics ? SET_PAST_LYRICS_HIDE : SET_PAST_LYRICS_SHOW;
+        g_settings = alloc_default_settings();
+        if ( g_settings == NULL )
+            error_abort("Failed to allocate the user settings");
     }
     return true;
 #endif
@@ -922,9 +938,7 @@ static void create_volume_setting(Ui_t *ui, Drawable_t *prev) {
 
 static void on_reset_clicked(Ui_t *, const ButtonWidget_t *) {
     UserSettings_t *settings = settings_get();
-    *settings = (UserSettings_t){0};
-    settings->volume = 100;
-    settings->blur_lyrics = false;// config_get()->karaoke.blur_lyrics;
+    *settings = settings_defaults();
     g_modal->should_rebuild = true;
 }
 
