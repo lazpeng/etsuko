@@ -13,12 +13,6 @@ uniform vec2 u_region_fade[4];
 uniform int u_num_erase_regions;
 uniform vec4 u_erase_regions[64];
 
-uniform float u_blurRadius;
-uniform sampler2D u_fb_tex;
-uniform bool u_useFbTex;
-uniform vec2 u_fbTexOrigin;
-uniform vec2 u_fbTexSize;
-
 void main() {
     float finalAlpha = u_alpha;
     if (u_borderRadius > 0.0) {
@@ -73,26 +67,7 @@ void main() {
         discard;
     }
 
-    vec4 texColor;
-    if (u_blurRadius > 0.0) {
-        const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
-        vec2 tex_offset = u_blurRadius / vec2(textureSize(u_tex, 0));
-        vec4 result = texture(u_tex, TexCoord) * weights[0] * weights[0];
-        for (int i = -4; i <= 4; i++) {
-            for (int j = -4; j <= 4; j++) {
-                if (i == 0 && j == 0) continue;
-                result += texture(u_tex, TexCoord + vec2(float(i), float(j)) * tex_offset)
-                          * weights[abs(i)] * weights[abs(j)];
-            }
-        }
-        vec4 fb_sample;
-        if (u_useFbTex) {
-            fb_sample = texture(u_fb_tex, (gl_FragCoord.xy - u_fbTexOrigin) / u_fbTexSize);
-        }
-        texColor = u_useFbTex ? mix(fb_sample, result, result.a) : result;
-    } else {
-        texColor = texture(u_tex, TexCoord);
-    }
+    vec4 texColor = texture(u_tex, TexCoord);
 
     FragColor = vec4(texColor.rgb * u_colorModFactor, texColor.a * finalAlpha);
 }

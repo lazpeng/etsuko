@@ -926,21 +926,26 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
     opts.scale_regions = &delta.scale_regions;
     opts.center_on_scale = drawable->center_on_scale;
 
-    if ( drawable->shadow != NULL && delta.final_alpha > 0 ) {
+    // it came to me in a dream
+    const int32_t shadow_max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
+    const int32_t shadow_alpha = MIN(shadow_max_alpha, drawable->alpha_mod);
+
+    if ( drawable->shadow != NULL && delta.final_alpha > 0 && shadow_alpha > 0 ) {
         Bounds_t shadow_bounds = rect;
+        shadow_bounds.x += drawable->shadow->bounds.x;
+        shadow_bounds.y += drawable->shadow->bounds.y;
         shadow_bounds.w = drawable->shadow->bounds.w;
         shadow_bounds.h = drawable->shadow->bounds.h;
 
         DrawTextureOpts_t shadow_opts = opts;
-        const int32_t max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
-        const uint8_t alpha = MIN(max_alpha, drawable->alpha_mod);
-        shadow_opts.alpha_mod = alpha;
+        shadow_opts.alpha_mod = shadow_alpha;
         shadow_opts.scale_regions = NULL;
 
         render_draw_texture(drawable->shadow->texture, &shadow_bounds, &shadow_opts);
     }
 
     opts.color_mod = delta.color_mod;
+    opts.blur_radius = delta.final_blur_radius;
     if ( drawable->draw_underlay ) {
         opts.alpha_mod = drawable->underlay_alpha;
         render_draw_texture(drawable->texture, &rect, &opts);
@@ -948,10 +953,6 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
 
     opts.alpha_mod = delta.final_alpha;
     opts.draw_regions = &delta.draw_regions;
-    if ( delta.final_blur_radius > 0.f ) {
-        opts.blur_radius = delta.final_blur_radius;
-        opts.blur_with_bg = true;
-    }
     if ( delta.final_alpha > 0 )
         render_draw_texture(drawable->texture, &rect, &opts);
 }
@@ -1129,8 +1130,6 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         .h = container_bounds.h,
     };
 
-    render_push_blur_ctx(&container_screen_bounds);
-
     if ( container->background->type != BACKGROUND_NONE ) {
         render_draw_background(container->background, &container_screen_bounds);
     }
@@ -1163,7 +1162,6 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
             c_idx += 1;
         }
     }
-    render_pop_blur_ctx();
 }
 
 void ui_draw(const Ui_t *ui) {

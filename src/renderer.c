@@ -49,6 +49,32 @@
 #define NOISE_FIELD_SHORT_AXIS (192)
 #define IMAGE_BLUR_TIME_PERIOD (2000.0 * M_PI)
 
+// Sigma in source pixels per unit of blur_radius, tuned to look about like the tap grid it replaced
+#define BLUR_SIGMA_PER_RADIUS (1.75f)
+#define BLUR_RADIUS_QUANTUM (0.25f)
+#define BLUR_MIN_RADIUS (0.2f)
+// Padding is sized for the top of the bucket a sigma lands in, so a radius moving around inside one bucket never resizes the
+// cache
+#define BLUR_PAD_BUCKET_SIGMA (2.f)
+// Past three sigma the weights round away
+#define BLUR_SUPPORT_SIGMAS (3.f)
+// Smallest sigma, in reduced texels, that still upscales without the reduced grid showing through
+#define BLUR_MIN_REDUCED_SIGMA (1.5f)
+// A bilinear fetch covers a 2x2 block and no more, so going further would need a real downsample
+#define BLUR_MAX_SCALE (2)
+#define BLUR_MAX_TAPS (16)
+#define BLUR_CACHE_TTL_FRAMES (120)
+#define BLUR_SCRATCH_COUNT (2)
+
+// How long a captured backdrop stands in for the live one. What it samples drifts slowly and the
+// blur keeps nothing but that drift, so it holds up for a good few frames
+#define BACKDROP_REFRESH_SECONDS (0.08)
+#define BACKDROP_SCALE (4)
+// Sigma as a fraction of the shorter side of the area being frosted
+#define BACKDROP_SIGMA_FRACTION (0.04)
+// Captured around it too, so the edges mix with what is really outside instead of a stretched copy
+#define BACKDROP_EDGE_SIGMAS (2.f)
+
 typedef struct FontData_t {
     stbtt_fontinfo ui_font_info, lyrics_font_info;
     unsigned char *ui_font_data, *lyrics_font_data;
@@ -68,11 +94,6 @@ typedef struct TextureShaderData_t {
     GLint region_fade_loc;
     GLint num_erase_regions_loc;
     GLint erase_regions_loc;
-    GLint blur_radius_loc;
-    GLint fb_tex_loc;
-    GLint use_fb_tex_loc;
-    GLint fb_tex_origin_loc;
-    GLint fb_tex_size_loc;
 } TextureShaderData_t;
 
 typedef struct RectShaderData_t {
@@ -125,6 +146,27 @@ typedef struct BackgroundUpscaleShaderData_t {
     GLint bounds_loc;
 } BackgroundUpscaleShaderData_t;
 
+typedef struct BlurShaderData_t {
+    GLuint id;
+    GLint tex_loc;
+    GLint uv_bounds_loc;
+    GLint step_loc;
+    GLint num_taps_loc;
+    GLint offsets_loc;
+    GLint weights_loc;
+    GLint unpremultiply_loc;
+} BlurShaderData_t;
+
+typedef struct BlurPrepareShaderData_t {
+    GLuint id;
+    GLint tex_loc;
+    GLint scale_loc;
+    GLint src_origin_loc;
+    GLint src_dir_loc;
+    GLint src_radius_loc;
+    GLint pad_transparent_loc;
+} BlurPrepareShaderData_t;
+
 typedef struct ShaderData_t {
     GLuint active_shader_program;
     TextureShaderData_t tex;
@@ -133,14 +175,32 @@ typedef struct ShaderData_t {
     ImageBlurShaderData_t image_blur;
     NoiseFieldShaderData_t noise_field;
     BackgroundUpscaleShaderData_t bg_upscale;
+    BlurShaderData_t blur;
+    BlurPrepareShaderData_t blur_prepare;
 } ShaderData_t;
 
-typedef struct BlurData_t {
-    Texture_t *fb_texture;
-    GLuint fb_fbo;
-    Bounds_t container_bounds;
-    bool in_ctx;
-} BlurData_t;
+typedef struct BlurCache_t {
+    OWNING MAYBE_NULL Texture_t *texture;
+    // Quantized radius the contents were built for. Negative means not built yet
+    float radius;
+    // Room left around the source, in source pixels, and source pixels per texel of the copy
+    int32_t pad, scale;
+    int32_t src_w, src_h;
+    uint64_t last_used_frame;
+    WEAK Texture_t *owner;
+    WEAK MAYBE_NULL struct BlurCache_t *next;
+} BlurCache_t;
+
+typedef struct BlurEngineData_t {
+    // Whichever texture a pass writes into is attached to this in turn
+    GLuint fbo;
+    // Only there for the vertex objects the passes draw their quad with
+    OWNING MAYBE_NULL Texture_t *pass_quad;
+    // Grown to fit the largest blur seen so far and then left alone
+    OWNING MAYBE_NULL Texture_t *scratch[BLUR_SCRATCH_COUNT];
+    WEAK MAYBE_NULL BlurCache_t *caches;
+    uint64_t frame;
+} BlurEngineData_t;
 
 typedef struct Renderer_t {
     GLFWwindow *window;
@@ -151,12 +211,13 @@ typedef struct Renderer_t {
     double window_pixel_scale;
     FontData_t fonts;
     ShaderData_t shaders;
-    BlurData_t blur_data;
+    BlurEngineData_t blur_engine;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
 
 static float *get_projection_matrix(void);
+static void restore_render_target_binding(void);
 
 static GLuint compile_shader(const GLenum type, const char *source, const char *name) {
     const GLuint shader = glCreateShader(type);
@@ -264,49 +325,256 @@ static void set_shader_program(const GLuint program) {
     }
 }
 
-static void draw_blurred_bg_at(const Bounds_t *bounds, const float blur_radius) {
-    const Texture_t *fb_tex = g_renderer->blur_data.fb_texture;
-    if ( fb_tex == NULL )
-        return;
+typedef struct BlurKernel_t {
+    int32_t num_taps;
+    float offsets[BLUR_MAX_TAPS];
+    float weights[BLUR_MAX_TAPS];
+} BlurKernel_t;
 
-    const Bounds_t c = g_renderer->blur_data.container_bounds;
-    const float cx = (float)c.x, cy = (float)c.y;
-    const float cw = (float)c.w, ch = (float)c.h;
-    const float x = (float)bounds->x, y = (float)bounds->y;
-    const float w = (float)bounds->w, h = (float)bounds->h;
+typedef struct BlurLayout_t {
+    int32_t pad, scale;
+    int32_t width, height;
+    float sigma;
+} BlurLayout_t;
 
-    const float u0 = (x - cx) / cw;
-    const float u1 = (x + w - cx) / cw;
-    const float v0 = 1.f - (y - cy) / ch;
-    const float v1 = 1.f - (y + h - cy) / ch;
+static void build_blur_kernel(const float sigma, BlurKernel_t *kernel) {
+    float discrete[(BLUR_MAX_TAPS - 1) * 2 + 1];
+    int32_t support = (int32_t)ceilf(BLUR_SUPPORT_SIGMAS * MAX(sigma, 0.01f));
+    support = MAX(1, MIN(support, (BLUR_MAX_TAPS - 1) * 2));
 
-    set_shader_program(g_renderer->shaders.tex.id);
-    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, get_projection_matrix());
-    glUniform1f(g_renderer->shaders.tex.border_radius_loc, 0.f);
-    glUniform1f(g_renderer->shaders.tex.alpha_loc, 1.f);
-    glUniform2f(g_renderer->shaders.tex.rect_size_loc, w, h);
-    glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 0);
-    glUniform1f(g_renderer->shaders.tex.color_mod_loc, 1.f);
-    glUniform1i(g_renderer->shaders.tex.num_regions_loc, 0);
-    glUniform2f(g_renderer->shaders.tex.region_fade_loc, 0.f, 0.f);
-    glUniform1i(g_renderer->shaders.tex.num_erase_regions_loc, 0);
-    glUniform1f(g_renderer->shaders.tex.blur_radius_loc, blur_radius);
-    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, 0);
+    const float denom = 2.f * sigma * sigma;
+    float total = 0.f;
+    for ( int32_t k = 0; k <= support; k++ ) {
+        discrete[k] = expf(-(float)(k * k) / denom);
+        total += k == 0 ? discrete[k] : 2.f * discrete[k];
+    }
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fb_tex->id);
-    glBindVertexArray(fb_tex->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, fb_tex->vbo);
+    kernel->num_taps = 1;
+    kernel->offsets[0] = 0.f;
+    kernel->weights[0] = discrete[0] / total;
+    for ( int32_t k = 1; k <= support; k += 2 ) {
+        const float w0 = discrete[k];
+        const float w1 = k + 1 <= support ? discrete[k + 1] : 0.f;
+        const float pair = w0 + w1;
+
+        kernel->offsets[kernel->num_taps] = ((float)k * w0 + (float)(k + 1) * w1) / pair;
+        kernel->weights[kernel->num_taps] = pair / total;
+        kernel->num_taps++;
+    }
+}
+
+static BlurLayout_t blur_layout_for(const int32_t src_w, const int32_t src_h, const float radius) {
+    BlurLayout_t layout = {0};
+    layout.sigma = radius * BLUR_SIGMA_PER_RADIUS;
+    layout.scale = MAX(1, MIN(BLUR_MAX_SCALE, (int32_t)(layout.sigma / BLUR_MIN_REDUCED_SIGMA)));
+
+    const float bucket = ceilf(layout.sigma / BLUR_PAD_BUCKET_SIGMA) * BLUR_PAD_BUCKET_SIGMA;
+    layout.pad = (int32_t)ceilf(BLUR_SUPPORT_SIGMAS * bucket);
+
+    layout.width = (src_w + 2 * layout.pad + layout.scale - 1) / layout.scale;
+    layout.height = (src_h + 2 * layout.pad + layout.scale - 1) / layout.scale;
+    return layout;
+}
+
+static Texture_t *ensure_blur_scratch(const int32_t index, const int32_t width, const int32_t height) {
+    Texture_t *scratch = g_renderer->blur_engine.scratch[index];
+    if ( scratch != NULL && scratch->width >= width && scratch->height >= height )
+        return scratch;
+
+    const int32_t w = scratch != NULL ? MAX(width, scratch->width) : width;
+    const int32_t h = scratch != NULL ? MAX(height, scratch->height) : height;
+    if ( scratch != NULL )
+        render_destroy_texture(scratch);
+
+    g_renderer->blur_engine.scratch[index] = render_make_empty(w, h);
+    return g_renderer->blur_engine.scratch[index];
+}
+
+static void draw_blur_pass_quad(const float u0, const float v0, const float u1, const float v1) {
+    const Texture_t *quad = g_renderer->blur_engine.pass_quad;
 
     float vertices[QUAD_VERTICES_SIZE] = {0};
-    create_quad_vertices_with_uv(x, y, w, h, u0, v0, u1, v1, vertices);
+    create_quad_vertices_with_uv(-1.f, -1.f, 2.f, 2.f, u0, v0, u1, v1, vertices);
+
+    glBindVertexArray(quad->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, quad->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+static void bind_blur_target(const Texture_t *target, const int32_t width, const int32_t height) {
+    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_engine.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->id, 0);
+    glViewport(0, 0, width, height);
+}
+
+typedef struct BlurPassOpts_t {
+    // Part of the source that lands on the destination, in source coordinates
+    float u0, v0, u1, v1;
+    // How much of the source the previous pass wrote
+    int32_t src_used_w, src_used_h;
+    // One tap unit along the axis of this pass
+    float step_x, step_y;
+    bool unpremultiply;
+} BlurPassOpts_t;
+
+static void run_blur_pass(const Texture_t *src, const Texture_t *dst, const int32_t width, const int32_t height,
+                          const BlurKernel_t *kernel, const BlurPassOpts_t *opts) {
+    const BlurShaderData_t *shader = &g_renderer->shaders.blur;
+    set_shader_program(shader->id);
+
+    bind_blur_target(dst, width, height);
+
+    glUniform1i(shader->tex_loc, 0);
+    glUniform4f(shader->uv_bounds_loc, 0.5f / (float)src->width, 0.5f / (float)src->height,
+                ((float)opts->src_used_w - 0.5f) / (float)src->width, ((float)opts->src_used_h - 0.5f) / (float)src->height);
+    glUniform2f(shader->step_loc, opts->step_x, opts->step_y);
+    glUniform1i(shader->num_taps_loc, kernel->num_taps);
+    glUniform1fv(shader->offsets_loc, BLUR_MAX_TAPS, kernel->offsets);
+    glUniform1fv(shader->weights_loc, BLUR_MAX_TAPS, kernel->weights);
+    glUniform1i(shader->unpremultiply_loc, opts->unpremultiply);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, src->id);
+
+    draw_blur_pass_quad(opts->u0, opts->v0, opts->u1, opts->v1);
+}
+
+typedef struct BlurPrepareOpts_t {
+    int32_t scale;
+    // Source texel the destination starts at, and which way each axis runs from there
+    int32_t origin_x, origin_y, dir_x, dir_y;
+    // Corner to cut out of the source, in source pixels
+    float src_radius;
+    bool pad_transparent;
+} BlurPrepareOpts_t;
+
+static void run_blur_prepare_pass(const Texture_t *src, const Texture_t *dst, const int32_t width, const int32_t height,
+                                  const BlurPrepareOpts_t *opts) {
+    const BlurPrepareShaderData_t *shader = &g_renderer->shaders.blur_prepare;
+    set_shader_program(shader->id);
+
+    bind_blur_target(dst, width, height);
+
+    glUniform1i(shader->tex_loc, 0);
+    glUniform1i(shader->scale_loc, opts->scale);
+    glUniform2i(shader->src_origin_loc, opts->origin_x, opts->origin_y);
+    glUniform2i(shader->src_dir_loc, opts->dir_x, opts->dir_y);
+    glUniform1f(shader->src_radius_loc, opts->src_radius);
+    glUniform1i(shader->pad_transparent_loc, opts->pad_transparent);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, src->id);
+
+    draw_blur_pass_quad(0.f, 0.f, 1.f, 1.f);
+}
+
+static void regenerate_blur_cache(const Texture_t *source, const BlurCache_t *cache, const BlurLayout_t *layout) {
+    const Texture_t *prepared = ensure_blur_scratch(0, layout->width, layout->height);
+    const Texture_t *scratch = ensure_blur_scratch(1, layout->width, layout->height);
+
+    const BlendMode_t saved_blend = g_renderer->blend_mode;
+    render_set_blend_mode(BLEND_MODE_NONE);
+
+    const BlurPrepareOpts_t prepare = {
+        .scale = layout->scale,
+        .origin_x = -layout->pad,
+        .origin_y = -layout->pad,
+        .dir_x = 1,
+        .dir_y = 1,
+        .src_radius = source->border_radius < 0.f ? (float)MIN(source->width, source->height) * 0.5f : source->border_radius,
+        .pad_transparent = true,
+    };
+    run_blur_prepare_pass(source, prepared, layout->width, layout->height, &prepare);
+
+    BlurKernel_t kernel;
+    build_blur_kernel(layout->sigma / (float)layout->scale, &kernel);
+
+    const BlurPassOpts_t horizontal = {
+        .u1 = (float)layout->width / (float)prepared->width,
+        .v1 = (float)layout->height / (float)prepared->height,
+        .src_used_w = layout->width,
+        .src_used_h = layout->height,
+        .step_x = 1.f / (float)prepared->width,
+    };
+    run_blur_pass(prepared, scratch, layout->width, layout->height, &kernel, &horizontal);
+
+    const BlurPassOpts_t vertical = {
+        .u1 = (float)layout->width / (float)scratch->width,
+        .v1 = (float)layout->height / (float)scratch->height,
+        .src_used_w = layout->width,
+        .src_used_h = layout->height,
+        .step_y = 1.f / (float)scratch->height,
+        .unpremultiply = true,
+    };
+    run_blur_pass(scratch, cache->texture, layout->width, layout->height, &kernel, &vertical);
+
     glBindTexture(GL_TEXTURE_2D, 0);
+    restore_render_target_binding();
+    render_set_blend_mode(saved_blend);
+}
+
+static void destroy_blur_cache(BlurCache_t *cache) {
+    BlurCache_t **link = &g_renderer->blur_engine.caches;
+    while ( *link != NULL && *link != cache )
+        link = &(*link)->next;
+    if ( *link == cache )
+        *link = cache->next;
+
+    cache->owner->blur_cache = NULL;
+    if ( cache->texture != NULL )
+        render_destroy_texture(cache->texture);
+    free(cache);
+}
+
+static void expire_blur_caches(void) {
+    const uint64_t frame = g_renderer->blur_engine.frame;
+    BlurCache_t *cache = g_renderer->blur_engine.caches;
+    while ( cache != NULL ) {
+        BlurCache_t *next = cache->next;
+        if ( frame - cache->last_used_frame > BLUR_CACHE_TTL_FRAMES )
+            destroy_blur_cache(cache);
+        cache = next;
+    }
+    g_renderer->blur_engine.frame++;
+}
+
+static const BlurCache_t *ensure_blur_cache(Texture_t *texture, const float radius) {
+    const float quantized = roundf(radius / BLUR_RADIUS_QUANTUM) * BLUR_RADIUS_QUANTUM;
+    const BlurLayout_t layout = blur_layout_for(texture->width, texture->height, quantized);
+
+    BlurCache_t *cache = texture->blur_cache;
+    if ( cache == NULL ) {
+        cache = calloc(1, sizeof(*cache));
+        if ( cache == NULL )
+            error_abort("Failed to allocate blur cache");
+        cache->owner = texture;
+        cache->next = g_renderer->blur_engine.caches;
+        g_renderer->blur_engine.caches = cache;
+        texture->blur_cache = cache;
+    }
+
+    const bool layout_changed = cache->texture == NULL || cache->pad != layout.pad || cache->scale != layout.scale ||
+                                cache->src_w != texture->width || cache->src_h != texture->height;
+    if ( layout_changed ) {
+        if ( cache->texture != NULL )
+            render_destroy_texture(cache->texture);
+        cache->texture = render_make_empty(layout.width, layout.height);
+        cache->pad = layout.pad;
+        cache->scale = layout.scale;
+        cache->src_w = texture->width;
+        cache->src_h = texture->height;
+        cache->radius = -1.f;
+    }
+    if ( cache->radius != quantized ) {
+        cache->radius = quantized;
+        regenerate_blur_cache(texture, cache, &layout);
+    }
+
+    cache->last_used_frame = g_renderer->blur_engine.frame;
+    return cache;
 }
 
 static float resolve_background_border_radius(const Background_t *background, const Bounds_t *bounds) {
@@ -421,6 +689,10 @@ void render_init(void) {
         create_shader_program(buffer, incbin_default_vert_shader, incbin_noise_field_frag_shader, "noise_field");
     g_renderer->shaders.bg_upscale.id =
         create_shader_program(buffer, incbin_default_vert_shader, incbin_background_upscale_frag_shader, "bg_upscale");
+    g_renderer->shaders.blur.id =
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_blur_frag_shader, "blur");
+    g_renderer->shaders.blur_prepare.id =
+        create_shader_program(buffer, incbin_fullscreen_quad_vert_shader, incbin_blur_prepare_frag_shader, "blur_prepare");
     end_shader_compilation(buffer);
 
     // Get uniform locations for texture shader
@@ -436,11 +708,6 @@ void render_init(void) {
     g_renderer->shaders.tex.region_fade_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_region_fade");
     g_renderer->shaders.tex.num_erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_num_erase_regions");
     g_renderer->shaders.tex.erase_regions_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_erase_regions");
-    g_renderer->shaders.tex.blur_radius_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_blurRadius");
-    g_renderer->shaders.tex.fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fb_tex");
-    g_renderer->shaders.tex.use_fb_tex_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_useFbTex");
-    g_renderer->shaders.tex.fb_tex_origin_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fbTexOrigin");
-    g_renderer->shaders.tex.fb_tex_size_loc = glGetUniformLocation(g_renderer->shaders.tex.id, "u_fbTexSize");
 
     // Get uniform locations for rect shader
     g_renderer->shaders.rect.projection_loc = glGetUniformLocation(g_renderer->shaders.rect.id, "u_projection");
@@ -481,6 +748,27 @@ void render_init(void) {
     g_renderer->shaders.bg_upscale.projection_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_projection");
     g_renderer->shaders.bg_upscale.use_bounds_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_use_bounds");
     g_renderer->shaders.bg_upscale.bounds_loc = glGetUniformLocation(g_renderer->shaders.bg_upscale.id, "u_bounds");
+
+    // Get uniform locations for the separable blur pass
+    g_renderer->shaders.blur.tex_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_tex");
+    g_renderer->shaders.blur.uv_bounds_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_uvBounds");
+    g_renderer->shaders.blur.step_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_step");
+    g_renderer->shaders.blur.num_taps_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_numTaps");
+    g_renderer->shaders.blur.offsets_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_offsets");
+    g_renderer->shaders.blur.weights_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_weights");
+    g_renderer->shaders.blur.unpremultiply_loc = glGetUniformLocation(g_renderer->shaders.blur.id, "u_unpremultiply");
+
+    // Get uniform locations for the blur prepare pass
+    const BlurPrepareShaderData_t *prepare = &g_renderer->shaders.blur_prepare;
+    g_renderer->shaders.blur_prepare.tex_loc = glGetUniformLocation(prepare->id, "u_tex");
+    g_renderer->shaders.blur_prepare.scale_loc = glGetUniformLocation(prepare->id, "u_scale");
+    g_renderer->shaders.blur_prepare.src_origin_loc = glGetUniformLocation(prepare->id, "u_srcOrigin");
+    g_renderer->shaders.blur_prepare.src_dir_loc = glGetUniformLocation(prepare->id, "u_srcDir");
+    g_renderer->shaders.blur_prepare.src_radius_loc = glGetUniformLocation(prepare->id, "u_srcRadius");
+    g_renderer->shaders.blur_prepare.pad_transparent_loc = glGetUniformLocation(prepare->id, "u_padTransparent");
+
+    glGenFramebuffers(1, &g_renderer->blur_engine.fbo);
+    g_renderer->blur_engine.pass_quad = render_make_null();
 }
 
 void render_finish(void) {
@@ -501,14 +789,22 @@ void render_finish(void) {
     glDeleteProgram(g_renderer->shaders.image_blur.id);
     glDeleteProgram(g_renderer->shaders.noise_field.id);
     glDeleteProgram(g_renderer->shaders.bg_upscale.id);
+    glDeleteProgram(g_renderer->shaders.blur.id);
+    glDeleteProgram(g_renderer->shaders.blur_prepare.id);
+
+    while ( g_renderer->blur_engine.caches != NULL )
+        destroy_blur_cache(g_renderer->blur_engine.caches);
+    for ( int32_t i = 0; i < BLUR_SCRATCH_COUNT; i++ ) {
+        if ( g_renderer->blur_engine.scratch[i] != NULL )
+            render_destroy_texture(g_renderer->blur_engine.scratch[i]);
+    }
+    if ( g_renderer->blur_engine.pass_quad != NULL )
+        render_destroy_texture(g_renderer->blur_engine.pass_quad);
+    if ( g_renderer->blur_engine.fbo != 0 )
+        glDeleteFramebuffers(1, &g_renderer->blur_engine.fbo);
 
     // Destroy GL context (GLFW destroys context with window)
     glfwDestroyWindow(g_renderer->window);
-
-    if ( g_renderer->blur_data.fb_texture != NULL )
-        render_destroy_texture(g_renderer->blur_data.fb_texture);
-    if ( g_renderer->blur_data.fb_fbo != 0 )
-        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
 
     // Cleanup
     free(g_renderer);
@@ -531,15 +827,6 @@ void render_on_window_changed(void) {
     events_set_window_pixel_scale(g_renderer->window_pixel_scale);
 
     g_renderer->viewport = (Bounds_t){.x = 0, .y = 0, .w = (double)outW, .h = (double)outH};
-
-    if ( g_renderer->blur_data.fb_texture != NULL ) {
-        render_destroy_texture(g_renderer->blur_data.fb_texture);
-        g_renderer->blur_data.fb_texture = NULL;
-    }
-    if ( g_renderer->blur_data.fb_fbo != 0 ) {
-        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
-        g_renderer->blur_data.fb_fbo = 0;
-    }
 
     glViewport(0, 0, outW, outH);
     update_projection_matrix();
@@ -869,54 +1156,6 @@ static Texture_t *internal_create_gradient_background_texture(Background_t *back
     return texture;
 }
 
-#define BLUR_CTX_STACK_MAX 16
-static BlurData_t g_blur_ctx_stack[BLUR_CTX_STACK_MAX];
-static int g_blur_ctx_depth = 0;
-
-void render_push_blur_ctx(const Bounds_t *container_bounds) {
-    assert(g_blur_ctx_depth < BLUR_CTX_STACK_MAX);
-    g_blur_ctx_stack[g_blur_ctx_depth++] = g_renderer->blur_data;
-    g_renderer->blur_data = (BlurData_t){.container_bounds = *container_bounds, .in_ctx = true};
-}
-
-void render_pop_blur_ctx(void) {
-    if ( g_renderer->blur_data.fb_texture != NULL ) {
-        render_destroy_texture(g_renderer->blur_data.fb_texture);
-    }
-    if ( g_renderer->blur_data.fb_fbo != 0 ) {
-        glDeleteFramebuffers(1, &g_renderer->blur_data.fb_fbo);
-    }
-    g_renderer->blur_data = g_blur_ctx_stack[--g_blur_ctx_depth];
-}
-
-static void ensure_fb_snapshot(void) {
-    if ( !g_renderer->blur_data.in_ctx )
-        return;
-    if ( g_renderer->blur_data.fb_texture != NULL )
-        return;
-
-    const Bounds_t b = g_renderer->blur_data.container_bounds;
-    const int32_t cw = (int32_t)b.w;
-    const int32_t ch = (int32_t)b.h;
-    const int32_t cx = (int32_t)b.x;
-    const int32_t fb_y = (int32_t)g_renderer->viewport.h - (int32_t)b.y - ch;
-
-    g_renderer->blur_data.fb_texture = render_make_empty(cw, ch);
-
-    glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cx, fb_y, cw, ch);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    // Create an FBO backed by the snapshot texture so we can stamp blurred drawables into it
-    // as they are drawn. This keeps the snapshot current, so each subsequent drawable that
-    // samples from it sees the already-composited result of all previous drawables rather than
-    // just the raw pre-container background.
-    glGenFramebuffers(1, &g_renderer->blur_data.fb_fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_data.fb_fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
 void render_clear(void) {
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -945,8 +1184,136 @@ void render_destroy_background(Background_t *background) {
             render_destroy_render_target(background->low_res_target);
         if ( background->noise_target != NULL )
             render_destroy_render_target(background->noise_target);
+        if ( background->backdrop_capture != NULL )
+            render_destroy_texture(background->backdrop_capture);
+        if ( background->backdrop_result != NULL )
+            render_destroy_texture(background->backdrop_result);
         free(background);
     }
+}
+
+static void draw_backdrop_blur(Background_t *background, const Bounds_t *bounds, const float border_radius) {
+    if ( g_renderer->render_target != NULL )
+        return;
+
+    const float sigma = (float)(MIN(bounds->w, bounds->h) * BACKDROP_SIGMA_FRACTION);
+    if ( sigma <= 0.f )
+        return;
+
+    const int32_t margin = (int32_t)ceilf(BACKDROP_EDGE_SIGMAS * sigma);
+    const double vw = g_renderer->viewport.w, vh = g_renderer->viewport.h;
+    Bounds_t capture = {.x = MAX(0.0, floor(bounds->x) - margin), .y = MAX(0.0, floor(bounds->y) - margin)};
+    capture.w = MIN(vw, ceil(bounds->x + bounds->w) + margin) - capture.x;
+    capture.h = MIN(vh, ceil(bounds->y + bounds->h) + margin) - capture.y;
+    if ( capture.w <= 0 || capture.h <= 0 )
+        return;
+
+    const int32_t cap_w = (int32_t)capture.w, cap_h = (int32_t)capture.h;
+    const int32_t low_w = (cap_w + BACKDROP_SCALE - 1) / BACKDROP_SCALE;
+    const int32_t low_h = (cap_h + BACKDROP_SCALE - 1) / BACKDROP_SCALE;
+    const int32_t out_w = MAX(1, ((int32_t)bounds->w + BACKDROP_SCALE - 1) / BACKDROP_SCALE);
+    const int32_t out_h = MAX(1, ((int32_t)bounds->h + BACKDROP_SCALE - 1) / BACKDROP_SCALE);
+
+    bool stale = false;
+    if ( background->backdrop_capture == NULL || background->backdrop_capture->width != cap_w ||
+         background->backdrop_capture->height != cap_h ) {
+        if ( background->backdrop_capture != NULL )
+            render_destroy_texture(background->backdrop_capture);
+        background->backdrop_capture = render_make_empty(cap_w, cap_h);
+        stale = true;
+    }
+    if ( background->backdrop_result == NULL || background->backdrop_result->width != out_w ||
+         background->backdrop_result->height != out_h ) {
+        if ( background->backdrop_result != NULL )
+            render_destroy_texture(background->backdrop_result);
+        background->backdrop_result = render_make_empty(out_w, out_h);
+        stale = true;
+    }
+
+    const double elapsed = events_get_elapsed_time();
+    stale = stale || background->backdrop_bounds.x != bounds->x || background->backdrop_bounds.y != bounds->y ||
+            elapsed - background->backdrop_refreshed_at >= BACKDROP_REFRESH_SECONDS ||
+            elapsed < background->backdrop_refreshed_at;
+
+    if ( stale ) {
+        const BlendMode_t saved_blend = g_renderer->blend_mode;
+        render_set_blend_mode(BLEND_MODE_NONE);
+
+        const int32_t fb_y = (int32_t)vh - (int32_t)capture.y - cap_h;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, background->backdrop_capture->id);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (int32_t)capture.x, fb_y, cap_w, cap_h);
+
+        const Texture_t *reduced = ensure_blur_scratch(0, low_w, low_h);
+        const BlurPrepareOpts_t prepare = {
+            .scale = BACKDROP_SCALE,
+            .origin_x = 0,
+            .origin_y = cap_h - 1,
+            .dir_x = 1,
+            .dir_y = -1,
+            .pad_transparent = false,
+        };
+        run_blur_prepare_pass(background->backdrop_capture, reduced, low_w, low_h, &prepare);
+
+        BlurKernel_t kernel;
+        build_blur_kernel(sigma / (float)BACKDROP_SCALE, &kernel);
+
+        const Texture_t *scratch = ensure_blur_scratch(1, low_w, low_h);
+        const BlurPassOpts_t horizontal = {
+            .u1 = (float)low_w / (float)reduced->width,
+            .v1 = (float)low_h / (float)reduced->height,
+            .src_used_w = low_w,
+            .src_used_h = low_h,
+            .step_x = 1.f / (float)reduced->width,
+        };
+        run_blur_pass(reduced, scratch, low_w, low_h, &kernel, &horizontal);
+
+        const float off_u = (float)(bounds->x - capture.x) / BACKDROP_SCALE / (float)scratch->width;
+        const float off_v = (float)(bounds->y - capture.y) / BACKDROP_SCALE / (float)scratch->height;
+        const BlurPassOpts_t vertical = {
+            .u0 = off_u,
+            .v0 = off_v,
+            .u1 = off_u + (float)out_w / (float)scratch->width,
+            .v1 = off_v + (float)out_h / (float)scratch->height,
+            .src_used_w = low_w,
+            .src_used_h = low_h,
+            .step_y = 1.f / (float)scratch->height,
+        };
+        run_blur_pass(scratch, background->backdrop_result, out_w, out_h, &kernel, &vertical);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        restore_render_target_binding();
+        render_set_blend_mode(saved_blend);
+
+        background->backdrop_bounds = *bounds;
+        background->backdrop_refreshed_at = elapsed;
+    }
+
+    const BackgroundUpscaleShaderData_t *upscale = &g_renderer->shaders.bg_upscale;
+    set_shader_program(upscale->id);
+    glUniformMatrix4fv(upscale->projection_loc, 1, GL_FALSE, get_projection_matrix());
+    glUniform1i(upscale->use_bounds_loc, 1);
+    glUniform4f(upscale->bounds_loc, (float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h);
+    glUniform1f(upscale->border_radius_loc, border_radius);
+    glUniform2f(upscale->rect_size_loc, (float)bounds->w, (float)bounds->h);
+    glUniform1f(upscale->grain_offset_loc, 71.f * (float)(elapsed * 0.37 - floor(elapsed * 0.37)));
+    glUniform1i(upscale->texture_loc, 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, background->backdrop_result->id);
+
+    const Texture_t *quad = g_renderer->blur_engine.pass_quad;
+    glBindVertexArray(quad->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, quad->vbo);
+
+    float vertices[QUAD_VERTICES_SIZE] = {0};
+    create_quad_vertices((float)bounds->x, (float)bounds->y, (float)bounds->w, (float)bounds->h, vertices);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {
@@ -962,9 +1329,7 @@ static void draw_gradient_bg(Background_t *background, const Bounds_t *bounds) {
     const BlendMode_t blend_mode = render_get_blend_mode();
     render_set_blend_mode(BLEND_MODE_BLEND);
     if ( background->blur ) {
-        ensure_fb_snapshot();
-        const float blur_radius = (float)(bounds->w + bounds->h) / 2 * 0.0025f;
-        draw_blurred_bg_at(bounds, blur_radius);
+        draw_backdrop_blur(background, bounds, resolve_background_border_radius(background, bounds));
     }
     static const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
     render_draw_texture(background->null_tex, bounds, &opts);
@@ -999,7 +1364,10 @@ void render_draw_background(Background_t *background, const Bounds_t *at) {
     }
 }
 
-void render_present(void) { glfwSwapBuffers(g_renderer->window); }
+void render_present(void) {
+    expire_blur_caches();
+    glfwSwapBuffers(g_renderer->window);
+}
 
 const Bounds_t *render_get_viewport(void) { return &g_renderer->viewport; }
 
@@ -1113,6 +1481,8 @@ static float *get_projection_matrix(void) {
 }
 
 void render_destroy_texture(Texture_t *texture) {
+    if ( texture->blur_cache != NULL )
+        destroy_blur_cache(texture->blur_cache);
     if ( texture->id != 0 )
         glDeleteTextures(1, &texture->id);
     if ( texture->vao != 0 )
@@ -1627,32 +1997,6 @@ void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds,
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-static void stamp_into_fb_texture(void) {
-    const Bounds_t c = g_renderer->blur_data.container_bounds;
-
-    float fb_proj[PROJECTION_MATRIX_SIZE];
-    create_orthographic_matrix((float)c.x, (float)(c.x + c.w), (float)(c.y + c.h), (float)c.y, fb_proj);
-
-    // Unbind texture 1 in case it's bound to something because writing to and reading from
-    // the same texture in webgl is undefined behavior.
-    // and in the cases I tested specifically, even though the texture isn't being read from in this case,
-    // causes visual artifacts
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_data.fb_fbo);
-    glViewport(0, 0, (GLsizei)c.w, (GLsizei)c.h);
-    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, fb_proj);
-    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, 0);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, (GLsizei)g_renderer->viewport.w, (GLsizei)g_renderer->viewport.h);
-    glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, get_projection_matrix());
-}
-
 void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts) {
     if ( texture == NULL || texture->id == 0 ) {
         error_abort("Warning: Attempting to draw invalid texture\n");
@@ -1674,6 +2018,30 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         return;
     }
 
+    Texture_t *draw_tex = texture;
+    float quad_x = (float)x, quad_y = (float)y, quad_w = w, quad_h = h;
+    float border_radius = texture->border_radius;
+
+    float region_scale_x = 1.f, region_scale_y = 1.f, region_bias_x = 0.f, region_bias_y = 0.f;
+
+    if ( opts->blur_radius > BLUR_MIN_RADIUS && texture->width > 0 && texture->height > 0 ) {
+        const BlurCache_t *cache = ensure_blur_cache(texture, opts->blur_radius);
+        const float stretch_x = w / (float)texture->width, stretch_y = h / (float)texture->height;
+        const float covered_w = (float)(cache->texture->width * cache->scale);
+        const float covered_h = (float)(cache->texture->height * cache->scale);
+
+        draw_tex = cache->texture;
+        border_radius = 0.f;
+        quad_x = (float)x - (float)cache->pad * stretch_x;
+        quad_y = (float)y - (float)cache->pad * stretch_y;
+        quad_w = covered_w * stretch_x;
+        quad_h = covered_h * stretch_y;
+        region_scale_x = (float)texture->width / covered_w;
+        region_scale_y = (float)texture->height / covered_h;
+        region_bias_x = (float)cache->pad / covered_w;
+        region_bias_y = (float)cache->pad / covered_h;
+    }
+
     const float *projection = get_projection_matrix();
 
     set_shader_program(g_renderer->shaders.tex.id);
@@ -1688,19 +2056,16 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     const float fade_width = (float)render_measure_pixels_from_em(REVEAL_FADE_EM);
     for ( int i = 0; i < num_draw_regions; i++ ) {
         const DrawRegionOpt_t *region = &opts->draw_regions->regions[i];
-        regions[i][0] = region->x0_perc;
-        regions[i][1] = region->y0_perc;
-        regions[i][2] = region->x1_perc;
-        regions[i][3] = region->y1_perc;
-        // The anchor may lie beyond this region's own x1 for scaled segment redraws that sit
-        // just behind the edge, keeping the ramp continuous across draw calls. The ramp is
-        // truncated so it never reaches behind the animation start nor past its target,
-        // growing from and shrinking back to zero width at the segment boundaries.
+        regions[i][0] = region->x0_perc * region_scale_x + region_bias_x;
+        regions[i][1] = region->y0_perc * region_scale_y + region_bias_y;
+        regions[i][2] = region->x1_perc * region_scale_x + region_bias_x;
+        regions[i][3] = region->y1_perc * region_scale_y + region_bias_y;
+
         const float anchor = region->fade_anchor_perc > 0.f ? region->fade_anchor_perc : region->x1_perc;
         const float travelled = (anchor - region->anim_x1_from_perc) * w;
         const float remaining = (region->anim_x1_to_perc - anchor) * w;
         region_fades[i][0] = MAX(0.f, MIN(fade_width, MIN(travelled, remaining)));
-        region_fades[i][1] = anchor;
+        region_fades[i][1] = anchor * region_scale_x + region_bias_x;
     }
 
     int num_erase_regions = 0;
@@ -1712,22 +2077,21 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     float erase_regions[MAX_SCALE_SUB_REGIONS][4] = {0};
     for ( int i = 0; i < num_erase_regions; i++ ) {
         const ScaleRegionOpt_t *region = &opts->scale_regions->regions[i];
-        erase_regions[i][0] = region->x0_perc;
-        erase_regions[i][1] = region->y0_perc;
-        erase_regions[i][2] = region->x1_perc;
-        erase_regions[i][3] = region->y1_perc;
+        erase_regions[i][0] = region->x0_perc * region_scale_x + region_bias_x;
+        erase_regions[i][1] = region->y0_perc * region_scale_y + region_bias_y;
+        erase_regions[i][2] = region->x1_perc * region_scale_x + region_bias_x;
+        erase_regions[i][3] = region->y1_perc * region_scale_y + region_bias_y;
     }
 
     // auto border radius using half of the smaller axis
-    float border_radius = texture->border_radius;
     if ( border_radius < 0.f ) {
-        border_radius = MIN(w, h) * 0.5f;
+        border_radius = MIN(quad_w, quad_h) * 0.5f;
     }
     glUniform1f(g_renderer->shaders.tex.border_radius_loc, border_radius);
     glUniform1f(g_renderer->shaders.tex.alpha_loc, (float)opts->alpha_mod / 255.0f);
-    glUniform2f(g_renderer->shaders.tex.rect_size_loc, w, h);
+    glUniform2f(g_renderer->shaders.tex.rect_size_loc, quad_w, quad_h);
     glUniform1i(g_renderer->shaders.tex.use_bounds_loc, 1);
-    glUniform4f(g_renderer->shaders.tex.bounds_loc, (float)x, (float)y, w, h);
+    glUniform4f(g_renderer->shaders.tex.bounds_loc, quad_x, quad_y, quad_w, quad_h);
     glUniformMatrix4fv(g_renderer->shaders.tex.projection_loc, 1, GL_FALSE, projection);
     glUniform1f(g_renderer->shaders.tex.color_mod_loc, opts->color_mod);
     glUniform1i(g_renderer->shaders.tex.num_regions_loc, num_draw_regions);
@@ -1740,51 +2104,20 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         glUniform4fv(g_renderer->shaders.tex.erase_regions_loc, MAX_SCALE_SUB_REGIONS, &erase_regions[0][0]);
     }
 
-    const float blur_radius = opts->blur_radius;
-    glUniform1f(g_renderer->shaders.tex.blur_radius_loc, blur_radius);
-    const bool use_fb_tex = blur_radius > 0.f && opts->blur_with_bg;
-    glUniform1i(g_renderer->shaders.tex.use_fb_tex_loc, use_fb_tex);
-    if ( use_fb_tex ) {
-        ensure_fb_snapshot();
-        if ( g_renderer->blur_data.fb_texture != NULL ) {
-            const Bounds_t b = g_renderer->blur_data.container_bounds;
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, g_renderer->blur_data.fb_texture->id);
-            glUniform1i(g_renderer->shaders.tex.fb_tex_loc, 1);
-            glUniform2f(g_renderer->shaders.tex.fb_tex_origin_loc, (float)b.x,
-                        (float)g_renderer->viewport.h - (float)b.y - (float)b.h);
-            glUniform2f(g_renderer->shaders.tex.fb_tex_size_loc, (float)b.w, (float)b.h);
-            glActiveTexture(GL_TEXTURE0);
-        }
-    }
+    glBindTexture(GL_TEXTURE_2D, draw_tex->id);
 
-    glBindTexture(GL_TEXTURE_2D, texture->id);
+    glBindVertexArray(draw_tex->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, draw_tex->vbo);
 
-    glBindVertexArray(texture->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, texture->vbo);
-
-    // Pad the texture when blur is active so we get a smoother fade at the edges
-    const float blur_pad = (blur_radius > 0.f && border_radius == 0.f) ? blur_radius * 4.0f : 0.f;
-    const Bounds_t final_bounds = {
-        .x = x - blur_pad, .y = y - blur_pad, .w = (int32_t)(w + 2.f * blur_pad), .h = (int32_t)(h + 2.f * blur_pad)};
-    if ( texture_needs_reconfigure(texture, &final_bounds) ) {
+    const Bounds_t final_bounds = {.x = quad_x, .y = quad_y, .w = (int32_t)quad_w, .h = (int32_t)quad_h};
+    if ( texture_needs_reconfigure(draw_tex, &final_bounds) ) {
         float vertices[QUAD_VERTICES_SIZE] = {0};
-        if ( blur_pad > 0.f ) {
-            create_quad_vertices_with_uv((float)(x - blur_pad), (float)(y - blur_pad), w + 2.f * blur_pad, h + 2.f * blur_pad,
-                                         -blur_pad / w, -blur_pad / h, 1.f + blur_pad / w, 1.f + blur_pad / h, vertices);
-        } else {
-            create_quad_vertices((float)x, (float)y, w, h, vertices);
-        }
+        create_quad_vertices(quad_x, quad_y, quad_w, quad_h, vertices);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
-        mark_texture_configured(texture, &final_bounds);
+        mark_texture_configured(draw_tex, &final_bounds);
     }
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // Stamp into the blur context's fb_texture so the snapshot stays current
-    if ( g_renderer->render_target == NULL && g_renderer->blur_data.fb_fbo != 0 && (blur_radius > 0.f || opts->blur_with_bg) ) {
-        stamp_into_fb_texture();
-    }
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1817,10 +2150,6 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
         scaled_region_opt->y0_perc = region->y0_perc;
         scaled_region_opt->y1_perc = region->y1_perc;
 
-        // Clamp the scaled segment to the revealed portion of its draw region. The fade
-        // state is inherited from the owning row regardless of clamping: the ramp is
-        // anchored at the row's reveal edge, so a segment that finished just behind the
-        // still moving edge keeps its share of the ramp instead of snapping to opaque.
         for ( int dr = 0; dr < num_draw_regions; dr++ ) {
             const DrawRegionOpt_t *draw_region = &opts->draw_regions->regions[dr];
             if ( draw_region->y0_perc <= scaled_region_opt->y0_perc && draw_region->y1_perc >= scaled_region_opt->y1_perc ) {
@@ -1845,13 +2174,16 @@ void render_destroy_shadow(Shadow_t *shadow) {
 }
 
 Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, const int32_t offset) {
-    const int32_t padding = offset / 2; // Leave some pixels for the blur
-    const int32_t width = (int32_t)src_bounds->w + offset + padding, height = (int32_t)src_bounds->h + offset + padding;
+    const float blur_radius = (float)offset / 2.f;
+
+    const int32_t pad = blur_radius > BLUR_MIN_RADIUS ? blur_layout_for(0, 0, blur_radius).pad : 0;
+    const int32_t width = (int32_t)src_bounds->w + offset + 2 * pad;
+    const int32_t height = (int32_t)src_bounds->h + offset + 2 * pad;
 
     RenderTarget_t *render_target = render_make_render_target(width, height);
     render_target_bind(render_target);
 
-    Bounds_t bounds = {.x = offset, .y = offset, .w = src_bounds->w, .h = src_bounds->h};
+    Bounds_t bounds = {.x = pad + offset, .y = pad + offset, .w = src_bounds->w, .h = src_bounds->h};
     DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 0.f};
     render_draw_texture(texture, &bounds, &opts);
     // Erase the original texture
@@ -1859,7 +2191,7 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     render_set_blend_mode(BLEND_MODE_ERASE);
 
     opts.color_mod = 1.f;
-    bounds.x = bounds.y = 0;
+    bounds.x = bounds.y = pad;
     render_draw_texture(texture, &bounds, &opts);
 
     render_set_blend_mode(saved_blend);
@@ -1867,22 +2199,20 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     render_target_unbind(render_target);
     Texture_t *result = render_target_detach_texture(render_target);
 
-    result->border_radius = texture->border_radius;
-
-    const float blur_r = (float)offset / 2.f;
-    if ( blur_r > 0.f ) {
+    if ( blur_radius > BLUR_MIN_RADIUS ) {
         // Recreate texture on the render target
         render_target_ensure_configured(render_target, width, height);
         render_target_bind(render_target);
+        render_set_blend_mode(BLEND_MODE_NONE);
 
         const Bounds_t blur_bounds = {.x = 0, .y = 0, .w = width, .h = height};
-        const DrawTextureOpts_t blur_opts = {.alpha_mod = 255, .color_mod = 1.f, .blur_radius = blur_r};
+        const DrawTextureOpts_t blur_opts = {.alpha_mod = 255, .color_mod = 1.f, .blur_radius = blur_radius};
         render_draw_texture(result, &blur_bounds, &blur_opts);
         render_destroy_texture(result);
 
+        render_set_blend_mode(saved_blend);
         render_target_unbind(render_target);
         result = render_target_detach_texture(render_target);
-        result->border_radius = texture->border_radius;
     }
 
     render_destroy_render_target(render_target);
@@ -1890,7 +2220,7 @@ Shadow_t *render_make_shadow(Texture_t *texture, const Bounds_t *src_bounds, con
     Shadow_t *shadow = calloc(1, sizeof(*shadow));
     shadow->offset = offset;
     shadow->texture = result;
-    shadow->bounds = (Bounds_t){.w = width, .h = height};
+    shadow->bounds = (Bounds_t){.x = -pad, .y = -pad, .w = width, .h = height};
 
     return shadow;
 }

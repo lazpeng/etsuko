@@ -15,6 +15,8 @@
 #define MAX_SCALE_SUB_REGIONS (64)
 #define BORDER_RADIUS_AUTO (-1.f)
 
+struct BlurCache_t;
+
 /**
  * Represents a texture uploaded to the GPU using OpenGL, with some cached information about it
  */
@@ -31,6 +33,9 @@ typedef struct Texture_t {
     int32_t buf_x, buf_y, buf_w, buf_h;
     // Padding on the left of the texture. Automatically removed from the given coordinates during draw
     int32_t left_bearing_offset;
+    // Blurred copy of this texture, built on demand by a blurred draw and kept between frames.
+    // Private to the renderer, which also drops it once nothing has drawn it for a while.
+    OWNING MAYBE_NULL struct BlurCache_t *blur_cache;
 } Texture_t;
 
 typedef struct RenderTarget_t {
@@ -84,7 +89,9 @@ typedef struct Bounds_t {
 typedef struct Shadow_t {
     // Texture of the shadow itself
     OWNING Texture_t *texture;
-    // Bounds of the generated texture. It's likely larger than the texture itself
+    // Bounds of the generated texture, relative to the top left of the texture it was made from.
+    // x and y are negative by however much room the blur needed around it, so the caller adds them
+    // to the parent's position rather than treating this as dimensions only.
     Bounds_t bounds;
     // Offset relative to the parent texture. Must be applied manually before rendering the shadow.
     // Applies to both the x and y axis at the same time.
@@ -210,10 +217,10 @@ typedef struct DrawTextureOpts_t {
     WEAK const ScaleRegionOptSet_t *scale_regions;
     // Center the final texture if any scale modifications are applied
     bool center_on_scale;
-    // Blur radius in pixels. 0 means no blur.
+    // Blur strength. 0 means no blur. it scales the gaussian sigma the blur is built from.
+    // Blurred textures replace the original texture during drawing and they are cached by a fixed amount of time, only
+    // being rebuilt when the TTL ends or this value changes, so animating the blur value is relatively expensive
     float blur_radius;
-    // Blur texture together with a sampled portion of the default framebuffer at the location being drawn, if blur_radius is > 0
-    bool blur_with_bg;
 } DrawTextureOpts_t;
 
 /**
@@ -228,6 +235,14 @@ typedef struct Background_t {
     double border_radius_em;
     OWNING MAYBE_NULL RenderTarget_t *gradient_target;
     bool blur;
+    // Untouched copy of the area the backdrop is frosted from
+    OWNING MAYBE_NULL Texture_t *backdrop_capture;
+    // The finished blurred backdrop, at a fraction of the size it gets drawn at
+    OWNING MAYBE_NULL Texture_t *backdrop_result;
+    // Bounds the current backdrop was built for
+    Bounds_t backdrop_bounds;
+    // When the backdrop was built at
+    double backdrop_refreshed_at;
     OWNING MAYBE_NULL Texture_t *image_tex;
     OWNING MAYBE_NULL Texture_t *image_prev_tex;
     // Value between 0 and 1 to interpolate between the two (prev and current) background images
@@ -449,15 +464,4 @@ void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds,
  * texture uploaded to GPU memory.
  */
 void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextureOpts_t *opts);
-/**
- * Begins a container-scoped blur context. Must be called before drawing a container's children when blur effects may be present.
- * The first draw with blur_with_bg inside this context will lazily capture a snapshot of the framebuffer at the container bounds.
- * Contexts stack: nested containers each push their own context.
- */
-void render_push_blur_ctx(const Bounds_t *container_bounds);
-/**
- * Ends the current container blur context, freeing any snapshot that was taken. Restores the previous context.
- */
-void render_pop_blur_ctx(void);
-
 #endif // ETSUKO_RENDERER_H

@@ -43,6 +43,14 @@ static const char incbin_background_upscale_frag_shader[] = {
 #embed "shaders/background upscale.frag.glsl"
     ,'\0'
 };
+static const char incbin_blur_frag_shader[] = {
+#embed "shaders/blur.frag.glsl"
+    ,'\0'
+};
+static const char incbin_blur_prepare_frag_shader[] = {
+#embed "shaders/blur prepare.frag.glsl"
+    ,'\0'
+};
 
 #endif
 
