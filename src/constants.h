@@ -10,7 +10,6 @@
 
 #define VERSION "0.7.3a"
 #define APP_NAME "etsuko"
-#define DEFAULT_TITLE APP_NAME " - Karaoke v" VERSION
 
 /**
  * This annotates, very poorly, that the struct owns the following pointer and is responsible for freeing it

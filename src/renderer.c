@@ -645,7 +645,7 @@ void render_init(void) {
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 
-    g_renderer->window = glfwCreateWindow(width, height, DEFAULT_TITLE, NULL, NULL);
+    g_renderer->window = glfwCreateWindow(width, height, "etsuko", NULL, NULL);
     if ( g_renderer->window == NULL ) {
         error_abort("Failed to create window");
     }
