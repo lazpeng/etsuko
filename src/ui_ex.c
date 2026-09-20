@@ -207,12 +207,15 @@ static void fade_hint_for_line(const LyricsView_t *view, const int32_t index) {
     }
 }
 
-static void blur_hint_for_line(const LyricsView_t *view, const int32_t index) {
+static void blur_hint_for_line(const LyricsView_t *view, const int32_t index, const bool immediate) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     if ( widget->reading_hint != NULL ) {
         const Drawable_t *drawable = widget->line;
         Drawable_t *hint = widget->reading_hint;
-        hint->blur_radius = drawable->blur_radius;
+        if ( immediate )
+            ui_drawable_set_blur_radius_immediate(hint, drawable->blur_radius);
+        else
+            ui_drawable_set_blur_radius(hint, drawable->blur_radius);
     }
 }
 
@@ -692,10 +695,11 @@ static int32_t calculate_distance(const LyricsView_t *view, const int32_t index,
     return MAX(1, distance);
 }
 
-static void calculate_sub_region_for_active_line(const LyricsView_t *view, LyricLineWidget_t *widget, const Song_t *song,
-                                                 const Song_Line_t *line, const bool lyric_settings_changed) {
+static void calculate_sub_region_for_active_line(const LyricsView_t *view, LyricLineWidget_t *widget) {
     // A slight variation that highlights the entire portion of the segment
     // Mainly intended when the timing is done per-syllable
+    const Song_t *song = view->song;
+    const Song_Line_t *line = view->selected_language->song_language->lines->data[widget->index];
     Drawable_t *drawable = widget->line;
     const Drawable_TextData_t *text_data = drawable->custom_data;
 
@@ -711,6 +715,10 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
     const double settings_time_offset = settings_get()->global_audio_offset_ms / 1000.0;
     const double audio_elapsed = audio_elapsed_time() + song->time_offset + settings_time_offset;
     int32_t timing_offset_start = 0;
+
+    const bool lyric_effect_changed = view->saved_lyric_effect_setting != settings_get()->lyric_effect;
+    const bool lyric_fill_changed = view->saved_lyric_fill_setting != settings_get()->lyric_fill;
+    const bool lyric_settings_changed = lyric_effect_changed || lyric_fill_changed;
 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
     for ( int32_t s = 0; s < line->num_timings; s++ ) {
@@ -858,7 +866,7 @@ static void set_line_active(const LyricsView_t *view, const int32_t index, Lyric
     ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
     scale_hint_for_line(view, index);
     fade_hint_for_line(view, index);
-    blur_hint_for_line(view, index);
+    blur_hint_for_line(view, index, true);
 
     const Song_Line_t *line = view->selected_language->song_language->lines->data[index];
 
@@ -890,9 +898,9 @@ static void set_line_active(const LyricsView_t *view, const int32_t index, Lyric
         ui_clear_sticky_animations(drawable);
 
     const bool fill_enabled_in_settings = settings_get()->lyric_fill != SET_LYRIC_FILL_DISABLED;
-    if ( view->selected_language->song_language->has_sub_timings && line->num_timings > 0 && fill_enabled_in_settings ) {
-        const bool settings_changed = lyric_effect_changed || lyric_fill_changed;
-        calculate_sub_region_for_active_line(view, widget, view->song, line, settings_changed);
+    const bool has_timings = view->selected_language->song_language->has_sub_timings && line->num_timings > 0;
+    if ( has_timings && fill_enabled_in_settings ) {
+        calculate_sub_region_for_active_line(view, widget);
     }
 }
 
@@ -925,7 +933,7 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
     if ( view->current_hovered_index == index ) {
         ui_drawable_set_alpha(drawable, calculate_alpha(0));
         ui_drawable_set_blur_radius_immediate(drawable, 0.f);
-        blur_hint_for_line(view, index);
+        blur_hint_for_line(view, index, true);
     } else {
         if ( alpha != drawable->alpha_mod ) {
             ui_drawable_set_alpha(drawable, alpha);
@@ -933,7 +941,7 @@ static void set_line_inactive(const LyricsView_t *view, const int32_t index, Lyr
         }
         if ( blur != drawable->blur_radius ) {
             ui_drawable_set_blur_radius(drawable, blur);
-            blur_hint_for_line(view, index);
+            blur_hint_for_line(view, index, false);
         }
     }
 
@@ -999,7 +1007,8 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
             distance = calculate_distance(view, index, reference_index);
         }
         // Don't change the alpha if the user is hovering over the line
-        if ( view->current_hovered_index == index ) {
+        const bool hovered = view->current_hovered_index == index;
+        if ( hovered ) {
             ui_drawable_set_alpha(drawable, calculate_alpha(0));
             ui_drawable_set_blur_radius_immediate(drawable, 0.f);
         } else {
@@ -1007,7 +1016,7 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
             ui_drawable_set_blur_radius(drawable, calculate_blur(distance));
         }
         fade_hint_for_line(view, index);
-        blur_hint_for_line(view, index);
+        blur_hint_for_line(view, index, hovered);
     }
 
     return widget;
