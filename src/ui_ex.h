@@ -38,7 +38,6 @@ typedef struct LyricsLanguage_t {
     OWNING const char *language_str;
     WEAK Song_Language_t *song_language;
     OWNING Vector_t *lyric_widgets; // of LyricLineWidget_t*
-    int32_t current_active_index;
     int32_t current_first_active_index;
     WEAK Drawable_t *credit_separator, *credits_prefix, *credits_content;
     WEAK Drawable_t *lyric_anchor;

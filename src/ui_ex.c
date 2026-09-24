@@ -987,7 +987,7 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
         fade_hint_for_line(view, index);
     } else {
         int32_t distance;
-        const bool is_intermission = is_line_intermission(view, view->selected_language->current_active_index);
+        const bool is_intermission = is_line_intermission(view, reference_index);
         if ( reference_index < 0 || is_intermission ) {
             distance = LINE_FADE_MAX_DISTANCE;
         } else {
@@ -1084,10 +1084,6 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
 
     view->user_did_seek = fabs(elapsed_time - view->prev_elapsed) > 1.0;
 
-    if ( view->language_changed ) {
-        view->selected_language->current_active_index = -1;
-    }
-
     for ( int32_t i = 0; i < num_lines; i++ ) {
         const Song_Line_t *line = view->selected_language->song_language->lines->data[i];
         if ( elapsed_time < line->base_start_time + line->base_duration ) {
@@ -1124,7 +1120,6 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     view->saved_lyric_effect_setting = settings_get()->lyric_effect;
     view->saved_lyric_fill_setting = settings_get()->lyric_fill;
 
-    view->selected_language->current_active_index = state.current_active;
     view->prev_elapsed = elapsed_time;
 }
 
