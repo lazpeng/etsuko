@@ -276,7 +276,7 @@ int32_t str_buf_append_line(StrBuffer_t *buf, const char *src, const size_t len,
         }
         if ( c == '\r' ) {
             // If the next character is a unix newline, consume it in the string but stop at the \r
-            if ( bytes < (int32_t)len - 1 ) {
+            if ( bytes < (int32_t)len ) {
                 int32_t temp_bytes = bytes;
                 const int32_t temp_c = str_u8_next(src, len, &temp_bytes);
                 if ( temp_c == '\n' ) {
