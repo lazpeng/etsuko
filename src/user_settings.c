@@ -408,8 +408,8 @@ static Container_t *create_container(const Ui_t *ui) {
     };
     Container_t *container = ui_make_container(ui, ui_root_container(ui), &layout, CONTAINER_NONE);
 
-    const Color_t bg_color = {.r = 30, .g = 30, .b = 30, .a = 240};
-    const Color_t bg_color_secondary = {.r = 30, .g = 30, .b = 30, .a = 150};
+    const Color_t bg_color = {.r = 50, .g = 50, .b = 50, .a = 140};
+    const Color_t bg_color_secondary = {.r = 50, .g = 50, .b = 50, .a = 50};
     ui_container_set_background_colors(container, bg_color, bg_color_secondary);
     container->background->type = BACKGROUND_GRADIENT;
     container->background->border_radius_em = 2.0;
@@ -425,14 +425,14 @@ static void create_exit_button(Ui_t *ui) {
         .offset_y = 0.02,
         .absolute = true,
     };
-    ButtonWidget_t *close_btn = ui_build_button_widget(ui, g_modal->container, &close_layout,
-                                                       &(ButtonWidgetOpts_t){
-                                                           .content_type = BUTTON_CONTENT_IMAGE,
-                                                           .image_bytes = incbin_close_img,
-                                                           .image_length = sizeof incbin_close_img,
-                                                           .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
-                                                           .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
-                                                       });
+    const ButtonWidgetOpts_t btn_opts = {
+        .content_type = BUTTON_CONTENT_IMAGE,
+        .image_bytes = incbin_close_img,
+        .image_length = sizeof incbin_close_img,
+        .bg_show_type = BUTTON_BG_SHOW_ON_HOVER,
+        .bg_color = {.r = 100, .g = 100, .b = 100, .a = 100},
+    };
+    ButtonWidget_t *close_btn = ui_build_button_widget(ui, g_modal->container, &close_layout, &btn_opts);
     close_btn->on_click_callback = on_close_settings;
 }
 
