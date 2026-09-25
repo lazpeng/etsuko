@@ -119,6 +119,18 @@ static Song_Line_t *make_line(void) {
     return line;
 }
 
+static void free_line(Song_Line_t *line) {
+    if ( line->readings != NULL ) {
+        for ( size_t i = 0; i < line->readings->size; i++ ) {
+            Song_LineReading_t *reading = line->readings->data[i];
+            free(reading->reading_text);
+            free(reading);
+        }
+    }
+    free(line->full_text);
+    free(line);
+}
+
 static void read_lyrics(const Song_Language_t *lang, const char *buffer, const size_t index) {
     Song_Line_t *line;
     if ( index < lang->lines->size ) {
@@ -140,6 +152,9 @@ static void read_lyrics(const Song_Language_t *lang, const char *buffer, const s
 
 static double convert_timing(const char *str, const size_t len) {
     const char *colon = strchr(str, ':');
+    if ( colon == NULL ) {
+        error_abort("%s: \"%.*s\" is not a valid timing, expected it in a mm:ss form", g_song->id, (int)len, str);
+    }
     char *minutes_str = strndup(str, colon - str);
     const double minutes = strtod(minutes_str, NULL);
     free(minutes_str);
@@ -328,6 +343,9 @@ static void read_readings(const Song_Language_t *lang, const char *buffer, const
     }
 
     const Song_Line_t *line = lang->lines->data[index];
+    if ( line->full_text == NULL ) {
+        error_abort("read_readings: There is a reading hint line for lyric line %d, which has no text", index);
+    }
     const int32_t lyric_len = (int32_t)strlen(line->full_text);
 
     int32_t start = 0;
@@ -396,6 +414,33 @@ static Song_Language_t *select_language(const Song_t *song, const char *language
     return target;
 }
 
+static void validate_timed_lines(const Song_Language_t *lang) {
+    // Delete excess empty lines at the end
+    while ( lang->lines->size > 1 ) {
+        const size_t index = lang->lines->size - 1;
+        Song_Line_t *line = lang->lines->data[index];
+        // Only the very first line could legitimately start at 0 without a duration
+        const bool has_timing = line->base_start_time != 0 || line->base_duration != 0;
+        if ( has_timing && line->full_text != NULL )
+            break;
+        if ( !has_timing && !str_is_empty(line->full_text) ) {
+            error_abort("%s: lyric line %zu (%s) has no timing", g_song->id, index, line->full_text);
+        }
+        free_line(line);
+        vec_remove(lang->lines, index);
+    }
+
+    for ( size_t i = 0; i < lang->lines->size; i++ ) {
+        const Song_Line_t *line = lang->lines->data[i];
+        if ( line->full_text == NULL ) {
+            error_abort("%s: timing %zu (%.2fs) has no lyric line", g_song->id, i, line->base_start_time);
+        }
+        if ( line->base_duration < 0 ) {
+            error_abort("%s: lyric line %zu has out of order timing", g_song->id, i);
+        }
+    }
+}
+
 void song_load(const char *filename, const char *src, const int src_size) {
     g_song = calloc(1, sizeof(*g_song));
     g_song->languages = vec_init();
@@ -406,7 +451,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
     // This controls whether the lyrics portion of the song is already
     bool has_lyrics = false;
 
-    bool old_lyrics_compat = false;
     BlockType current_block = BLOCK_HEADER;
     int32_t block_line_index = 0;
     StrBuffer_t *str_buffer = str_buf_init();
@@ -436,7 +480,6 @@ void song_load(const char *filename, const char *src, const int src_size) {
             if ( str_equals_sized(buffer, "#timings", 8) ) {
                 current_block = BLOCK_TIMINGS;
             } else if ( str_equals_sized(buffer, "#lyrics", 7) ) {
-                old_lyrics_compat = true;
                 current_block = BLOCK_LYRICS;
                 has_lyrics = true;
             } else if ( str_equals_sized(buffer, "#ass", 4) ) {
@@ -508,12 +551,13 @@ void song_load(const char *filename, const char *src, const int src_size) {
         lang->temp_readings = NULL;
     }
 
-    const Song_Language_t *default_language = select_language(g_song, g_song->language, true);
-    if ( default_language->lines->size > 0 && old_lyrics_compat ) {
-        // Since the last line will have a 0 duration, set it here to a reasonable number so we can see the last line
-        Song_Line_t *line = default_language->lines->data[default_language->lines->size - 1];
-        if ( line->base_duration == 0 )
-            line->base_duration = 100.0;
+    // Not every song has lyrics, but the default language is expected to exist regardless
+    select_language(g_song, g_song->language, true);
+
+    for ( size_t i = 0; i < g_song->languages->size; i++ ) {
+        const Song_Language_t *lang = g_song->languages->data[i];
+        if ( lang->has_timings )
+            validate_timed_lines(lang);
     }
 }
 
@@ -523,16 +567,7 @@ static void free_song_languages(const Song_t *song) {
     for ( size_t i = 0; i < song->languages->size; i++ ) {
         Song_Language_t *language = song->languages->data[i];
         for ( size_t j = 0; j < language->lines->size; j++ ) {
-            Song_Line_t *line = language->lines->data[j];
-            if ( line->readings != NULL ) {
-                for ( size_t h = 0; h < line->readings->size; h++ ) {
-                    Song_LineReading_t *reading = line->readings->data[h];
-                    free(reading->reading_text);
-                    free(reading);
-                }
-            }
-            free(line->full_text);
-            free(line);
+            free_line(language->lines->data[j]);
         }
         if ( language->temp_readings != NULL ) {
             for ( size_t j = 0; j < language->temp_readings->size; j++ ) {
