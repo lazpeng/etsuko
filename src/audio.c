@@ -59,7 +59,13 @@ static void check_al_error(const char *msg) {
     }
 }
 
-void audio_init(void) {
+static void clear_queue() {
+    alSourceStop(g_audio.source);
+    alSourcei(g_audio.source, AL_BUFFER, 0);
+    check_al_error("clear_queue");
+}
+
+void audio_init() {
     g_audio.device = alcOpenDevice(NULL);
     if ( !g_audio.device ) {
         error_abort("Failed to open OpenAL device");
@@ -99,16 +105,7 @@ void audio_finish(void) {
 }
 
 void audio_load(const unsigned char *data, const int data_size) {
-    alSourceStop(g_audio.source);
-
-    // Clear queued buffers
-    ALint queued;
-    alGetSourcei(g_audio.source, AL_BUFFERS_QUEUED, &queued);
-    while ( queued > 0 ) {
-        ALuint buffer;
-        alSourceUnqueueBuffers(g_audio.source, 1, &buffer);
-        queued--;
-    }
+    clear_queue();
 
     if ( g_audio.mp3_data != NULL ) {
         mp3dec_ex_close(&g_audio.decoder);
@@ -204,14 +201,7 @@ void audio_seek(double time) {
     g_audio.decoder_exhausted = false;
 
     // Clear buffers and refill
-    alSourceStop(g_audio.source);
-    ALint queued;
-    alGetSourcei(g_audio.source, AL_BUFFERS_QUEUED, &queued);
-    while ( queued > 0 ) {
-        ALuint buffer;
-        alSourceUnqueueBuffers(g_audio.source, 1, &buffer);
-        queued--;
-    }
+    clear_queue();
 
     for ( int i = 0; i < NUM_BUFFERS; i++ ) {
         const size_t read = mp3dec_ex_read(&g_audio.decoder, g_audio.pcm_buffer, BUFFER_SIZE / sizeof(int16_t));
@@ -264,9 +254,13 @@ void audio_loop(void) {
     bool first = true;
 
     while ( processed > 0 ) {
-        ALuint buffer;
+        ALuint buffer = 0;
+        check_al_error("before alSourceUnqueueBuffers");
         alSourceUnqueueBuffers(g_audio.source, 1, &buffer);
-        check_al_error("alSourceUnqueueBuffers");
+        if ( alGetError() != AL_NO_ERROR || buffer == 0 ) {
+            fprintf(stderr, "OpenAL Error at alSourceUnqueueBuffers\n");
+            break;
+        }
         if ( first ) {
             g_audio.last_first_decoded_sample = g_audio.decoder.cur_sample;
             first = false;
