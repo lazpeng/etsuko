@@ -30,7 +30,7 @@ typedef struct Texture_t {
     // Internal vertex array object and buffer object pre-configured and exclusive to this texture
     unsigned int vbo, vao;
     // Cached values used when configuring the above VAO and VBO so we can track when those need to be reconfigured
-    int32_t buf_x, buf_y, buf_w, buf_h;
+    double buf_x, buf_y, buf_w, buf_h;
     // Padding on the left of the texture. Automatically removed from the given coordinates during draw
     int32_t left_bearing_offset;
     // Blurred copy of this texture, built on demand by a blurred draw and kept between frames.
@@ -289,6 +289,14 @@ void render_on_window_changed(void);
  * Clears the framebuffer for drawing.
  */
 void render_clear(void);
+/**
+ * Restricts drawing to the given bounds
+ */
+void render_push_clip(const Bounds_t *bounds);
+/**
+ * Restores the clip area that was active before the last render_push_clip
+ */
+void render_pop_clip(void);
 Background_t *render_make_background(BackgroundType_t type);
 void render_destroy_background(Background_t *background);
 /**
@@ -345,19 +353,10 @@ BlendMode_t render_get_blend_mode(void);
  */
 Color_t render_color_parse(uint32_t color);
 /**
- * Darkens a given color by a given amount in the range of 0 to 1, e.g. 0.2 darkens a color by 20%, or the equivalent of
- * multiplying all color channels by 0.8
- */
-Color_t render_color_darken(Color_t color, double amount);
-/**
  * Loads and stores the given font (truetype) and assigns it to the specified type.
  * In case another font of the same type has already been loaded, it is freed and replaced
  */
 void render_load_font(const unsigned char *data, int data_size, FontType_t type);
-/**
- * Measures text in the given size and font type, optionally saving the width and height of the overall text.
- */
-void render_measure_text_size(const char *text, int32_t pixels, MAYBE_NULL int32_t *w, MAYBE_NULL int32_t *h, FontType_t kind);
 /**
  * Returns a pixel size for the given em value
  */
@@ -387,11 +386,6 @@ Texture_t *render_make_text(const char *text, int32_t pixels_size, const Color_t
  * exclusive to images). Supported image formats: JPEG, PNG
  */
 Texture_t *render_make_image(const unsigned char *bytes, int length, double border_radius_em);
-/**
- * Creates a texture with a checkerboard pattern with fixed size and optional border radius.
- * Kinda useless.
- */
-Texture_t *render_make_dummy_image(double border_radius_em);
 /**
  * Creates a shadow texture based on the provided texture, which by adding the additional padding so the blur looks better will
  * always be larger than the original texture. The shadow is first created by making a completely black version of the same
@@ -454,7 +448,7 @@ void render_destroy_render_target(RenderTarget_t *render_target);
  * uploaded to the GPU, helps keep track of this information. This draw function is subject to the currently active render target
  * and behaves the same as render_draw_texture in that regard.
  */
-void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius);
+void render_draw_rounded_rect(Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius);
 /**
  * Draws a texture to the currently active render target (which can be a texture render target, or the framebuffer itself), using
  * the provided options. Bounds specifies the location and size the texture is to be drawn to/as, and upon change in dimensions

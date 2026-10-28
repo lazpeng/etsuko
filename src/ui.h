@@ -87,10 +87,18 @@ typedef enum ContainerFlags_t {
     CONTAINER_HORIZONTAL_ALIGN_CONTENT = 2,
 } ContainerFlags_t;
 
+/**
+ * What a container does with content that goes past its bounds on the y axis (overflow_y). Clipping only applies
+ * vertically, so content can still extend past the left and right edges (e.g. shadows and blur at the borders), and mouse
+ * events are not delivered to drawables in the clipped out part
+ */
 typedef enum OverflowKind_t {
-    OVERFLOW_CLIP = 0,
+    // Default. Content is drawn wherever it is, even outside the container
+    OVERFLOW_NOTHING = 0,
+    // Content outside the container's vertical bounds is not drawn
+    OVERFLOW_CLIP,
+    // Same as clip, and the content can be scrolled with the mouse wheel, the scroll bar and the ui_container_scroll_y_* calls
     OVERFLOW_SCROLL,
-    OVERFLOW_NOTHING,
 } OverflowKind_t;
 
 typedef enum ScrollBarKind_t {
@@ -274,14 +282,12 @@ typedef enum DrawableAlignment_t { ALIGN_LEFT = 0, ALIGN_CENTER, ALIGN_RIGHT } D
 
 typedef struct CharOffsetInfo_t {
     int32_t char_idx;
-    int32_t start_byte_offset, end_byte_offset;
     double x, y;
     double width, height;
 } CharOffsetInfo_t;
 
 typedef struct TextOffsetInfo_t {
     int32_t num_chars, start_char_idx;
-    int32_t start_byte_offset, end_byte_offset;
     double start_x;
     double start_y;
     double width, height;
@@ -302,7 +308,6 @@ typedef struct Drawable_TextData_t {
     bool draw_shadow;
     OWNING Vector_t *line_offsets; // of TextOffsetInfo_t
     bool compute_offsets;
-    bool increased_line_padding;
 } Drawable_TextData_t;
 
 typedef struct Drawable_ImageData_t {

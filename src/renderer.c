@@ -212,12 +212,31 @@ typedef struct Renderer_t {
     FontData_t fonts;
     ShaderData_t shaders;
     BlurEngineData_t blur_engine;
+    Bounds_t clip_stack[MAX_SCISSOR_STACK];
+    int32_t clip_depth;
 } Renderer_t;
 
 static Renderer_t *g_renderer = NULL;
 
 static float *get_projection_matrix(void);
 static void restore_render_target_binding(void);
+
+static void apply_scissor(const bool default_framebuffer) {
+    if ( !default_framebuffer || g_renderer->clip_depth == 0 ) {
+        glDisable(GL_SCISSOR_TEST);
+        return;
+    }
+    const Bounds_t *clip = &g_renderer->clip_stack[g_renderer->clip_depth - 1];
+    const int32_t x0 = (int32_t)floor(clip->x), y0 = (int32_t)floor(clip->y);
+    const int32_t x1 = (int32_t)ceil(clip->x + clip->w), y1 = (int32_t)ceil(clip->y + clip->h);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(x0, (int32_t)g_renderer->viewport.h - y1, MAX(0, x1 - x0), MAX(0, y1 - y0));
+}
+
+static void bind_framebuffer(const GLuint fbo) {
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    apply_scissor(fbo == 0);
+}
 
 static GLuint compile_shader(const GLenum type, const char *source, const char *name) {
     const GLuint shader = glCreateShader(type);
@@ -405,7 +424,7 @@ static void draw_blur_pass_quad(const float u0, const float v0, const float u1, 
 }
 
 static void bind_blur_target(const Texture_t *target, const int32_t width, const int32_t height) {
-    glBindFramebuffer(GL_FRAMEBUFFER, g_renderer->blur_engine.fbo);
+    bind_framebuffer(g_renderer->blur_engine.fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->id, 0);
     glViewport(0, 0, width, height);
 }
@@ -593,10 +612,10 @@ static bool texture_needs_reconfigure(const Texture_t *texture, const Bounds_t *
 }
 
 static void mark_texture_configured(Texture_t *texture, const Bounds_t *at) {
-    texture->buf_x = (int32_t)at->x;
-    texture->buf_y = (int32_t)at->y;
-    texture->buf_w = (int32_t)at->w;
-    texture->buf_h = (int32_t)at->h;
+    texture->buf_x = at->x;
+    texture->buf_y = at->y;
+    texture->buf_w = at->w;
+    texture->buf_h = at->h;
 }
 
 #ifdef __EMSCRIPTEN__
@@ -850,10 +869,10 @@ static void deconstruct_colors_opengl(const Color_t *color, float *r, float *g, 
 static void restore_render_target_binding(void) {
     const RenderTarget_t *render_target = g_renderer->render_target;
     if ( render_target == NULL ) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        bind_framebuffer(0);
         glViewport(0, 0, (int32_t)g_renderer->viewport.w, (int32_t)g_renderer->viewport.h);
     } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+        bind_framebuffer(render_target->fbo);
         glViewport(0, 0, render_target->width, render_target->height);
     }
 }
@@ -867,7 +886,7 @@ static void configure_render_target(RenderTarget_t *render_target, const int32_t
     render_target->texture = render_make_empty(width, height);
     create_orthographic_matrix(0.f, (float)width, 0.f, (float)height, render_target->projection);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+    bind_framebuffer(render_target->fbo);
     glBindTexture(GL_TEXTURE_2D, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, render_target->texture->id, 0);
     glClearColor(0.f, 0.f, 0.f, 0.f);
@@ -956,7 +975,7 @@ Texture_t *render_target_detach_texture(RenderTarget_t *render_target) {
     }
     render_target->texture = NULL;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, render_target->fbo);
+    bind_framebuffer(render_target->fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
     restore_render_target_binding();
 
@@ -1154,6 +1173,28 @@ static Texture_t *internal_create_gradient_background_texture(Background_t *back
 
     render_set_blend_mode(saved_blend);
     return texture;
+}
+
+void render_push_clip(const Bounds_t *bounds) {
+    if ( g_renderer->clip_depth >= MAX_SCISSOR_STACK )
+        error_abort("render_push_clip: clip stack is full");
+
+    Bounds_t clip = *bounds;
+    if ( g_renderer->clip_depth > 0 ) {
+        const Bounds_t *top = &g_renderer->clip_stack[g_renderer->clip_depth - 1];
+        const double x0 = MAX(clip.x, top->x), y0 = MAX(clip.y, top->y);
+        const double x1 = MIN(clip.x + clip.w, top->x + top->w), y1 = MIN(clip.y + clip.h, top->y + top->h);
+        clip = (Bounds_t){.x = x0, .y = y0, .w = MAX(0.0, x1 - x0), .h = MAX(0.0, y1 - y0)};
+    }
+    g_renderer->clip_stack[g_renderer->clip_depth++] = clip;
+    apply_scissor(g_renderer->render_target == NULL);
+}
+
+void render_pop_clip(void) {
+    if ( g_renderer->clip_depth <= 0 )
+        error_abort("render_pop_clip: clip stack is empty");
+    g_renderer->clip_depth--;
+    apply_scissor(g_renderer->render_target == NULL);
 }
 
 void render_clear(void) {
@@ -1401,44 +1442,6 @@ void render_load_font(const unsigned char *data, const int data_size, const Font
 
 void render_set_window_title(const char *title) { glfwSetWindowTitle(g_renderer->window, title); }
 
-void render_measure_text_size(const char *text, const int32_t pixels, int32_t *w, int32_t *h, const FontType_t kind) {
-    const stbtt_fontinfo *font = kind == FONT_UI ? &g_renderer->fonts.ui_font_info : &g_renderer->fonts.lyrics_font_info;
-
-    const float pixel_height = (float)pixels;
-    const float scale = stbtt_ScaleForMappingEmToPixels(font, pixel_height);
-
-    int ascent, descent, lineGap;
-    stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
-
-    if ( h )
-        *h = (int32_t)((ascent - descent + lineGap) * (double)scale);
-
-    int width = 0;
-    int32_t i = 0;
-    const int32_t len = (int32_t)strlen(text);
-    int32_t c = 0;
-    int32_t prev_c = -1;
-
-    while ( i < len ) {
-        c = str_u8_next(text, len, &i);
-        if ( c < 0 )
-            continue;
-
-        int advance, lsb;
-        stbtt_GetCodepointHMetrics(font, c, &advance, &lsb);
-
-        if ( prev_c != -1 ) {
-            width += stbtt_GetCodepointKernAdvance(font, prev_c, c);
-        }
-
-        width += advance;
-        prev_c = c;
-    }
-
-    if ( w )
-        *w = (int32_t)(width * (double)scale);
-}
-
 int32_t render_measure_pixels_from_em(const double em) {
     const double scale_w = g_renderer->viewport.w / DEFAULT_WIDTH;
     const double scale_h = g_renderer->viewport.h / DEFAULT_HEIGHT;
@@ -1498,13 +1501,6 @@ Color_t render_color_parse(const uint32_t color) {
     const uint8_t g = color >> 8;
     const uint8_t b = color & 0xFF;
     return (Color_t){.r = r, .g = g, .b = b, .a = a};
-}
-
-Color_t render_color_darken(Color_t color, const double amount) {
-    color.r = (uint8_t)fmax(0, color.r * (1.0 - amount));
-    color.g = (uint8_t)fmax(0, color.g * (1.0 - amount));
-    color.b = (uint8_t)fmax(0, color.b * (1.0 - amount));
-    return color;
 }
 
 // Size of the blurred copy.
@@ -1820,7 +1816,7 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
 
                     if ( out_x >= 0 && out_x < width && out_y >= 0 && out_y < height ) {
                         const unsigned char val = char_bitmap[y * c_w + x_pix];
-                        if ( val > 0 ) {
+                        if ( val > bitmap[out_y * width + out_x] ) {
                             bitmap[out_y * width + out_x] = val;
                         }
                     }
@@ -1866,45 +1862,6 @@ Texture_t *render_make_text(const char *text, const int32_t pixels_size, const C
     return texture;
 }
 
-static Texture_t *create_test_texture(void) {
-    const int size = 256;
-    unsigned char *pixels = malloc(size * size * 4);
-
-    // Create a checkerboard pattern
-    for ( int y = 0; y < size; y++ ) {
-        for ( int x = 0; x < size; x++ ) {
-            const int checker = (x / 32 + y / 32) % 2;
-            const unsigned char color = checker ? 255 : 0;
-
-            const int index = (y * size + x) * 4;
-            pixels[index + 0] = color;
-            pixels[index + 1] = color;
-            pixels[index + 2] = color;
-            pixels[index + 3] = 255;
-        }
-    }
-
-    Texture_t *texture = render_make_null();
-    texture->width = size;
-    texture->height = size;
-
-    GLuint texture_id;
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    free(pixels);
-    texture->id = texture_id;
-
-    return texture;
-}
-
 Texture_t *render_make_image(const unsigned char *bytes, const int length, const double border_radius_em) {
     int32_t w, h;
     unsigned char *pixels = stbi_load_from_memory(bytes, length, &w, &h, NULL, 4);
@@ -1938,19 +1895,7 @@ Texture_t *render_make_image(const unsigned char *bytes, const int length, const
     return texture;
 }
 
-Texture_t *render_make_dummy_image(const double border_radius_em) {
-    Texture_t *texture = create_test_texture();
-
-    if ( border_radius_em > 0 ) {
-        texture->border_radius = (float)render_measure_pixels_from_em(border_radius_em);
-    } else if ( border_radius_em < 0 ) {
-        texture->border_radius = BORDER_RADIUS_AUTO;
-    }
-
-    return texture;
-}
-
-void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius) {
+void render_draw_rounded_rect(Texture_t *null_tex, const Bounds_t *bounds, const Color_t *color, float border_radius) {
     if ( bounds->w <= 0 ) {
         return;
     }
@@ -1971,25 +1916,28 @@ void render_draw_rounded_rect(const Texture_t *null_tex, const Bounds_t *bounds,
     glBindVertexArray(null_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, null_tex->vbo);
 
-    if ( texture_needs_reconfigure(null_tex, bounds) ) {
-        const float padding = border_radius;
-        const float vertices[] = {(float)bounds->x - padding,
-                                  (float)bounds->y - padding,
+    const float padding = border_radius;
+    const Bounds_t padded = {
+        .x = bounds->x - padding, .y = bounds->y - padding, .w = bounds->w + 2 * padding, .h = bounds->h + 2 * padding};
+    if ( texture_needs_reconfigure(null_tex, &padded) ) {
+        const float vertices[] = {(float)padded.x,
+                                  (float)padded.y,
                                   0.0f,
                                   0.0f,
-                                  (float)(bounds->x + bounds->w) + padding,
-                                  (float)bounds->y - padding,
+                                  (float)(padded.x + padded.w),
+                                  (float)padded.y,
                                   1.0f,
                                   0.0f,
-                                  (float)(bounds->x + bounds->w) + padding,
-                                  (float)(bounds->y + bounds->h) + padding,
+                                  (float)(padded.x + padded.w),
+                                  (float)(padded.y + padded.h),
                                   1.0f,
                                   1.0f,
-                                  (float)bounds->x - padding,
-                                  (float)(bounds->y + bounds->h) + padding,
+                                  (float)padded.x,
+                                  (float)(padded.y + padded.h),
                                   0.0f,
                                   1.0f};
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        mark_texture_configured(null_tex, &padded);
     }
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -2109,7 +2057,7 @@ void render_draw_texture(Texture_t *texture, const Bounds_t *at, const DrawTextu
     glBindVertexArray(draw_tex->vao);
     glBindBuffer(GL_ARRAY_BUFFER, draw_tex->vbo);
 
-    const Bounds_t final_bounds = {.x = quad_x, .y = quad_y, .w = (int32_t)quad_w, .h = (int32_t)quad_h};
+    const Bounds_t final_bounds = {.x = quad_x, .y = quad_y, .w = quad_w, .h = quad_h};
     if ( texture_needs_reconfigure(draw_tex, &final_bounds) ) {
         float vertices[QUAD_VERTICES_SIZE] = {0};
         create_quad_vertices(quad_x, quad_y, quad_w, quad_h, vertices);

@@ -232,6 +232,29 @@ static void handle_global_keyboard_input(Ui_t *ui) {
     }
 }
 
+static bool container_clips_y(const Container_t *container) {
+    return container->overflow_y.kind == OVERFLOW_SCROLL || container->overflow_y.kind == OVERFLOW_CLIP;
+}
+
+static void container_screen_pos(const Container_t *container, double *x, double *y) {
+    ui_get_container_canon_pos(container, x, y, true);
+    *y += container->overflow_y.current_amount;
+}
+
+static bool drawable_visible_at(const Drawable_t *drawable, const double mouse_y) {
+    for ( const Container_t *container = drawable->parent; container != NULL; container = container->parent ) {
+        if ( !container->enabled )
+            return false;
+        if ( container_clips_y(container) ) {
+            double x, y;
+            container_screen_pos(container, &x, &y);
+            if ( mouse_y < y || mouse_y > y + container->bounds.h )
+                return false;
+        }
+    }
+    return true;
+}
+
 static void handle_mouse_input(Ui_t *ui) {
     Drawable_t *hovered_drawable = NULL;
     int32_t mouse_x, mouse_y;
@@ -271,7 +294,7 @@ static void handle_mouse_input(Ui_t *ui) {
             Drawable_t *drawable = cur->nodes->data[i];
             double d_pos_x, d_pos_y;
             ui_get_drawable_canon_pos(drawable, &d_pos_x, &d_pos_y);
-            if ( !drawable->enabled ) {
+            if ( !drawable->enabled || !drawable_visible_at(drawable, mouse_y) ) {
                 continue;
             }
 
@@ -365,51 +388,56 @@ done_hit_test:
     }
 }
 
-static Container_t *find_deepest_scrollable_container(Container_t *parent, Bounds_t bounds) {
-    bounds.x += parent->bounds.x;
-    bounds.y += parent->bounds.y;
-
-    int32_t mouse_x, mouse_y;
-    events_get_mouse_position(&mouse_x, &mouse_y);
-
-    const bool within_x = mouse_x >= bounds.x && mouse_x <= bounds.x + parent->bounds.w;
-    const bool within_y = mouse_y >= bounds.y && mouse_y <= bounds.y + parent->bounds.h;
-
-    // Let's consider no other child container could be outside of the parent container's bounds
-    if ( !within_x || !within_y )
+static Container_t *find_deepest_scrollable_container(Container_t *container, const double mouse_x, const double mouse_y,
+                                                      bool *covered, bool *blocked) {
+    *covered = false;
+    if ( !container->enabled )
         return NULL;
 
-    for ( size_t i = 0; i < parent->child_containers->size; i++ ) {
-        Container_t *child = parent->child_containers->data[i];
-        Container_t *result = find_deepest_scrollable_container(child, bounds);
-        if ( result )
+    double x, y;
+    container_screen_pos(container, &x, &y);
+    if ( mouse_x < x || mouse_x > x + container->bounds.w || mouse_y < y || mouse_y > y + container->bounds.h )
+        return NULL;
+    *covered = true;
+
+    for ( size_t i = container->child_containers->size; i-- > 0; ) {
+        Container_t *child = container->child_containers->data[i];
+        bool child_covered = false;
+        Container_t *result = find_deepest_scrollable_container(child, mouse_x, mouse_y, &child_covered, blocked);
+        if ( result != NULL || *blocked )
             return result;
+        if ( child_covered && child->z_layer_index > container->z_layer_index ) {
+            *blocked = true;
+            return NULL;
+        }
     }
 
-    // If there's no child container that fits before us, return the current one if it does have scrolling enabled
-    if ( parent->overflow_y.kind == OVERFLOW_SCROLL )
-        return parent;
+    if ( container->overflow_y.kind == OVERFLOW_SCROLL )
+        return container;
 
     return NULL;
 }
 
-static void handle_container_scroll(const Ui_t *ui) {
+static void handle_container_scroll(Ui_t *ui) {
     const double amount = events_get_mouse_scrolled();
     if ( amount == 0 )
         return;
+    int32_t mouse_x, mouse_y;
+    events_get_mouse_position(&mouse_x, &mouse_y);
+
     // Find the deepest container under the mouse cursor that has overflow enabled
-    Container_t *scrollable = find_deepest_scrollable_container(ui->root_container, (Bounds_t){0});
+    bool covered = false, blocked = false;
+    Container_t *scrollable = find_deepest_scrollable_container(ui->root_container, mouse_x, mouse_y, &covered, &blocked);
     if ( scrollable == NULL )
         return;
 
     ui_container_scroll_y_by(scrollable, amount);
 
-    int32_t mouse_x, mouse_y;
-    events_get_mouse_position(&mouse_x, &mouse_y);
     for ( size_t i = 0; i < ui->global_events->size; i++ ) {
         const EventDef_t *def = ui->global_events->data[i];
         if ( def->type == UI_EVENT_MOUSE_SCROLL ) {
-            const UiEventOpts_t opts = {.event = def->type,
+            const UiEventOpts_t opts = {.ui = ui,
+                                        .event = def->type,
                                         .mouse = {.x = mouse_x,
                                                   .y = mouse_y,
                                                   .scroll = amount,
@@ -906,7 +934,7 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
 
     // it came to me in a dream
     const int32_t shadow_max_alpha = drawable->type == DRAW_TYPE_IMAGE ? 50 : 128;
-    const int32_t shadow_alpha = MIN(shadow_max_alpha, drawable->alpha_mod);
+    const int32_t shadow_alpha = MIN(shadow_max_alpha, delta.final_alpha);
 
     if ( drawable->shadow != NULL && delta.final_alpha > 0 && shadow_alpha > 0 ) {
         Bounds_t shadow_bounds = rect;
@@ -1117,6 +1145,13 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
         render_draw_rounded_rect(ui->null_texture, &container_screen_bounds, &color, 0);
     }
 
+    const bool clip = container_clips_y(container);
+    if ( clip ) {
+        const Bounds_t clip_bounds = {
+            .x = 0, .y = container_screen_bounds.y, .w = ui->root_container->bounds.w, .h = container_screen_bounds.h};
+        render_push_clip(&clip_bounds);
+    }
+
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y - container->overflow_y.current_amount;
 
@@ -1140,6 +1175,9 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
             c_idx += 1;
         }
     }
+
+    if ( clip )
+        render_pop_clip();
 }
 
 void ui_draw(const Ui_t *ui) {
@@ -1379,73 +1417,42 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
     recompute_vertical_scroll_bar_bounds(container);
 }
 
-void ui_container_scroll_y_by(Container_t *container, const double amount) {
+static void internal_scroll_y_to(Container_t *container, const double position, MAYBE_NULL const AnimatedSetOpts_t *opts) {
     if ( container->overflow_y.kind != OVERFLOW_SCROLL )
-        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
+        error_abort("ui_container_scroll_y: Container is not scrollable");
 
-    const double current_amount = container->overflow_y.current_amount;
     const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
-    const double target = MAX(area.min_content_y, MIN(area.max_content_y, current_amount - amount));
+    const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
     container->overflow_y.set_amount = target;
 
     ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
-    if ( scroll_anim != NULL ) {
-        Animation_ScrollYData_t *data = scroll_anim->custom_data;
-        data->from_amount = container->overflow_y.current_amount;
-        data->to_amount = target;
-        scroll_anim->elapsed = 0.0;
-        scroll_anim->active = true;
-        scroll_anim->duration = data->duration;
-        scroll_anim->ease_func = data->ease_func;
-    } else {
+    if ( scroll_anim == NULL ) {
+        if ( opts != NULL )
+            printf("Warning: ui_container_scroll_y_to_dur: no scroll y animation set, no duration is applied.\n");
         container->overflow_y.current_amount = target;
+        return;
     }
+
+    Animation_ScrollYData_t *data = scroll_anim->custom_data;
+    data->from_amount = container->overflow_y.current_amount;
+    data->to_amount = target;
+    scroll_anim->elapsed = 0.0;
+    scroll_anim->active = true;
+    scroll_anim->duration = opts != NULL ? opts->duration : data->duration;
+    scroll_anim->delay = opts != NULL ? opts->delay : 0.0;
+    scroll_anim->ease_func = data->ease_func;
+}
+
+void ui_container_scroll_y_by(Container_t *container, const double amount) {
+    internal_scroll_y_to(container, container->overflow_y.current_amount - amount, NULL);
 }
 
 void ui_container_scroll_y_to(Container_t *container, const double position) {
-    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
-        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
-
-    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
-    const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
-    container->overflow_y.set_amount = target;
-
-    ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
-    if ( scroll_anim != NULL ) {
-        Animation_ScrollYData_t *data = scroll_anim->custom_data;
-        data->from_amount = container->overflow_y.current_amount;
-        data->to_amount = target;
-        scroll_anim->elapsed = 0.0;
-        scroll_anim->active = true;
-        scroll_anim->duration = data->duration;
-        scroll_anim->ease_func = data->ease_func;
-    } else {
-        container->overflow_y.current_amount = target;
-    }
+    internal_scroll_y_to(container, position, NULL);
 }
 
 void ui_container_scroll_y_to_dur(Container_t *container, const double position, const AnimatedSetOpts_t opts) {
-    if ( container->overflow_y.kind != OVERFLOW_SCROLL )
-        error_abort("ui_container_scroll_by_vertical: Container is not scrollable");
-
-    const ContainerScrollableArea_t area = gather_container_scrollable_area(container);
-    const double target = MAX(area.min_content_y, MIN(area.max_content_y, position));
-    container->overflow_y.set_amount = target;
-
-    ContainerAnimation_t *scroll_anim = find_container_scroll_y_anim(container);
-    if ( scroll_anim != NULL ) {
-        Animation_ScrollYData_t *data = scroll_anim->custom_data;
-        data->from_amount = container->overflow_y.current_amount;
-        data->to_amount = target;
-        scroll_anim->elapsed = 0.0;
-        scroll_anim->active = true;
-        scroll_anim->duration = opts.duration;
-        scroll_anim->delay = opts.delay;
-        scroll_anim->ease_func = data->ease_func;
-    } else {
-        printf("Warning: ui_container_scroll_y_to_dur: no scroll y animation set, no duration is applied.\n");
-        container->overflow_y.current_amount = target;
-    }
+    internal_scroll_y_to(container, position, &opts);
 }
 
 void ui_end_loop(void) { render_present(); }
@@ -1781,7 +1788,7 @@ static int32_t measure_text_wrap_stop(const Drawable_TextData_t *data, const Con
 /**
  * Partially computes text offsets character by character. Some of the information is later populated by internal_make_text.
  */
-static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line, const int32_t byte_offset) {
+static void internal_partial_compute_text_offsets(const Drawable_TextData_t *data, const char *line) {
     const size_t text_size = strlen(line);
     const int32_t pixels_size = render_measure_pixels_from_em(data->em);
 
@@ -1793,15 +1800,12 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
     }
     vec_add(data->line_offsets, info);
     info->char_offsets = vec_init();
-    info->start_byte_offset = byte_offset;
     info->start_char_idx = prev != NULL ? prev->start_char_idx + prev->num_chars : 0;
     info->num_chars = 0;
 
     double x = 0;
     int32_t prev_c = -1;
     for ( int32_t i = 0; i < (int32_t)text_size; ) {
-        const int32_t prev_i = i;
-
         const int32_t c = str_u8_next(line, text_size, &i);
         if ( c < 0 )
             break;
@@ -1813,15 +1817,12 @@ static void internal_partial_compute_text_offsets(const Drawable_TextData_t *dat
         if ( char_info == NULL ) {
             error_abort("Failed to allocate char offset info");
         }
-        char_info->start_byte_offset = prev_i;
         char_info->char_idx = info->num_chars++;
         char_info->height = char_bounds.font_height;
         char_info->width = char_bounds.width;
-        char_info->end_byte_offset = byte_offset + i;
         char_info->x = x;
         char_info->y = 0; // Will be computed later
 
-        info->end_byte_offset = byte_offset + i;
         info->width += char_bounds.width;
         info->height = char_info->height;
 
@@ -1865,7 +1866,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
             Texture_t *texture = render_make_text(line_str, pixels_size, &data->color, data->font_type);
 
             if ( should_compute_offsets ) {
-                internal_partial_compute_text_offsets(data, line_str, (int32_t)start);
+                internal_partial_compute_text_offsets(data, line_str);
             }
             free(line_str);
 
@@ -1897,7 +1898,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
                 error_abort("Invalid alignment mode");
             }
 
-            if ( data->compute_offsets ) {
+            if ( should_compute_offsets ) {
                 TextOffsetInfo_t *info = data->line_offsets->data[i];
                 info->start_x = x;
                 info->start_y = y;
@@ -1926,7 +1927,7 @@ static Drawable_t *internal_make_text(Drawable_t *result, const Drawable_TextDat
         final_texture = render_make_text(data->text, pixels_size, &data->color, data->font_type);
 
         if ( should_compute_offsets ) {
-            internal_partial_compute_text_offsets(data, data->text, 0);
+            internal_partial_compute_text_offsets(data, data->text);
         }
     }
 
@@ -2581,12 +2582,15 @@ void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, const float scale, c
 
     const Animation_t *base_anim = find_animation(drawable, ANIM_SCALE);
     if ( base_anim != NULL ) {
-        Animation_t *animation = internal_reapply_animation(drawable, base_anim, base_anim->apply_type, opts.unique_id);
+        AnimationApplyType_t apply_type = opts.apply_type;
+        if ( apply_type == ANIM_APPLY_DEFAULT )
+            apply_type = base_anim->apply_type;
+        Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
             data->from_scale = drawable->bounds.scale_mod;
             data->to_scale = scale_mod;
-            data->duration = opts.duration;
+            animation->duration = opts.duration > 0.0 ? opts.duration : base_anim->duration;
             animation->delay = opts.delay;
         }
     }
@@ -2618,6 +2622,32 @@ void ui_drawable_set_draw_region_immediate(Drawable_t *drawable, const DrawRegio
     copy_draw_regions_to_drawable(drawable, draw_regions);
 }
 
+static bool retarget_running_draw_region(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions,
+                                         const AnimatedSetOpts_t *opts) {
+    Animation_t *running = internal_find_active_animation(drawable, ANIM_DRAW_REGION, opts->unique_id);
+    if ( running == NULL )
+        return false;
+
+    Animation_DrawRegionData_t *data = running->custom_data;
+    double progress = 0.0;
+    if ( running->elapsed > running->delay && running->duration > 0.0 )
+        progress = apply_ease_func(MIN(1.0, (running->elapsed - running->delay) / running->duration), running->ease_func);
+
+    for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        const float from = i < data->draw_regions.num_regions ? data->draw_regions.regions[i].x1_perc : 0.f;
+        const float to = i < drawable->draw_regions.num_regions ? drawable->draw_regions.regions[i].x1_perc : from;
+        data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+        data->draw_regions.regions[i].x1_perc = (float)(from + (to - from) * progress);
+    }
+    data->draw_regions.num_regions = draw_regions->num_regions;
+
+    running->elapsed = 0.0;
+    running->duration = opts->duration;
+    running->delay = opts->delay;
+    copy_draw_regions_to_drawable(drawable, draw_regions);
+    return true;
+}
+
 void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSet_t *draw_regions, const AnimatedSetOpts_t opts) {
     const Animation_t *base_anim = find_animation(drawable, ANIM_DRAW_REGION);
     if ( base_anim != NULL ) {
@@ -2631,6 +2661,9 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
             }
         }
         if ( !different )
+            return;
+
+        if ( base_anim->apply_type == ANIM_APPLY_BLOCK && retarget_running_draw_region(drawable, draw_regions, &opts) )
             return;
 
         Animation_t *animation = internal_reapply_animation(drawable, base_anim, base_anim->apply_type, opts.unique_id);
