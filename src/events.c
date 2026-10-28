@@ -94,7 +94,7 @@ static void cursor_position_callback(GLFWwindow *window, const double x_pos, con
     update_mouse_position(window, x_pos, y_pos);
 }
 
-static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_events.mouse.scrolled = y_offset; }
+static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_events.mouse.scrolled += y_offset; }
 
 static void window_size_callback(GLFWwindow *, int, int) {
     g_events.window.resized = true;
