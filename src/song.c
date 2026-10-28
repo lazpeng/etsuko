@@ -39,10 +39,10 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
     } else if ( str_equals_sized(buffer, "filePath", equals) ) {
         song->file_path = value;
     } else if ( str_equals_sized(buffer, "bgColor", equals) ) {
-        song->bg_color = strtol(value, NULL, 16);
+        song->bg_color = (uint32_t)strtoul(value, NULL, 16);
         free(value);
     } else if ( str_equals_sized(buffer, "bgColorSecondary", equals) ) {
-        song->bg_color_secondary = strtol(value, NULL, 16);
+        song->bg_color_secondary = (uint32_t)strtoul(value, NULL, 16);
         free(value);
     } else if ( str_equals_sized(buffer, "alignment", equals) ) {
         if ( str_equals_right_sized(value, "left") ) {
@@ -126,6 +126,7 @@ static void free_line(Song_Line_t *line) {
             free(reading->reading_text);
             free(reading);
         }
+        vec_destroy(line->readings);
     }
     free(line->full_text);
     free(line);
@@ -222,11 +223,14 @@ static void read_ass_line_content(const Song_t *song, Song_Line_t *line, Song_La
         // No sub timings
         const size_t len = end - start;
         line->full_text = strndup(start, len);
-        if ( song->assume_full_sub_timing_when_absent ) {
+        if ( song->assume_full_sub_timing_when_absent && len > 0 ) {
+            language->has_sub_timings = true;
             Song_LineTiming_t *timing = &line->timings[line->num_timings++];
             timing->duration = line->base_duration;
             timing->start_idx = 0;
             timing->end_idx = (int32_t)len;
+            timing->start_char_idx = 0;
+            timing->end_char_idx = str_u8_count(line->full_text, 0, (int32_t)len);
             timing->cumulative_duration = 0;
             timing->is_only_punctuation = is_line_timing_only_punctuation(line, timing);
         }
@@ -359,6 +363,11 @@ static void read_readings(const Song_Language_t *lang, const char *buffer, const
             goto end;
 
         const int32_t idx = str_u8_find_str(line->full_text, buffer + start, lyric_idx, lyric_len, eq - start);
+        if ( idx < 0 ) {
+            printf("Warning: %s: reading hint key '%.*s' not found in lyric line %d after byte %d\n", g_song->id, eq - start,
+                   buffer + start, index, lyric_idx);
+            goto end;
+        }
         const int32_t part_count = str_u8_count(buffer, start, eq);
 
         Song_LineReading_t *reading = calloc(1, sizeof(*reading));
