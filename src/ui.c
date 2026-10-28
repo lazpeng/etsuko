@@ -472,9 +472,21 @@ static void draw_dynamic_rectangle(const Drawable_t *drawable, const Bounds_t *b
     if ( border_radius > 0 )
         border_radius = (float)render_measure_pixels_from_em(data->border_radius_em);
 
+    if ( alpha <= 0 )
+        return;
+
+    Bounds_t scaled = *bounds;
+    const double scale = MAX(0.0, 1.0 + bounds->scale_mod);
+    scaled.w *= scale;
+    scaled.h *= scale;
+    if ( drawable->center_on_scale ) {
+        scaled.x -= (scaled.w - bounds->w) / 2.0;
+        scaled.y -= (scaled.h - bounds->h) / 2.0;
+    }
+
     Color_t color = data->color;
     color.a = (uint8_t)alpha;
-    render_draw_rounded_rect(drawable->texture, bounds, &color, border_radius);
+    render_draw_rounded_rect(drawable->texture, &scaled, &color, border_radius);
 }
 
 static bool measure_constraint(const SizeConstraint_t *constraint, const bool horizontal, double *out_value) {
@@ -546,17 +558,31 @@ static void measure_layout(const Layout_t *layout, const Container_t *parent, Bo
         }
     }
 
-    // TODO: overrides keep-aspect-ratio
-    double cw;
-    if ( measure_constraint(&layout->min_width, true, &cw) )
-        w = MAX(w, cw);
-    if ( measure_constraint(&layout->max_width, true, &cw) )
-        w = MIN(w, cw);
-    double ch;
-    if ( measure_constraint(&layout->min_height, false, &ch) )
-        h = MAX(h, ch);
-    if ( measure_constraint(&layout->max_height, false, &ch) )
-        h = MIN(h, ch);
+    if ( maintain_aspect_ratio && w > 0.0 && h > 0.0 ) {
+        double lower = 0.0, upper = INFINITY, c;
+        if ( measure_constraint(&layout->min_width, true, &c) )
+            lower = MAX(lower, c / w);
+        if ( measure_constraint(&layout->min_height, false, &c) )
+            lower = MAX(lower, c / h);
+        if ( measure_constraint(&layout->max_width, true, &c) )
+            upper = MIN(upper, c / w);
+        if ( measure_constraint(&layout->max_height, false, &c) )
+            upper = MIN(upper, c / h);
+        const double factor = MIN(MAX(1.0, lower), upper);
+        w *= factor;
+        h *= factor;
+    } else {
+        double cw;
+        if ( measure_constraint(&layout->min_width, true, &cw) )
+            w = MAX(w, cw);
+        if ( measure_constraint(&layout->max_width, true, &cw) )
+            w = MIN(w, cw);
+        double ch;
+        if ( measure_constraint(&layout->min_height, false, &ch) )
+            h = MAX(h, ch);
+        if ( measure_constraint(&layout->max_height, false, &ch) )
+            h = MIN(h, ch);
+    }
 
     // width or height being zero means automatic so dependent on the actual size of the thing, e.g. text and images
     // this is of course a major oversight and it will be wrong if you forget to set these properly so... don't :)
@@ -785,7 +811,7 @@ static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds
     const double progress = (animation->elapsed - animation->delay) / animation->duration;
     if ( progress < 1.0 ) {
         const double scale_delta = data->to_scale - data->from_scale;
-        final_bounds->scale_mod = data->from_scale + scale_delta * progress;
+        final_bounds->scale_mod = data->from_scale + scale_delta * apply_ease_func(progress, animation->ease_func);
     } else {
         animation->active = false;
     }
@@ -894,7 +920,55 @@ static void apply_animations(const Drawable_t *drawable, AnimationDelta *animati
     }
 }
 
-static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bounds_t *base_bounds) {
+static double current_scale_mod(const Drawable_t *drawable) {
+    for ( int32_t i = (int32_t)drawable->active_animations->size - 1; i >= 0; i-- ) {
+        const Animation_t *animation = drawable->active_animations->data[i];
+        if ( animation->type != ANIM_SCALE || !animation->active )
+            continue;
+        const Animation_ScaleData_t *data = animation->custom_data;
+        if ( animation->elapsed <= animation->delay )
+            return data->from_scale;
+        const double progress = (animation->elapsed - animation->delay) / animation->duration;
+        if ( progress < 1.0 )
+            return data->from_scale + (data->to_scale - data->from_scale) * apply_ease_func(progress, animation->ease_func);
+        break;
+    }
+    return drawable->bounds.scale_mod;
+}
+
+static double scale_top_compensation(const Drawable_t *drawable, const double scale_mod) {
+    if ( drawable->layout.follow_scale == NULL || !drawable->center_on_scale )
+        return 0.0;
+    return drawable->bounds.h * scale_mod * 0.5;
+}
+
+static double follow_scale_offset_y(const Layout_t *layout) {
+    const Drawable_t *target = layout->follow_scale;
+    if ( target == NULL )
+        return 0.0;
+    const double scale_mod = current_scale_mod(target);
+    const double growth_below = target->bounds.h * scale_mod * (target->center_on_scale ? 0.5 : 1.0);
+    return follow_scale_offset_y(&target->layout) + scale_top_compensation(target, scale_mod) + growth_below;
+}
+
+typedef struct GroupScale_t {
+    double pivot_x, pivot_y;
+    double factor;
+} GroupScale_t;
+
+static void apply_group_scale(const GroupScale_t *group, const bool center_on_scale, Bounds_t *rect) {
+    double anchor_x = rect->x, anchor_y = rect->y;
+    if ( center_on_scale ) {
+        anchor_x += rect->w * 0.5;
+        anchor_y += rect->h * 0.5;
+    }
+    rect->x += (group->pivot_x + (anchor_x - group->pivot_x) * group->factor) - anchor_x;
+    rect->y += (group->pivot_y + (anchor_y - group->pivot_y) * group->factor) - anchor_y;
+    rect->scale_mod = (1.0 + rect->scale_mod) * group->factor - 1.0;
+}
+
+static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bounds_t *base_bounds,
+                         MAYBE_NULL const GroupScale_t *group) {
     if ( !drawable->enabled || drawable->pending_recompute ) {
         return;
     }
@@ -906,7 +980,10 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
 
     Bounds_t rect = delta.final_bounds;
     rect.x += base_bounds->x;
-    rect.y += base_bounds->y;
+    rect.y += base_bounds->y + follow_scale_offset_y(&drawable->layout) +
+              scale_top_compensation(drawable, delta.final_bounds.scale_mod);
+    if ( group != NULL )
+        apply_group_scale(group, drawable->center_on_scale, &rect);
 
     if ( drawable->layout.absolute ) {
         rect.x -= drawable->parent->align_content_offset_x;
@@ -1122,6 +1199,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
 
     Bounds_t container_bounds = container->bounds;
     apply_container_animations(container, &container_bounds);
+    container_bounds.y += follow_scale_offset_y(&container->layout);
 
     if ( container->overflow_y.kind == OVERFLOW_SCROLL ) {
         recompute_vertical_scroll_bar_bounds(container);
@@ -1155,6 +1233,17 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
     base_bounds.x += container->align_content_offset_x;
     base_bounds.y += container->align_content_offset_y - container->overflow_y.current_amount;
 
+    GroupScale_t group = {0};
+    const GroupScale_t *group_ptr = NULL;
+    if ( container->scale_with != NULL ) {
+        const double pivot_offset_y = container->flags & CONTAINER_SCALE_FROM_CENTER ? container_screen_bounds.h * 0.5 : 0.0;
+        group = (GroupScale_t){.pivot_x = container_screen_bounds.x + container_screen_bounds.w * 0.5,
+                               .pivot_y = container_screen_bounds.y + pivot_offset_y,
+                               .factor = MAX(0.0, 1.0 + current_scale_mod(container->scale_with))};
+        if ( group.factor != 1.0 )
+            group_ptr = &group;
+    }
+
     // Draw descendants of the current container at the same time, following the order of the z indices
     // vectors are already sorted at insertion time
     // note that changing the z index after initial creation/dynamically is not supported and will give incorrect results
@@ -1168,7 +1257,7 @@ static void draw_all_container(const Ui_t *ui, Container_t *container, Bounds_t 
                                : INT32_MAX;
         // In case they're equal, favor drawables
         if ( dz <= cz ) {
-            perform_draw(ui, container->child_drawables->data[d_idx], &base_bounds);
+            perform_draw(ui, container->child_drawables->data[d_idx], &base_bounds, group_ptr);
             d_idx += 1;
         } else {
             draw_all_container(ui, container->child_containers->data[c_idx], base_bounds);
@@ -2371,6 +2460,7 @@ static Animation_ScaleData_t *dup_anim_scale_data(const Animation_ScaleData_t *d
     result->from_scale = data->from_scale;
     result->to_scale = data->to_scale;
     result->duration = data->duration;
+    result->ease_func = data->ease_func;
     return result;
 }
 
@@ -2585,10 +2675,22 @@ void ui_drawable_set_scale_factor_dur(Drawable_t *drawable, const float scale, c
         AnimationApplyType_t apply_type = opts.apply_type;
         if ( apply_type == ANIM_APPLY_DEFAULT )
             apply_type = base_anim->apply_type;
+
+        double from_scale = drawable->bounds.scale_mod;
+        const Animation_t *running = internal_find_active_animation(drawable, ANIM_SCALE, opts.unique_id);
+        if ( running != NULL && opts.interpolate_if_active && apply_type == ANIM_APPLY_OVERRIDE ) {
+            const Animation_ScaleData_t *data = running->custom_data;
+            from_scale = data->from_scale;
+            if ( running->elapsed > running->delay && running->duration > 0.0 ) {
+                const double progress = MIN(1.0, (running->elapsed - running->delay) / running->duration);
+                from_scale += (data->to_scale - data->from_scale) * apply_ease_func(progress, running->ease_func);
+            }
+        }
+
         Animation_t *animation = internal_reapply_animation(drawable, base_anim, apply_type, opts.unique_id);
         if ( animation != NULL ) {
             Animation_ScaleData_t *data = animation->custom_data;
-            data->from_scale = drawable->bounds.scale_mod;
+            data->from_scale = from_scale;
             data->to_scale = scale_mod;
             animation->duration = opts.duration > 0.0 ? opts.duration : base_anim->duration;
             animation->delay = opts.delay;
@@ -2836,7 +2938,7 @@ void ui_animate_scale(Drawable_t *target, const Animation_ScaleData_t *data) {
     result->target = target;
     result->duration = data->duration;
     result->active = false;
-    result->ease_func = ANIM_EASE_NONE;
+    result->ease_func = data->ease_func;
 
     vec_add(target->animations, result);
 }

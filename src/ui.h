@@ -71,6 +71,7 @@ typedef struct Layout_t {
     double padding_w, padding_h;
     WEAK const Drawable_t *relative_to_size;
     WEAK const Drawable_t *relative_to;
+    WEAK const Drawable_t *follow_scale;
     SizeConstraint_t min_width, max_width;
     SizeConstraint_t min_height, max_height;
     int32_t z_index;
@@ -85,6 +86,7 @@ typedef enum ContainerFlags_t {
     CONTAINER_NONE = 0,
     CONTAINER_VERTICAL_ALIGN_CONTENT = 1,
     CONTAINER_HORIZONTAL_ALIGN_CONTENT = 2,
+    CONTAINER_SCALE_FROM_CENTER = 4,
 } ContainerFlags_t;
 
 /**
@@ -148,6 +150,7 @@ typedef struct Container_t {
     bool draw_debug_overlay;
     bool content_size_dirty;
     ContainerScrollableArea_t scrollable_area;
+    WEAK const Drawable_t *scale_with;
 } Container_t;
 
 typedef struct Drawable_t {
@@ -336,6 +339,7 @@ typedef struct Animation_FadeInOutData_t {
 typedef struct Animation_ScaleData_t {
     double from_scale, to_scale;
     double duration;
+    AnimationEaseType_t ease_func;
 } Animation_ScaleData_t;
 
 typedef struct Animation_DrawRegionData_t {

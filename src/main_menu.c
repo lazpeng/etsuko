@@ -20,13 +20,11 @@
 #define ALBUM_SCALE_DURATION (0.2)
 #define ALBUM_SCALE_DOWN_DURATION (0.1)
 #define ALBUM_SCALE_FACTOR (1.2)
+#define ALBUM_MAX_HEIGHT (0.27)
 #define MAX_SONGS_PER_ROW (4)
-#define SONG_TITLE_REGULAR_OFFSET_Y (0.01)
-#define SONG_TITLE_SCALED_OFFSET_Y (0.04)
-#define SONG_ALBUM_REGULAR_OFFSET_Y (0.005)
-#define SONG_ALBUM_SCALED_OFFSET_Y (0.01)
-#define PILL_REGULAR_OFFSET_Y (0.06)
-#define PILL_SCALED_OFFSET_Y (0.1)
+#define SONG_TITLE_OFFSET_Y (0.01)
+#define SONG_ALBUM_OFFSET_Y (0.005)
+#define PILL_OFFSET_Y (0.06)
 #define BACKGROUND_CHANGE_DURATION (0.6)
 
 // Prev comment: "This shit shouldn't be here"
@@ -184,41 +182,25 @@ AppStatus_t menu_load_loop(MainMenu_t *menu) {
     return APP_STATUS_LOADING;
 }
 
+static void set_entry_scale(const SongEntryDrawables_t *entry, const float scale, const double duration) {
+    const AnimatedSetOpts_t anim_opts = {.duration = duration, .interpolate_if_active = true};
+    ui_drawable_set_scale_factor_dur(entry->image, scale, anim_opts);
+    ui_drawable_set_scale_factor_dur(entry->title, scale, anim_opts);
+    ui_drawable_set_scale_factor_dur(entry->album, scale, anim_opts);
+}
+
 static void on_album_art_event(const UiEventOpts_t *opts, Drawable_t *, void *custom_data) {
     const SongEntryDrawables_t *entry = custom_data;
     MainMenu_t *menu = entry->menu;
 
     if ( opts->event == UI_EVENT_MOUSE_HOVER_ENTERED ) {
         menu->selected_song = entry->key;
-        ui_drawable_set_scale_factor(entry->image, ALBUM_SCALE_FACTOR);
-        ui_drawable_set_scale_factor(entry->title, ALBUM_SCALE_FACTOR);
-        ui_drawable_set_scale_factor(entry->album, ALBUM_SCALE_FACTOR);
-
-        // Change the layout slightly so the text gets out of the way of the enlarged image
-        // this is unfortunately necessary because the ui design is shit
-        // change the title only because it's the one right below. the rest should reposition accordingly
-        entry->title->layout.offset_y = SONG_TITLE_SCALED_OFFSET_Y;
-        ui_reposition_drawable(entry->title);
-        // also change the album to keep a uniform spacing when scaled
-        entry->album->layout.offset_y = SONG_ALBUM_SCALED_OFFSET_Y;
-        ui_reposition_drawable(entry->album);
-        entry->pills_container->layout.offset_y = PILL_SCALED_OFFSET_Y;
-        ui_reposition_container(entry->pills_container);
+        set_entry_scale(entry, ALBUM_SCALE_FACTOR, ALBUM_SCALE_DURATION);
 
         // Update background
         menu->album_data_dirty = true;
     } else if ( opts->event == UI_EVENT_MOUSE_HOVER_EXITED ) {
-        const AnimatedSetOpts_t anim_opts = {.duration = ALBUM_SCALE_DOWN_DURATION};
-        ui_drawable_set_scale_factor_dur(entry->image, 1.f, anim_opts);
-        ui_drawable_set_scale_factor_dur(entry->title, 1.f, anim_opts);
-        ui_drawable_set_scale_factor_dur(entry->album, 1.f, anim_opts);
-
-        entry->title->layout.offset_y = SONG_TITLE_REGULAR_OFFSET_Y;
-        ui_reposition_drawable(entry->title);
-        entry->album->layout.offset_y = SONG_ALBUM_REGULAR_OFFSET_Y;
-        ui_reposition_drawable(entry->album);
-        entry->pills_container->layout.offset_y = PILL_REGULAR_OFFSET_Y;
-        ui_reposition_container(entry->pills_container);
+        set_entry_scale(entry, 1.f, ALBUM_SCALE_DOWN_DURATION);
     } else if ( opts->event == UI_EVENT_MOUSE_CLICK ) {
         config_set_karaoke_song_file(config_get(), entry->key);
         etsuko_navigate("/?song=", entry->key);
@@ -232,7 +214,8 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE |
                  LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
         .relative_to = image,
-        .offset_y = SONG_TITLE_REGULAR_OFFSET_Y,
+        .follow_scale = image,
+        .offset_y = SONG_TITLE_OFFSET_Y,
     };
     const Drawable_TextData_t data = {.text = song->name, .color = {.r = 255, .g = 255, .b = 255, .a = 255}, .em = 0.7};
     Drawable_t *text = ui_make_text(menu->ui, &data, menu->container, &layout);
@@ -243,8 +226,6 @@ static Drawable_t *setup_song_title(const MainMenu_t *menu, const MenuSong_t *so
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
-    const Animation_EaseTranslationData_t translation_data = {.duration = ALBUM_SCALE_DURATION};
-    ui_animate_translation(text, &translation_data);
 
     return text;
 }
@@ -286,17 +267,15 @@ static Drawable_t *setup_single_tag_pill(const MainMenu_t *menu, char *tag, cons
 static Container_t *setup_tag_pills(const MainMenu_t *menu, const MenuSong_t *song, const SongEntryDrawables_t *entry) {
     const Layout_t layout = {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_RELATIVE_TO_SIZE,
-        .offset_y = PILL_REGULAR_OFFSET_Y,
+        .offset_y = PILL_OFFSET_Y,
         .width = 1.0,
         .height = 1.0,
         .relative_to = entry->image,
         .relative_to_size = entry->image,
+        .follow_scale = entry->album,
     };
     Container_t *pills_container = ui_make_container(menu->ui, menu->container, &layout, CONTAINER_HORIZONTAL_ALIGN_CONTENT);
-    const Animation_EaseTranslationData_t translation_data = {
-        .duration = ALBUM_SCALE_DURATION,
-    };
-    ui_container_animate_translation(pills_container, &translation_data);
+    pills_container->scale_with = entry->image;
 
     const Drawable_t *prev_pill = NULL;
     StrBuffer_t *buf = str_buf_init();
@@ -325,7 +304,8 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE |
                  LAYOUT_CENTER_X | LAYOUT_PROPORTIONAL_Y,
         .relative_to = title,
-        .offset_y = 0.005,
+        .follow_scale = title,
+        .offset_y = SONG_ALBUM_OFFSET_Y,
     };
     char *str;
     if ( song->year != 0 ) {
@@ -343,8 +323,6 @@ static Drawable_t *setup_song_album_text(const MainMenu_t *menu, const MenuSong_
         .duration = ALBUM_SCALE_DURATION,
     };
     ui_animate_scale(text, &scale_data);
-    const Animation_EaseTranslationData_t translation_data = {.duration = ALBUM_SCALE_DURATION};
-    ui_animate_translation(text, &translation_data);
 
     free(str);
     return text;
@@ -389,7 +367,8 @@ static void setup_song(MainMenu_t *menu, const MenuSong_t *song) {
     GridLayoutInfo_t *grid = &menu->grid_layout_info;
     Layout_t layout = {.flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_POS |
                                 LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
-                       .width = 0.15};
+                       .width = 0.15,
+                       .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &menu->container->bounds, .value = ALBUM_MAX_HEIGHT}};
     bool set_first = false;
     if ( grid->row_count == MAX_SONGS_PER_ROW || grid->first_in_row == NULL ) {
         grid->row_count = 0;
