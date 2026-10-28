@@ -1,6 +1,6 @@
-//
-// Created by Rafael Nakano on 16/11/25.
-//
+/**
+ * resource_includes.h - Embeds the shaders and images into the binary so they need no loading at runtime
+ */
 
 #ifndef ETSUKO_RESOURCE_INCLUDES_H
 #define ETSUKO_RESOURCE_INCLUDES_H

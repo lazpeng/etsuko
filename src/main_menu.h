@@ -1,5 +1,5 @@
 /**
- * Shows a gallery with all the available songs for the user to select
+ * main_menu.h - Shows a gallery with all the available songs for the user to select
  */
 
 #ifndef ETSUKO_MAIN_MENU_H

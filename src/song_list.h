@@ -1,3 +1,7 @@
+/**
+ * song_list.h - Parses the song list shown in the main menu
+ */
+
 #ifndef ETSUKO_SONG_LIST_H
 #define ETSUKO_SONG_LIST_H
 

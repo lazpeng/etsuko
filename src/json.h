@@ -1,3 +1,7 @@
+/**
+ * json.h - An unergonomic json parser
+ */
+
 #ifndef ETSUKO_JSON_H
 #define ETSUKO_JSON_H
 
