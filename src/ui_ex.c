@@ -33,6 +33,7 @@
 #define SCALE_ANIMATION_DURATION (0.1)
 #define FADE_ANIMATION_DURATION (1.0)
 #define HINT_TOGGLE_FADE_ANIMATION_DURATION (0.5)
+#define HINT_REACHED_FADE_DURATION (0.3)
 #define SCALE_ANIMATION_OUT_DURATION (0.3)
 #define SCROLL_ANIMATION_DURATION (0.3)
 #define SCALE_REGION_UP_DURATION (0.15)
@@ -74,6 +75,8 @@ typedef struct LyricLineWidget_t {
     WEAK const Song_Line_t *song_line;
     OWNING Drawable_t *line;
     OWNING MAYBE_NULL Drawable_t *reading_hint;
+    OWNING MAYBE_NULL RenderTarget_t *reading_hint_target;
+    OWNING MAYBE_NULL Vector_t *reading_entries; // of ReadingEntry_t*
     OWNING MAYBE_NULL Container_t *intermission_group;
     WEAK Drawable_t *intermission_dots[INTERMISSION_NUM_DOTS];
     bool has_reading_hint;
@@ -218,9 +221,58 @@ static void blur_hint_for_line(const LyricsView_t *view, const int32_t index) {
 }
 
 typedef struct ReadingEntry_t {
-    Texture_t *texture;
+    OWNING Texture_t *texture;
     double x, y;
+    double start_time;
+    int32_t alpha;
 } ReadingEntry_t;
+
+static double reading_start_time(const Song_Line_t *line, const Song_LineReading_t *reading) {
+    for ( int32_t s = 0; s < line->num_timings; s++ ) {
+        if ( line->timings[s].end_char_idx > (int32_t)reading->start_ch_idx )
+            return line->base_start_time + line->timings[s].cumulative_duration;
+    }
+    return line->base_start_time;
+}
+
+static void destroy_reading_entries(LyricLineWidget_t *widget) {
+    if ( widget->reading_entries == NULL )
+        return;
+    for ( size_t i = 0; i < widget->reading_entries->size; i++ ) {
+        ReadingEntry_t *entry = widget->reading_entries->data[i];
+        render_destroy_texture(entry->texture);
+        free(entry);
+    }
+    vec_destroy(widget->reading_entries);
+    widget->reading_entries = NULL;
+}
+
+static void release_reading_hint_texture(LyricLineWidget_t *widget) {
+    if ( widget->reading_hint_target != NULL ) {
+        render_destroy_render_target(widget->reading_hint_target);
+        widget->reading_hint_target = NULL;
+    } else if ( widget->reading_hint->texture != NULL ) {
+        render_destroy_texture(widget->reading_hint->texture);
+    }
+    widget->reading_hint->texture = NULL;
+}
+
+static void bake_reading_hint(const LyricLineWidget_t *widget) {
+    render_target_bind(widget->reading_hint_target);
+    const BlendMode_t blend_mode = render_get_blend_mode();
+    render_set_blend_mode(BLEND_MODE_NONE);
+    render_clear();
+
+    for ( size_t i = 0; i < widget->reading_entries->size; i++ ) {
+        const ReadingEntry_t *entry = widget->reading_entries->data[i];
+        const Bounds_t bounds = {.x = entry->x, .y = entry->y, .w = entry->texture->width, .h = entry->texture->height};
+        const DrawTextureOpts_t opts = {.alpha_mod = entry->alpha, .color_mod = 1.f};
+        render_draw_texture(entry->texture, &bounds, &opts);
+    }
+
+    render_target_unbind(widget->reading_hint_target);
+    render_set_blend_mode(blend_mode);
+}
 
 static void make_reading_hint(LyricLineWidget_t *widget) {
     const Drawable_TextData_t *lyric_data = widget->line->custom_data;
@@ -233,6 +285,7 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
 
     const Song_Line_t *line = widget->song_line;
 
+    destroy_reading_entries(widget);
     Vector_t *entries = vec_init();
     double max_w = 0, max_h = 0;
 
@@ -271,6 +324,8 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
             entry->texture = render_make_text(reading->reading_text, pixels, &white, FONT_UI);
             entry->x = x;
             entry->y = y;
+            entry->start_time = reading_start_time(line, reading);
+            entry->alpha = 255;
             vec_add(entries, entry);
 
             max_w = MAX(max_w, x + entry->texture->width);
@@ -293,38 +348,19 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
                         &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
         ui_animate_scale(widget->reading_hint, &(Animation_ScaleData_t){.duration = SCALE_ANIMATION_DURATION});
         ui_drawable_set_alpha_immediate(widget->reading_hint, hint_target_alpha(widget));
-    } else if ( widget->reading_hint->texture != NULL ) {
-        render_destroy_texture(widget->reading_hint->texture);
-        widget->reading_hint->texture = NULL;
+    } else {
+        release_reading_hint_texture(widget);
     }
 
+    widget->reading_entries = entries;
     if ( entries->size > 0 ) {
-        RenderTarget_t *render_target = render_make_render_target((int32_t)ceil(max_w), (int32_t)ceil(max_h));
-        render_target_bind(render_target);
-        const BlendMode_t blend_mode = render_get_blend_mode();
-        render_set_blend_mode(BLEND_MODE_NONE);
-
-        for ( size_t li = 0; li < entries->size; li++ ) {
-            const ReadingEntry_t *entry = entries->data[li];
-            const Bounds_t bounds = {.x = entry->x, .y = entry->y, .w = entry->texture->width, .h = entry->texture->height};
-            const DrawTextureOpts_t opts = {.alpha_mod = 255, .color_mod = 1.f};
-            render_draw_texture(entry->texture, &bounds, &opts);
-        }
-
-        render_target_unbind(render_target);
-        widget->reading_hint->texture = render_target_detach_texture(render_target);
-        render_destroy_render_target(render_target);
-        render_set_blend_mode(blend_mode);
+        // The texture stays owned by the target so the hint can be baked again as each entry gets reached
+        widget->reading_hint_target = render_make_render_target((int32_t)ceil(max_w), (int32_t)ceil(max_h));
+        widget->reading_hint->texture = widget->reading_hint_target->texture;
+        bake_reading_hint(widget);
     } else {
         widget->reading_hint->texture = render_make_null();
     }
-
-    for ( size_t li = 0; li < entries->size; li++ ) {
-        ReadingEntry_t *entry = entries->data[li];
-        render_destroy_texture(entry->texture);
-        free(entry);
-    }
-    vec_destroy(entries);
 
     ui_reposition_drawable_immediate(widget->reading_hint);
 
@@ -392,8 +428,11 @@ static void lyric_line_widget_reconfigure(void *widget_data) {
 static void lyric_line_widget_destroy(Ui_t *ui, void *widget_data) {
     LyricLineWidget_t *widget = widget_data;
 
-    if ( widget->reading_hint != NULL )
+    if ( widget->reading_hint != NULL ) {
+        release_reading_hint_texture(widget);
         ui_destroy_drawable(ui, widget->reading_hint);
+    }
+    destroy_reading_entries(widget);
     if ( is_intermission_widget(widget) )
         ui_destroy_container(ui, widget->intermission_group);
     ui_destroy_drawable(ui, widget->line);
@@ -481,6 +520,34 @@ static void animate_intermission(const LyricLineWidget_t *widget, const double e
             (INTERMISSION_DOT_DIM_ALPHA + (255 - INTERMISSION_DOT_DIM_ALPHA) * dot_fill) * reveal * (1.0 - outro);
         ui_drawable_set_alpha_immediate(widget->intermission_dots[i], (int32_t)alpha);
     }
+}
+
+static bool is_line_filling(const LyricsView_t *view, const LyricLineWidget_t *widget) {
+    const bool has_timings = view->selected_language->song_language->has_sub_timings && widget->song_line->num_timings > 0;
+    const bool fill_enabled_in_settings = settings_get()->lyric_fill != SET_LYRIC_FILL_DISABLED;
+    return widget->state == LINE_ACTIVE && has_timings && fill_enabled_in_settings;
+}
+
+static void fade_in_reached_hints(const LyricsView_t *view, const LyricLineWidget_t *widget, const double elapsed) {
+    if ( widget->reading_hint_target == NULL )
+        return;
+
+    const bool filling = is_line_filling(view, widget);
+    const int32_t unreached_alpha = calculate_alpha(0);
+    bool changed = false;
+    for ( size_t i = 0; i < widget->reading_entries->size; i++ ) {
+        ReadingEntry_t *entry = widget->reading_entries->data[i];
+        int32_t alpha = 255;
+        if ( filling ) {
+            const double reached = ease_out_cubic(clamp01((elapsed - entry->start_time) / HINT_REACHED_FADE_DURATION));
+            alpha = unreached_alpha + (int32_t)((255 - unreached_alpha) * reached);
+        }
+        changed |= alpha != entry->alpha;
+        entry->alpha = alpha;
+    }
+
+    if ( changed )
+        bake_reading_hint(widget);
 }
 
 static double advance_smooth_clock(LyricsView_t *view, const double elapsed) {
@@ -1275,6 +1342,7 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
         const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[i];
         if ( is_intermission_widget(widget) )
             animate_intermission(widget, smooth_elapsed);
+        fade_in_reached_hints(view, widget, smooth_elapsed);
     }
     update_credits_blur(view, &state);
 
