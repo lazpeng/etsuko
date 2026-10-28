@@ -11,9 +11,6 @@
 #include "ui.h"
 #include "user_settings.h"
 
-// 512 lines ought to be enough for anybody
-#define MAX_SONG_LINES 512
-
 // A state for every lyric line in the karaoke state machine
 typedef enum LineState_t {
     // Transient state. Just before it is properly initialized
