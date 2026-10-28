@@ -40,41 +40,12 @@ int32_t str_find(const char *src, const char c, const int32_t start, int32_t max
 }
 
 int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, const int32_t max_len, const int32_t sub_len) {
-    const int32_t sub_count = str_u8_count(sub, 0, sub_len);
-    int32_t sub_i = 0;
-    const int32_t first_sub_c = str_u8_next(sub, sub_len, &sub_i);
+    if ( sub_len <= 0 || start < 0 )
+        return -1;
 
-    int32_t i = 0;
-    while ( i < max_len ) {
-        const bool skip = i < start;
-        const int32_t start_i = i;
-        const int32_t c = str_u8_next(src, max_len, &i);
-        if ( skip )
-            continue;
-
-        if ( c == first_sub_c ) {
-            const int32_t start_sub_i = sub_i;
-            bool found = true;
-
-            for ( int32_t count = 1; count < sub_count; count++ ) {
-                if ( sub_i >= sub_len - 1 ) {
-                    found = false;
-                    break;
-                }
-
-                const int32_t cur_c = str_u8_next(src, max_len, &i);
-                const int32_t sub_c = str_u8_next(sub, sub_len, &sub_i);
-
-                if ( cur_c != sub_c || sub_c < 0 || cur_c < 0 ) {
-                    sub_i = start_sub_i;
-                    found = false;
-                    break;
-                }
-            }
-
-            if ( found )
-                return start_i;
-        }
+    for ( int32_t i = start; i + sub_len <= max_len; i++ ) {
+        if ( memcmp(src + i, sub, sub_len) == 0 )
+            return i;
     }
 
     return -1;
