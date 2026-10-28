@@ -61,7 +61,7 @@ typedef struct {
     SettingsOpts_t settings;
     // Draw a live FPS counter in the top-left of the screen
     bool show_fps;
-    // Enable vsync (ignored on web — the browser controls the swap interval)
+    // Enable vsync (ignored on web)
     bool vsync;
 } Config_t;
 
