@@ -60,7 +60,9 @@ without major hickups.
 - Ninja
 - A C compiler (preferably clang)
 - OpenGL (probably already included in your system)
-- GLEW, GLFW3 and OpenAL dev libraries
+- GLFW3 and OpenAL dev libraries (the OpenGL loader, glad, is bundled in contrib/)
+- OpenSSL dev libraries, used to fetch songs from the remote server when they aren't in the local assets folder. Configure with
+`-DDISABLE_REMOTE_FETCH=ON` to build without it (only local files will load)
 
 On Linux and mac OS it's probably pretty straightforward to build, you can either install all the dependencies manually or use the vcpkg
 cmake target. On Windows it's a bit trickier and you'll probably want to use the vcpkg target.
@@ -77,7 +79,9 @@ cd ./build/wasm-release/
 emrun ./etsuko.html
 ```
 
-Note that a secret.h file defining CDN_BASE_PATH is required as a way to fetch song files from a (possibly) remote server, but you can
+Note that a src/secret.h file (not tracked by git, but there's an example in secret_example.h) defining CDN_BASE_PATH and API_SONG_LIST_ENDPOINT
+is required. API_SONG_LIST_ENDPOINT is the URL of the json song list shown in the main menu, and CDN_BASE_PATH is used as a way to
+fetch song files from a (possibly) remote server, but you can
 just point it to localhost (and whatever port emrun uses on your machine) and it'll fetch the files from the same base path as the .html
 file is at the time of running the command. So for example, localhost:\<port\>/assets/my_song.txt is resolved to a file my_song.txt inside the ./assets/ folder
 in the same directory as etsuko.html. I just said the same thing twice.
@@ -85,8 +89,8 @@ in the same directory as etsuko.html. I just said the same thing twice.
 No dependencies other than emscripten itself is needed when building this target.
 ***
 
-**Upon running, the program will probably fail and close because it needs a song
-to play. It uses a custom format described below.**
+**Upon running, the program opens the main menu, which lists the songs from API_SONG_LIST_ENDPOINT (on the web build, a
+`?song=<name_with_underscores>` query parameter opens a song directly instead). Songs use a custom format described below.**
 
 ## Playing songs
 
