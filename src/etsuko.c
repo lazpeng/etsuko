@@ -43,7 +43,26 @@ void global_init(void) {
     render_init();
 }
 
+static void finish_current_mode(void) {
+    if ( g_state->current_mode == APP_MODE_KARAOKE ) {
+        karaoke_finish(g_state->state);
+    } else if ( g_state->current_mode == APP_MODE_MENU ) {
+        menu_finish(g_state->state);
+    }
+
+    if ( g_state->state != NULL ) {
+        free(g_state->state);
+        g_state->state = NULL;
+    }
+    g_state->current_mode = APP_MODE_NONE;
+}
+
 void global_finish(void) {
+    if ( g_state != NULL ) {
+        finish_current_mode();
+        free(g_state);
+        g_state = NULL;
+    }
     render_finish();
     glfwTerminate();
 }
@@ -126,16 +145,7 @@ void global_update() {
         error_abort("global_update: state is null. Call global_init first");
 
     if ( g_state->next_mode != APP_MODE_NONE ) {
-        if ( g_state->current_mode == APP_MODE_KARAOKE ) {
-            karaoke_finish(g_state->state);
-        } else if ( g_state->current_mode == APP_MODE_MENU ) {
-            menu_finish(g_state->state);
-        }
-
-        if ( g_state->state != NULL ) {
-            free(g_state->state);
-            g_state->state = NULL;
-        }
+        finish_current_mode();
         const Config_OpMode_t mode = g_state->next_mode;
 
         g_state->current_mode = mode;
