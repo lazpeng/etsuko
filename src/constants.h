@@ -8,7 +8,7 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-#define VERSION "0.7.3"
+#define VERSION "0.7.4a"
 #define APP_NAME "etsuko"
 
 /**
