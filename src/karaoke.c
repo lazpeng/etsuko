@@ -132,6 +132,15 @@ static char *get_loading_files_names(const Karaoke_t *state) {
     return str;
 }
 
+static void apply_song_gradient_colors(Background_t *bg) {
+    bg->primary_color = render_color_parse(song_get()->bg_color);
+    if ( bg->primary_color.a == 0 )
+        bg->primary_color.a = 255;
+    bg->secondary_color = render_color_parse(song_get()->bg_color_secondary);
+    if ( bg->secondary_color.a == 0 )
+        bg->secondary_color.a = 255;
+}
+
 static void on_song_loaded(const Resource_t *res) {
     if ( res->status == LOAD_ERROR )
         error_abort("Failed to load song file resource");
@@ -144,12 +153,7 @@ static void on_song_loaded(const Resource_t *res) {
 
     Background_t *bg = ui_root_container(state->ui)->background;
     bg->type = BACKGROUND_GRADIENT;
-    bg->primary_color = render_color_parse(song_get()->bg_color);
-    if ( bg->primary_color.a == 0 )
-        bg->primary_color.a = 255;
-    bg->secondary_color = render_color_parse(song_get()->bg_color_secondary);
-    if ( bg->secondary_color.a == 0 )
-        bg->secondary_color.a = 255;
+    apply_song_gradient_colors(bg);
 
     state->loading.song_loaded = true;
 }
@@ -451,6 +455,8 @@ static void setup_background(const Karaoke_t *state) {
         }
         ui_container_set_background_image(ui_root_container(state->ui), image);
         render_destroy_blurred_image(image);
+    } else {
+        apply_song_gradient_colors(bg);
     }
     bg->type = bg_type;
 }
