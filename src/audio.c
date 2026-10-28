@@ -196,6 +196,7 @@ void audio_seek(double time) {
     if ( sample_pos >= g_audio.total_samples ) {
         sample_pos = g_audio.total_samples;
     }
+    sample_pos -= sample_pos % (uint64_t)g_audio.channels;
 
     mp3dec_ex_seek(&g_audio.decoder, sample_pos);
     g_audio.decoder_exhausted = false;
