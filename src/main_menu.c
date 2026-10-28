@@ -73,6 +73,10 @@ typedef struct AlbumArtData_t {
 } AlbumArtData_t;
 
 static void album_art_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR ) {
+        printf("Warning: album art for a menu entry failed to load, keeping the placeholder\n");
+        return;
+    }
     AlbumArtData_t *data = res->custom_data;
 
     data->image_data = res->buffer->data;
@@ -90,6 +94,8 @@ static void album_art_loaded(const Resource_t *res) {
 }
 
 static void song_list_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to fetch the song list");
     StrBuffer_t *buffer = str_buf_init();
     str_buf_append_len(buffer, (const char *)res->buffer->data, (int)res->buffer->downloaded_bytes);
 
@@ -131,10 +137,14 @@ MainMenu_t *menu_init() {
 }
 
 static void ui_font_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load UI font resource");
     ui_load_font(res->buffer->data, (int)res->buffer->downloaded_bytes, FONT_UI);
 }
 
 static void no_album_art_loaded(const Resource_t *res) {
+    if ( res->status == LOAD_ERROR )
+        error_abort("Failed to load the default album art");
     // Create a temp album art for it
     AlbumArtData_t *data = calloc(1, sizeof(*data));
     data->id = NO_ART_KEY;

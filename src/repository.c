@@ -62,11 +62,13 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
     } else {
         if ( fetch->numBytes > 0 ) {
             append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
-            if ( resource->on_resource_loaded != NULL ) {
-                resource->on_resource_loaded(resource);
-            }
+            resource->status = LOAD_DONE;
+        } else {
+            printf("Fetch failed for '%s': empty response\n", resource->original_filename);
+            resource->status = LOAD_ERROR;
         }
-        resource->status = LOAD_DONE;
+        if ( resource->on_resource_loaded != NULL )
+            resource->on_resource_loaded(resource);
     }
     emscripten_fetch_close(fetch);
 }
@@ -78,6 +80,8 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
     } else {
         resource->status = LOAD_ERROR;
         printf("Fetch failed for '%s': %s\n", resource->original_filename, fetch->statusText);
+        if ( resource->on_resource_loaded != NULL )
+            resource->on_resource_loaded(resource);
     }
     emscripten_fetch_close(fetch);
 }
@@ -192,11 +196,24 @@ Resource_t *repo_load_resource(const LoadRequest_t *request) {
     else {
         remote_load_resource(path_buf->data, resource);
     }
+#else
+    else {
+        printf("Failed to load '%s': not found in assets/\n", resource->original_filename);
+        resource->status = LOAD_ERROR;
+        if ( resource->on_resource_loaded != NULL )
+            resource->on_resource_loaded(resource);
+    }
 #endif
 #endif
     str_buf_destroy(path_buf);
 
     return resource;
+}
+
+void repo_poll(void) {
+#if !defined(__EMSCRIPTEN__) && !defined(DISABLE_REMOTE_FETCH)
+    remote_poll_completions();
+#endif
 }
 
 void repo_resource_buffer_leak(Resource_t *resource) { resource->buffer = NULL; }

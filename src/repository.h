@@ -37,7 +37,12 @@ typedef struct ResourceBuffer_t {
 } ResourceBuffer_t;
 
 struct Resource_t;
-// Callback when the resource loading is completed
+/**
+ * Callback when the resource loading is completed, successfully or not. It is called once per resource (never, if the
+ * resource was destroyed before the load finished), always on the main thread, and the status is already set to LOAD_DONE
+ * or LOAD_ERROR when it runs, so callbacks should check it before touching the buffer. An empty remote response is
+ * reported as LOAD_ERROR
+ */
 typedef void (*f_resource_loaded_ptr)(const struct Resource_t *res);
 
 // Represents a resource loaded from the local filesystem or from a remote server
@@ -59,7 +64,7 @@ typedef struct LoadRequest_t {
     WEAK const char *absolute_path;
     // Sub folder where the resource is located in the remote location
     WEAK const char *sub_dir;
-    // Callback on completion
+    // Callback on completion or failure (see f_resource_loaded_ptr)
     WEAK MAYBE_NULL f_resource_loaded_ptr on_resource_loaded;
     // Caller custom data
     WEAK MAYBE_NULL void *custom_data;
@@ -70,10 +75,19 @@ typedef struct LoadRequest_t {
 /**
  * Loads a given resource.
  * For emscripten builds, this loads data from the configured cdn path.
- * For desktop builds, this loads from the assets directory located next to the executable (or in the working dir).
+ * For desktop builds, this loads from the assets directory located next to the executable (or in the working dir), and
+ * falls back to fetching it from its remote location in a background thread when it isn't there (unless
+ * DISABLE_REMOTE_FETCH is set, in which case a missing file fails right away).
+ * A local file completes synchronously, so its callback runs before this function returns.
  * Due to limitations in emscripten, streaming is not possible
  */
 Resource_t *repo_load_resource(const LoadRequest_t *request);
+/**
+ * Delivers the results of the loads that finished since the last call, running their callbacks on the calling thread.
+ * Must be called regularly from the main thread (the main loop does it once per frame). It's a no-op on emscripten, where
+ * the browser already runs the callbacks on the main thread
+ */
+void repo_poll(void);
 /**
  * Makes the resource "forget" about the resource so it doesn't get freed in the destroy function.
  * Only useful when another component wants to take ownership of the buffer for some reason
@@ -81,8 +95,8 @@ Resource_t *repo_load_resource(const LoadRequest_t *request);
 void repo_resource_buffer_leak(Resource_t *resource);
 /**
  * Frees data related to the resource, and its buffer if it was not leaked.
- * If the load is still in progress the resource is abandoned instead and freed by the loader once it completes,
- * and its callback will never be called
+ * If the load is still in progress the resource is abandoned instead, and freed once the load completes (by the fetch
+ * callback on emscripten, or by repo_poll on desktop), and its callback will never be called
  */
 void repo_resource_destroy(Resource_t *resource);
 // Frees a buffer in particular, useful for when it was leaked earlier and needs to be freed now

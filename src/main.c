@@ -3,6 +3,7 @@
 
 #include "etsuko.h"
 #include "config.h"
+#include "repository.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -14,6 +15,8 @@ static bool main_loop() {
         global_init();
         global_initialized = true;
     }
+
+    repo_poll();
 
     if ( global_active_mode() == APP_MODE_NONE ) {
         // No mode initialized, so set the default one set in the config
@@ -48,7 +51,6 @@ int main(void) {
     while ( main_loop() ) {}
 #endif
 
-    global_mode_switch(APP_MODE_NONE);
     global_finish();
     return EXIT_SUCCESS;
 }
