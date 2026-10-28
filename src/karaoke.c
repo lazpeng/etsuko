@@ -19,6 +19,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define ALBUM_ART_PAUSED_SCALE (0.8f)
+#define ALBUM_ART_SCALE_DURATION (0.6)
+
 typedef struct Karaoke_t {
     Ui_t *ui;
     struct {
@@ -534,6 +537,10 @@ void karaoke_setup(Karaoke_t *state) {
             .flags = LAYOUT_PROPORTIONAL_SIZE | LAYOUT_CENTER_X | LAYOUT_SPECIAL_KEEP_ASPECT_RATIO,
             .max_width = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6},
             .max_height = {.type = CONSTRAINT_RELATIVE, .relative_to = &state->drawables.left_container->bounds, .value = 0.6}});
+    state->drawables.album_image->center_on_scale = true;
+    ui_animate_scale(state->drawables.album_image,
+                     &(Animation_ScaleData_t){.duration = ALBUM_ART_SCALE_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
+    ui_drawable_set_scale_factor_immediate(state->drawables.album_image, ALBUM_ART_PAUSED_SCALE);
     ui_add_event_callback(state->ui, UI_EVENT_MOUSE_CLICK, state->drawables.album_image, on_album_art_clicked, state);
     // Set up the background shaders using the song's album art
     setup_background(state);
@@ -743,6 +750,12 @@ static void update_song_progressbar(const Karaoke_t *state) {
     }
 }
 
+static void update_album_art_scale(const Karaoke_t *state) {
+    const float scale = audio_is_paused() ? ALBUM_ART_PAUSED_SCALE : 1.f;
+    const AnimatedSetOpts_t opts = {.duration = ALBUM_ART_SCALE_DURATION, .interpolate_if_active = true};
+    ui_drawable_set_scale_factor_dur(state->drawables.album_image, scale, opts);
+}
+
 AppStatus_t karaoke_loop(const Karaoke_t *state) {
     events_loop();
     if ( events_has_quit() )
@@ -758,6 +771,7 @@ AppStatus_t karaoke_loop(const Karaoke_t *state) {
     update_remaining_text(state);
     fps_counter_update();
     update_song_progressbar(state);
+    update_album_art_scale(state);
     // Update the lyrics view
     ui_ex_lyrics_view_loop(state->drawables.lyrics_view);
 
