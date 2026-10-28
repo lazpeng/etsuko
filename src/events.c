@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+#endif
+
 #define SCROLL_MODIFIER (50)
 
 struct Events_t {
@@ -94,7 +98,31 @@ static void cursor_position_callback(GLFWwindow *window, const double x_pos, con
     update_mouse_position(window, x_pos, y_pos);
 }
 
+#ifdef __EMSCRIPTEN__
+#define WEB_PIXELS_PER_LINE (40.0)
+
+// Scroll by the same distance the browser would scroll a regular page, converted from CSS pixels to SCROLL_MODIFIER steps
+static bool wheel_callback(int, const EmscriptenWheelEvent *event, void *) {
+    double css_pixels = -event->deltaY;
+    switch ( event->deltaMode ) {
+    case DOM_DELTA_LINE:
+        css_pixels *= WEB_PIXELS_PER_LINE;
+        break;
+    case DOM_DELTA_PAGE: {
+        double width, height;
+        emscripten_get_element_css_size("#canvas", &width, &height);
+        css_pixels *= height;
+        break;
+    }
+    default:
+        break;
+    }
+    g_events.mouse.scrolled += css_pixels * emscripten_get_device_pixel_ratio() / SCROLL_MODIFIER;
+    return true;
+}
+#else
 static void scroll_callback(GLFWwindow *, double, const double y_offset) { g_events.mouse.scrolled += y_offset; }
+#endif
 
 static void window_size_callback(GLFWwindow *, int, int) {
     g_events.window.resized = true;
@@ -105,7 +133,11 @@ void events_setup_callbacks(void *window) {
     glfwSetKeyCallback(w, key_callback);
     glfwSetMouseButtonCallback(w, mouse_button_callback);
     glfwSetCursorPosCallback(w, cursor_position_callback);
+#ifdef __EMSCRIPTEN__
+    emscripten_set_wheel_callback("#canvas", NULL, false, wheel_callback);
+#else
     glfwSetScrollCallback(w, scroll_callback);
+#endif
     glfwSetWindowSizeCallback(w, window_size_callback);
 }
 
