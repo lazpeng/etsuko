@@ -51,6 +51,7 @@ typedef struct LyricsView_t {
     LyricEffectSetting_t saved_lyric_effect_setting;
     LyricFillSetting_t saved_lyric_fill_setting;
     double prev_elapsed;
+    double smooth_elapsed;
 } LyricsView_t;
 
 // Initializes the lyric view
