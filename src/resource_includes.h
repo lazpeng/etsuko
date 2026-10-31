@@ -12,43 +12,43 @@
 #ifdef RESOURCE_INCLUDE_SHADERS
 
 static const char incbin_default_vert_shader[] = {
-#embed "shaders/default.vert.glsl"
+#embed <shaders/default.vert.glsl>
     ,'\0'
 };
 static const char incbin_fullscreen_quad_vert_shader[] = {
-#embed "shaders/fsq.vert.glsl"
+#embed <shaders/fsq.vert.glsl>
     ,'\0'
 };
 static const char incbin_texture_frag_shader[] = {
-#embed "shaders/texture.frag.glsl"
+#embed <shaders/texture.frag.glsl>
     ,'\0'
 };
 static const char incbin_rect_frag_shader[] = {
-#embed "shaders/rect.frag.glsl"
+#embed <shaders/rect.frag.glsl>
     ,'\0'
 };
 static const char incbin_gradient_frag_shader[] = {
-#embed "shaders/gradient.frag.glsl"
+#embed <shaders/gradient.frag.glsl>
     ,'\0'
 };
 static const char incbin_image_blur_frag_shader[] = {
-#embed "shaders/image blur.frag.glsl"
+#embed <shaders/image blur.frag.glsl>
     ,'\0'
 };
 static const char incbin_noise_field_frag_shader[] = {
-#embed "shaders/noise field.frag.glsl"
+#embed <shaders/noise field.frag.glsl>
     ,'\0'
 };
 static const char incbin_background_upscale_frag_shader[] = {
-#embed "shaders/background upscale.frag.glsl"
+#embed <shaders/background upscale.frag.glsl>
     ,'\0'
 };
 static const char incbin_blur_frag_shader[] = {
-#embed "shaders/blur.frag.glsl"
+#embed <shaders/blur.frag.glsl>
     ,'\0'
 };
 static const char incbin_blur_prepare_frag_shader[] = {
-#embed "shaders/blur prepare.frag.glsl"
+#embed <shaders/blur prepare.frag.glsl>
     ,'\0'
 };
 

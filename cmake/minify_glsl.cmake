@@ -1,0 +1,6 @@
+file(READ "${INPUT}" content)
+string(REGEX REPLACE "//[^\n]*" "" content "${content}")
+string(REGEX REPLACE "[ \t\r]+\n" "\n" content "${content}")
+string(REGEX REPLACE "\n[ \t]+" "\n" content "${content}")
+string(REGEX REPLACE "^[ \t]+" "" content "${content}")
+file(WRITE "${OUTPUT}" "${content}")

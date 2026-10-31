@@ -51,13 +51,27 @@ set_source_files_properties(src/contrib/stb_image.c PROPERTIES COMPILE_FLAGS "-w
 set_source_files_properties(src/contrib/stb_truetype.c PROPERTIES COMPILE_FLAGS "-w")
 set_source_files_properties(src/contrib/minimp3.c PROPERTIES COMPILE_FLAGS "-w")
 
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/*.glsl")
+set(SHADER_EMBED_DIR "${CMAKE_BINARY_DIR}/embed")
+foreach (shader ${SHADER_SOURCES})
+    get_filename_component(shader_name "${shader}" NAME)
+    set(shader_output "${SHADER_EMBED_DIR}/shaders/${shader_name}")
+    add_custom_command(OUTPUT "${shader_output}"
+            COMMAND ${CMAKE_COMMAND} "-DINPUT=${shader}" "-DOUTPUT=${shader_output}" -P "${CMAKE_SOURCE_DIR}/cmake/minify_glsl.cmake"
+            DEPENDS "${shader}" "${CMAKE_SOURCE_DIR}/cmake/minify_glsl.cmake"
+            VERBATIM)
+    list(APPEND SHADER_OUTPUTS "${shader_output}")
+endforeach ()
+target_sources(etsuko PRIVATE ${SHADER_OUTPUTS})
+target_compile_options(etsuko PRIVATE "--embed-dir=${SHADER_EMBED_DIR}")
+
 if (EMSCRIPTEN)
     message(STATUS "Configuring for Emscripten/WebAssembly")
 
     set_target_properties(etsuko PROPERTIES SUFFIX ".html")
 
     target_compile_options(etsuko PRIVATE
-            "SHELL:-O3"
+            "SHELL:-Oz"
             "SHELL:-g0"
             "SHELL:-flto"
             "SHELL:-msimd128"
@@ -75,13 +89,18 @@ if (EMSCRIPTEN)
             "SHELL:-sMIN_WEBGL_VERSION=2"
             "SHELL:-sMAX_WEBGL_VERSION=2"
 
-            "SHELL:-O3"
+            "SHELL:-Oz"
             "SHELL:-g0"
             "SHELL:-flto"
             "SHELL:-msimd128"
             "SHELL:-sFILESYSTEM=1"
             "SHELL:-lidbfs.js"
             "SHELL:--closure=1"
+
+            "SHELL:-sENVIRONMENT=web"
+            "SHELL:-sINCOMING_MODULE_JS_API=[canvas]"
+            "SHELL:-sTEXTDECODER=2"
+            "SHELL:-sGL_ENABLE_GET_PROC_ADDRESS=0"
 
             "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/shell_minimal.html"
     )
