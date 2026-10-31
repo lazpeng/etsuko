@@ -653,12 +653,15 @@ static void recalculate_container_alignment_ancestors(Container_t *container) {
 }
 
 static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_t *out_bounds) {
+    const Drawable_t *relative_x = layout->relative_to_x != NULL ? layout->relative_to_x : layout->relative_to;
+    const Drawable_t *relative_y = layout->relative_to_y != NULL ? layout->relative_to_y : layout->relative_to;
+
     const Bounds_t *proportional_bounds_x = &parent->bounds;
     if ( layout->flags & LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE ) {
-        if ( layout->relative_to == NULL ) {
+        if ( relative_x == NULL ) {
             printf("Warning: LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE is set but no relative_to is assigned\n");
         } else {
-            proportional_bounds_x = &layout->relative_to->bounds;
+            proportional_bounds_x = &relative_x->bounds;
         }
     }
 
@@ -681,10 +684,10 @@ static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_
 
     const Bounds_t *proportional_bounds_y = &parent->bounds;
     if ( layout->flags & LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE ) {
-        if ( layout->relative_to == NULL ) {
+        if ( relative_y == NULL ) {
             printf("Warning: LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE is set but no relative_to is assigned\n");
         } else {
-            proportional_bounds_y = &layout->relative_to->bounds;
+            proportional_bounds_y = &relative_y->bounds;
         }
     }
 
@@ -705,27 +708,27 @@ static void position_layout(const Layout_t *layout, Container_t *parent, Bounds_
         }
     }
 
-    if ( layout->relative_to != NULL ) {
-        if ( layout->relative_to->parent != parent ) {
+    if ( relative_x != NULL || relative_y != NULL ) {
+        if ( (relative_x != NULL && relative_x->parent != parent) || (relative_y != NULL && relative_y->parent != parent) ) {
             error_abort("Relative layout's parent is not the same as the container");
         }
 
         if ( (layout->flags & LAYOUT_RELATIVE_TO_POS) == 0 ) {
             puts("Warning: relative_to is set but no LAYOUT_RELATIVE_TO_X/Y flag is set.");
         }
+    }
 
-        if ( layout->flags & LAYOUT_RELATIVE_TO_X ) {
-            x += layout->relative_to->bounds.x;
-            if ( layout->flags & LAYOUT_RELATION_X_INCLUDE_WIDTH ) {
-                x += layout->relative_to->bounds.w;
-            }
+    if ( relative_x != NULL && (layout->flags & LAYOUT_RELATIVE_TO_X) ) {
+        x += relative_x->bounds.x;
+        if ( layout->flags & LAYOUT_RELATION_X_INCLUDE_WIDTH ) {
+            x += relative_x->bounds.w;
         }
+    }
 
-        if ( layout->flags & LAYOUT_RELATIVE_TO_Y ) {
-            y += layout->relative_to->bounds.y;
-            if ( layout->flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
-                y += layout->relative_to->bounds.h;
-            }
+    if ( relative_y != NULL && (layout->flags & LAYOUT_RELATIVE_TO_Y) ) {
+        y += relative_y->bounds.y;
+        if ( layout->flags & LAYOUT_RELATION_Y_INCLUDE_HEIGHT ) {
+            y += relative_y->bounds.h;
         }
     }
 
@@ -2382,8 +2385,9 @@ void ui_recompute_container(Ui_t *ui, Container_t *container) {
     // drawable need a second positioning pass to pick up the final bounds of their target.
     for ( size_t i = 0; i < container->child_drawables->size; i++ ) {
         Drawable_t *drawable = container->child_drawables->data[i];
-        if ( drawable->layout.relative_to != NULL )
-            position_layout(&drawable->layout, drawable->parent, &drawable->bounds);
+        const Layout_t *layout = &drawable->layout;
+        if ( layout->relative_to != NULL || layout->relative_to_x != NULL || layout->relative_to_y != NULL )
+            position_layout(layout, drawable->parent, &drawable->bounds);
     }
 
     for ( size_t i = 0; i < container->child_containers->size; i++ ) {

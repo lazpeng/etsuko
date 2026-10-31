@@ -140,24 +140,24 @@ static Drawable_t *line_box(const LyricLineWidget_t *widget) {
 }
 
 static void chain_line_below_drawable(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
-    drawable->layout.relative_to = relative;
+    drawable->layout.relative_to_y = relative;
     drawable->layout.offset_y = offset_y;
     drawable->layout.flags |= LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
     drawable->layout.flags &= ~LAYOUT_ANCHOR_BOTTOM_Y;
 }
 
 static void chain_line_above_drawable(Drawable_t *drawable, const Drawable_t *relative, const double offset_y) {
-    drawable->layout.relative_to = relative;
+    drawable->layout.relative_to_y = relative;
     drawable->layout.offset_y = offset_y;
     drawable->layout.flags |= LAYOUT_ANCHOR_BOTTOM_Y;
     drawable->layout.flags &= ~LAYOUT_RELATION_Y_INCLUDE_HEIGHT;
 }
 
 static void pin_line_drawable(Drawable_t *drawable, const Drawable_t *relative) {
-    drawable->layout.relative_to = relative;
-    drawable->layout.offset_x = 0;
+    drawable->layout.relative_to_y = relative;
     drawable->layout.offset_y = 0;
-    drawable->layout.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y;
+    drawable->layout.flags |= LAYOUT_RELATIVE_TO_Y;
+    drawable->layout.flags &= ~(LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_ANCHOR_BOTTOM_Y);
 }
 
 static void chain_line_below(const LyricLineWidget_t *widget, const Drawable_t *relative, const double offset_y) {
@@ -180,11 +180,7 @@ static void chain_line_under_previous(const LyricsView_t *view, const int32_t in
 static void place_on_previous_box(const LyricsView_t *view, const int32_t index) {
     const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[index];
     const LyricLineWidget_t *previous = view->selected_language->lyric_widgets->data[index - 1];
-    Drawable_t *slot = widget->line;
-    slot->layout.relative_to = line_box(previous);
-    slot->layout.offset_y = 0;
-    slot->layout.flags |= LAYOUT_RELATIVE_TO_Y;
-    slot->layout.flags &= ~(LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_ANCHOR_BOTTOM_Y);
+    pin_line_drawable(widget->line, line_box(previous));
 }
 
 static void chain_line_above(const LyricsView_t *view, const Drawable_t *relative, const int32_t index) {
@@ -341,7 +337,8 @@ static void make_reading_hint(LyricLineWidget_t *widget) {
                                               &(Layout_t){.offset_x = 0,
                                                           .offset_y = 0,
                                                           .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_PROPORTIONAL_Y,
-                                                          .relative_to = widget->line});
+                                                          .relative_to_x = widget->line,
+                                                          .relative_to_y = widget->line});
         ui_animate_translation(widget->reading_hint, &(Animation_EaseTranslationData_t){
                                                          .duration = TRANSLATION_ANIMATION_DURATION,
                                                          .ease_func = ANIM_EASE_OUT_CUBIC,
@@ -646,7 +643,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             .offset_y = prev == NULL ? 0 : LINE_VERTICAL_PADDING,
             .offset_x = offset_x,
             .flags = alignment_flags | LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
-            .relative_to = prev == NULL ? result->lyric_anchor : prev,
+            .relative_to_y = prev == NULL ? result->lyric_anchor : prev,
         };
 
         if ( intermission ) {
@@ -872,7 +869,7 @@ static void reposition_line(const LyricsView_t *view, const LyricsState_t *state
 
     // Whichever of the two is pinned to the other has to be repositioned last
     Drawable_t *first = widget->line, *second = widget->reading_hint;
-    if ( second != NULL && first->layout.relative_to == second ) {
+    if ( second != NULL && first->layout.relative_to_y == second ) {
         first = widget->reading_hint;
         second = widget->line;
     }

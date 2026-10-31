@@ -71,6 +71,8 @@ typedef struct Layout_t {
     double padding_w, padding_h;
     WEAK const Drawable_t *relative_to_size;
     WEAK const Drawable_t *relative_to;
+    WEAK const Drawable_t *relative_to_x;
+    WEAK const Drawable_t *relative_to_y;
     WEAK const Drawable_t *follow_scale;
     SizeConstraint_t min_width, max_width;
     SizeConstraint_t min_height, max_height;
