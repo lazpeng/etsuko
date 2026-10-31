@@ -1286,13 +1286,14 @@ static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index
 
     const LineState_t new_state = LINE_ALMOST_HIDDEN;
     if ( widget->state != new_state ) {
-        if ( widget->state == LINE_ACTIVE ) {
-            const int32_t alpha = calculate_alpha(1);
-            ui_drawable_disable_draw_region(drawable);
-            ui_drawable_set_draw_underlay(drawable, false, 0);
-            ui_drawable_set_alpha(drawable, alpha);
-            fade_hint_for_line(view, index);
-        }
+        ui_drawable_disable_draw_region(drawable);
+        ui_drawable_set_draw_underlay(drawable, false, 0);
+        ui_drawable_set_alpha(drawable, calculate_alpha(1));
+        ui_drawable_set_blur_radius(drawable, 0.f);
+        ui_drawable_set_scale_factor(drawable, LINE_SCALE_FACTOR_ACTIVE);
+        scale_hint_for_line(view, index);
+        fade_hint_for_line(view, index);
+        blur_hint_for_line(view, index);
         widget->state = new_state;
     }
 }
@@ -1300,7 +1301,10 @@ static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index
 static void collapse_hidden_lines(const LyricsView_t *view, LyricsState_t *state) {
     if ( state->anchor < 0 ) {
         // Keep the last line in place, also indirectly update the anchor to a non-zero value
-        set_line_almost_hidden(view, state->num_lines - 1, state);
+        const int32_t last = state->num_lines - 1;
+        chain_line_under_previous(view, last, state);
+        reposition_line(view, state, last);
+        set_line_hidden(view, last, state);
     }
 
     const int32_t boundary = state->anchor;
