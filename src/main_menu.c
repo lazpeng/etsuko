@@ -79,11 +79,6 @@ static void album_art_loaded(const Resource_t *res) {
 
     data->image_data = res->buffer->data;
     data->image_data_size = res->buffer->downloaded_bytes;
-
-    data->blurred_art = render_make_blurred_image(res->buffer->data, (int)res->buffer->downloaded_bytes);
-    if ( data->blurred_art == NULL )
-        error_abort("Failed to blur album art image (main menu)");
-
     data->state = ART_PENDING_DRAW;
     if ( str_is_empty(data->menu->selected_song) )
         data->menu->selected_song = data->id;
@@ -103,7 +98,10 @@ static void song_list_loaded(const Resource_t *res) {
 
     if ( menu->menu_songs == NULL )
         error_abort("Failed to load song list");
+}
 
+static void start_album_art_loads(MainMenu_t *menu) {
+    menu->album_art_loads = vec_init();
     for ( size_t i = 0; i < menu->menu_songs->size; i++ ) {
         const MenuSong_t *song = menu->menu_songs->data[i];
         if ( str_is_empty(song->album_art_path) )
@@ -124,7 +122,6 @@ MainMenu_t *menu_init() {
     if ( menu == NULL )
         error_abort("Failed to allocate data for the main menu");
     menu->ui = ui_init();
-    menu->album_art_loads = vec_init();
     menu->album_arts = map_init();
     menu->menu_songs = vec_init();
     menu->album_art_drawables = map_init();
@@ -332,15 +329,17 @@ static void update_background(MainMenu_t *menu) {
     if ( str_is_empty(menu->selected_song) )
         return;
 
-    const AlbumArtData_t *art = map_get(menu->album_arts, menu->selected_song);
+    AlbumArtData_t *art = map_get(menu->album_arts, menu->selected_song);
     if ( art == NULL || art->image_data == NULL )
         return;
 
-    const Container_t *root = ui_root_container(menu->ui);
     if ( art->blurred_art == NULL ) {
-        root->background->type = BACKGROUND_NONE;
-        return;
+        art->blurred_art = render_make_blurred_image(art->image_data, (int)art->image_data_size);
+        if ( art->blurred_art == NULL )
+            error_abort("Failed to blur album art image (main menu)");
     }
+
+    const Container_t *root = ui_root_container(menu->ui);
     if ( !str_equals(menu->background_song, art->id) ) {
         ui_container_set_background_image(root, art->blurred_art);
         menu->background_song = art->id;
@@ -497,6 +496,9 @@ AppStatus_t menu_loop(MainMenu_t *menu) {
     ui_draw(menu->ui);
     ui_end_loop();
     settings_on_frame_end(menu->ui);
+
+    if ( menu->album_art_loads == NULL )
+        start_album_art_loads(menu);
 
     global_update();
     return APP_STATUS_OK;
