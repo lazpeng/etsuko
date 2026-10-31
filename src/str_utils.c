@@ -293,6 +293,8 @@ bool str_ch_is_katakana(const int32_t c) { return (c >= 0x30A0 && c <= 0x30FF); 
 
 bool str_ch_is_kana(const int32_t c) { return str_ch_is_hiragana(c) || str_ch_is_katakana(c); }
 
+bool str_ch_is_small_tsu(const int32_t c) { return c == 0x3063 || c == 0x30C3; }
+
 bool str_ch_is_japanese_particle(const int32_t c) {
     // は (wa/ha), が (ga), に (ni), を (wo), へ (he), の (no), で (de), も (mo)
     switch ( c ) {

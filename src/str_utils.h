@@ -140,6 +140,10 @@ bool str_ch_is_katakana(int32_t c);
  */
 bool str_ch_is_kana(int32_t c);
 /**
+ * Checks whether the given unicode codepoint is a っ or ッ
+ */
+bool str_ch_is_small_tsu(int32_t c);
+/**
  * Checks whether the given unicode codepoint is a japanese particle
  */
 bool str_ch_is_japanese_particle(int32_t c);

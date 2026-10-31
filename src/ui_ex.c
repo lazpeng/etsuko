@@ -1025,18 +1025,38 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
             if ( !segment_visited && should_show_effect ) {
                 const bool per_char =
                     settings_get()->per_char_effects && !song->disable_per_char_effects && segment_length_in_current_line > 1;
-                const int32_t num_units = per_char ? segment_length_in_current_line : 1;
-                const double unit_duration = per_char ? duration_per_character : duration;
+                const int32_t num_chars = segment_length_in_current_line;
                 const float segment_x1 = x1 + (float)segment_fill_contribution;
 
+                const size_t text_len = per_char ? strlen(line->full_text) : 0;
+                int32_t text_idx = 0;
+                for ( int32_t ci = 0; per_char && ci < timing_start_idx; ci++ ) {
+                    str_u8_next(line->full_text, text_len, &text_idx);
+                }
+
                 float unit_x0 = x1;
-                for ( int32_t u = 0; u < num_units; u++ ) {
-                    float unit_x1 = segment_x1;
-                    if ( u < num_units - 1 ) {
-                        const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[segment_start_in_line + u];
-                        unit_x1 = unit_x0 + (float)(char_info->width / drawable->bounds.w);
+                for ( int32_t u = 0; u < num_chars; ) {
+                    int32_t unit_len = num_chars;
+                    if ( per_char ) {
+                        unit_len = 1;
+                        const int32_t c = str_u8_next(line->full_text, text_len, &text_idx);
+                        // Don't split a small two preceding another character into its own unit
+                        if ( u < num_chars - 1 && str_ch_is_small_tsu(c) ) {
+                            str_u8_next(line->full_text, text_len, &text_idx);
+                            unit_len = 2;
+                        }
                     }
-                    const double unit_delay = u * unit_duration - elapsed_since_segment;
+
+                    float unit_x1 = segment_x1;
+                    if ( u + unit_len < num_chars ) {
+                        unit_x1 = unit_x0;
+                        for ( int32_t k = 0; k < unit_len; k++ ) {
+                            const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[segment_start_in_line + u + k];
+                            unit_x1 += (float)(char_info->width / drawable->bounds.w);
+                        }
+                    }
+                    const double unit_duration = per_char ? duration_per_character * unit_len : duration;
+                    const double unit_delay = u * duration_per_character - elapsed_since_segment;
                     const int32_t unit_id = timing_start_idx + u;
 
                     if ( pulse_effect && !is_only_punctuation ) {
@@ -1059,6 +1079,7 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
                         ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
                     }
                     unit_x0 = unit_x1;
+                    u += unit_len;
                 }
 
                 widget->segment_visited[s] |= (1u << i);
