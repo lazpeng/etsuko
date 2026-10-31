@@ -350,6 +350,8 @@ typedef struct Animation_ScaleData_t {
 
 typedef struct Animation_DrawRegionData_t {
     DrawRegionOptSet_t draw_regions;
+    double region_start[MAX_DRAW_SUB_REGIONS];
+    double region_duration[MAX_DRAW_SUB_REGIONS];
     double duration;
     AnimationEaseType_t ease_func;
 } Animation_DrawRegionData_t;

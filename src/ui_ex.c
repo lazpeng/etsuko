@@ -953,6 +953,7 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
     }
 
     bool is_only_punctuation = false;
+    bool last_segment_continues = false;
     // Calculate how much of each line we need to show
     for ( size_t i = 0; i < text_data->line_offsets->size; i++ ) {
         const TextOffsetInfo_t *offset_info = text_data->line_offsets->data[i];
@@ -1081,6 +1082,7 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
 
             x1 += (float)segment_fill_contribution;
             last_segment_remaining = duration - elapsed_since_segment;
+            last_segment_continues = timing_end_idx < timing->end_char_idx;
         }
         if ( i >= MAX_DRAW_SUB_REGIONS ) {
             error_abort("calculate_sub_region_for_active_line: i >= MAX_DRAW_SUB_REGIONS");
@@ -1096,7 +1098,8 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
     }
     ui_drawable_merge_finished_scale_regions(drawable);
 
-    const double min_duration = is_only_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
+    const bool exact_duration = is_only_punctuation || last_segment_continues;
+    const double min_duration = exact_duration ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
     const double fill_duration = MAX(min_duration, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, (AnimatedSetOpts_t){.duration = fill_duration});
 }

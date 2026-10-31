@@ -825,6 +825,16 @@ static void apply_scale_animation(Animation_t *animation, Bounds_t *final_bounds
     }
 }
 
+static double draw_region_progress(const Animation_t *animation, const int32_t region) {
+    const Animation_DrawRegionData_t *data = animation->custom_data;
+    const double local_elapsed = animation->elapsed - animation->delay - data->region_start[region];
+    if ( local_elapsed <= 0.0 )
+        return 0.0;
+    if ( local_elapsed >= data->region_duration[region] )
+        return 1.0;
+    return apply_ease_func(local_elapsed / data->region_duration[region], animation->ease_func);
+}
+
 static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet_t *regions) {
     const Animation_DrawRegionData_t *data = animation->custom_data;
     if ( animation->elapsed <= animation->delay ) {
@@ -832,22 +842,23 @@ static void apply_draw_region_animation(Animation_t *animation, DrawRegionOptSet
             regions->regions[i].x1_perc = data->draw_regions.regions[i].x1_perc;
         return;
     }
-    double progress = (animation->elapsed - animation->delay) / animation->duration;
-    if ( progress < 1.0 ) {
-        progress = apply_ease_func(progress, animation->ease_func);
-        for ( int i = 0; i < regions->num_regions; i++ ) {
-            // Naively consider that just the end indexes that are going to change
-            const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
-            // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
-            regions->regions[i].anim_x1_from_perc = data->draw_regions.regions[i].x1_perc;
-            regions->regions[i].anim_x1_to_perc = regions->regions[i].x1_perc;
-            regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
-            // TODO: Figure out a way to include animating the y axis but for now leave it commented
-            // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
-        }
-    } else {
-        animation->active = false;
+    bool running = false;
+    for ( int i = 0; i < regions->num_regions; i++ ) {
+        const double progress = draw_region_progress(animation, i);
+        if ( progress >= 1.0 )
+            continue;
+        running = true;
+        // Naively consider that just the end indexes that are going to change
+        const float delta_x = regions->regions[i].x1_perc - data->draw_regions.regions[i].x1_perc;
+        // const float delta_y = drawable->regions[i][3] - data->prev_regions[i][3];
+        regions->regions[i].anim_x1_from_perc = data->draw_regions.regions[i].x1_perc;
+        regions->regions[i].anim_x1_to_perc = regions->regions[i].x1_perc;
+        regions->regions[i].x1_perc = (float)(data->draw_regions.regions[i].x1_perc + delta_x * progress);
+        // TODO: Figure out a way to include animating the y axis but for now leave it commented
+        // final_regions[i][3] = data->prev_regions[i][3] + delta_y * (float)progress;
     }
+    if ( !running )
+        animation->active = false;
 }
 
 static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptSet_t *regions) {
@@ -2769,22 +2780,27 @@ static bool retarget_running_draw_region(Drawable_t *drawable, const DrawRegionO
     if ( running == NULL )
         return false;
 
+    // Each region keeps its own timeline so retargeting one line doesn't stretch the fill still running on another
     Animation_DrawRegionData_t *data = running->custom_data;
-    double progress = 0.0;
-    if ( running->elapsed > running->delay && running->duration > 0.0 )
-        progress = apply_ease_func(MIN(1.0, (running->elapsed - running->delay) / running->duration), running->ease_func);
-
+    const double now = MAX(0.0, running->elapsed - running->delay);
+    double end = now;
     for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        const bool existed = i < data->draw_regions.num_regions && i < drawable->draw_regions.num_regions;
         const float from = i < data->draw_regions.num_regions ? data->draw_regions.regions[i].x1_perc : 0.f;
         const float to = i < drawable->draw_regions.num_regions ? drawable->draw_regions.regions[i].x1_perc : from;
-        data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
-        data->draw_regions.regions[i].x1_perc = (float)(from + (to - from) * progress);
+        float region_from = from;
+        if ( !existed || to != draw_regions->regions[i].x1_perc ) {
+            region_from = (float)(from + (to - from) * (existed ? draw_region_progress(running, i) : 0.0));
+            data->region_start[i] = now + opts->delay;
+            data->region_duration[i] = opts->duration;
+        }
+        data->draw_regions.regions[i] = draw_regions->regions[i];
+        data->draw_regions.regions[i].x1_perc = region_from;
+        end = MAX(end, data->region_start[i] + data->region_duration[i]);
     }
     data->draw_regions.num_regions = draw_regions->num_regions;
 
-    running->elapsed = 0.0;
-    running->duration = opts->duration;
-    running->delay = opts->delay;
+    running->duration = end;
     copy_draw_regions_to_drawable(drawable, draw_regions);
     return true;
 }
@@ -2813,6 +2829,8 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
             // If it's finished or not active yet, and it's different, copy the drawable's previous values to the animation
             for ( int i = 0; i < draw_regions->num_regions; i++ ) {
                 data->draw_regions.regions[i] = drawable->draw_regions.regions[i];
+                data->region_start[i] = 0.0;
+                data->region_duration[i] = opts.duration;
             }
             data->draw_regions.num_regions = draw_regions->num_regions;
             animation->duration = opts.duration;
