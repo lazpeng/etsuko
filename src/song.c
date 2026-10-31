@@ -11,6 +11,26 @@ static Song_t *g_song;
 
 typedef enum { BLOCK_HEADER = 0, BLOCK_LYRICS, BLOCK_TIMINGS, BLOCK_ASS, BLOCK_READINGS, BLOCK_UNKNOWN } BlockType;
 
+static double parse_decimal(const char *str) {
+    while ( *str == ' ' || *str == '\t' )
+        str++;
+    double sign = 1.0;
+    if ( *str == '-' || *str == '+' )
+        sign = *str++ == '-' ? -1.0 : 1.0;
+    double value = 0.0;
+    while ( *str >= '0' && *str <= '9' )
+        value = value * 10.0 + (*str++ - '0');
+    double divisor = 1.0;
+    if ( *str == '.' ) {
+        str++;
+        while ( *str >= '0' && *str <= '9' ) {
+            value = value * 10.0 + (*str++ - '0');
+            divisor *= 10.0;
+        }
+    }
+    return sign * value / divisor;
+}
+
 static void read_header(Song_t *song, const char *buffer, const size_t length) {
     const size_t equals = strcspn(buffer, "=");
     if ( equals >= length )
@@ -56,7 +76,7 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
         }
         free(value);
     } else if ( str_equals_sized(buffer, "offset", equals) ) {
-        song->time_offset = strtod(value, NULL);
+        song->time_offset = parse_decimal(value);
         free(value);
     } else if ( str_equals_sized(buffer, "fontOverride", equals) ) {
         song->font_override = value;
@@ -160,10 +180,10 @@ static double convert_timing(const char *str, const size_t len) {
         error_abort("%s: \"%.*s\" is not a valid timing, expected it in a mm:ss form", g_song->id, (int)len, str);
     }
     char *minutes_str = strndup(str, colon - str);
-    const double minutes = strtod(minutes_str, NULL);
+    const double minutes = parse_decimal(minutes_str);
     free(minutes_str);
     char *seconds_str = strndup(colon + 1, len - (colon - str));
-    const double seconds = strtod(seconds_str, NULL);
+    const double seconds = parse_decimal(seconds_str);
     free(seconds_str);
 
     return minutes * 60.0 + seconds;
