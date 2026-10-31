@@ -1030,6 +1030,7 @@ static void perform_draw(const Ui_t *ui, const Drawable_t *drawable, const Bound
         DrawTextureOpts_t shadow_opts = opts;
         shadow_opts.alpha_mod = shadow_alpha;
         shadow_opts.scale_regions = NULL;
+        shadow_opts.blur_radius = drawable->blur_radius;
 
         render_draw_texture(drawable->shadow->texture, &shadow_bounds, &shadow_opts);
     }
