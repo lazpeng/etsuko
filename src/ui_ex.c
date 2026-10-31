@@ -1025,6 +1025,8 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
             }
 
             const bool segment_visited = widget->segment_visited[s] & (1u << i);
+            if ( !segment_visited && elapsed_since_segment < duration && audio_is_paused() )
+                break;
             is_only_punctuation = timing->is_only_punctuation;
 
             const bool pulse_enabled_in_config = config_get()->karaoke.enable_pulse_effect;

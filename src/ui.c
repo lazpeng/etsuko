@@ -2790,8 +2790,8 @@ void ui_drawable_set_draw_region_dur(Drawable_t *drawable, const DrawRegionOptSe
     if ( base_anim != NULL ) {
         // If it's the same, do nothing
         // TODO: Currently we only check for the x1 values
-        bool different = false;
-        for ( int i = 0; i < draw_regions->num_regions; i++ ) {
+        bool different = drawable->draw_regions.num_regions != draw_regions->num_regions;
+        for ( int i = 0; !different && i < draw_regions->num_regions; i++ ) {
             if ( drawable->draw_regions.regions[i].x1_perc != draw_regions->regions[i].x1_perc ) {
                 different = true;
                 break;
