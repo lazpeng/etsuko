@@ -76,7 +76,7 @@ Karaoke_t *karaoke_init(void) {
 static uint64_t get_sized_progress_bytes(const Resource_t *res) {
     if ( res == NULL || res->buffer->total_bytes == 0 )
         return 0;
-    return res->buffer->fetch_progress_bytes;
+    return MIN(res->buffer->fetch_progress_bytes, res->buffer->total_bytes);
 }
 
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
