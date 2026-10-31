@@ -65,8 +65,6 @@
 #define INTERMISSION_OUTRO_SCALE (0.5)
 #define INTERMISSION_BREATH_PERIOD (2.4)
 #define INTERMISSION_BREATH_AMPLITUDE (0.12)
-#define SMOOTH_CLOCK_MAX_DRIFT (0.5)
-#define SMOOTH_CLOCK_CORRECTION_RATE (2.0)
 
 typedef struct LyricsState_t {
     int32_t current_active, first_active, anchor, num_lines;
@@ -552,17 +550,6 @@ static void fade_in_reached_hints(const LyricsView_t *view, const LyricLineWidge
 
     if ( changed )
         bake_reading_hint(widget);
-}
-
-static double advance_smooth_clock(LyricsView_t *view, const double elapsed) {
-    const double drift = elapsed - view->smooth_elapsed;
-    if ( view->user_did_seek || fabs(drift) > SMOOTH_CLOCK_MAX_DRIFT ) {
-        view->smooth_elapsed = elapsed;
-    } else if ( !audio_is_paused() ) {
-        const double delta = events_get_delta_time();
-        view->smooth_elapsed += delta + drift * MIN(1.0, delta * SMOOTH_CLOCK_CORRECTION_RATE);
-    }
-    return view->smooth_elapsed;
 }
 
 // this function name sounds like a concert that is broadcasted over the internet
@@ -1417,12 +1404,11 @@ void ui_ex_lyrics_view_loop(LyricsView_t *view) {
     collapse_hidden_lines(view, &state);
     reposition_credits(view, &state);
 
-    const double smooth_elapsed = advance_smooth_clock(view, elapsed_time);
     for ( int32_t i = 0; i < num_lines; i++ ) {
         const LyricLineWidget_t *widget = view->selected_language->lyric_widgets->data[i];
         if ( is_intermission_widget(widget) )
-            animate_intermission(widget, smooth_elapsed);
-        fade_in_reached_hints(view, widget, smooth_elapsed);
+            animate_intermission(widget, elapsed_time);
+        fade_in_reached_hints(view, widget, elapsed_time);
     }
     update_credits_blur(view, &state);
 
