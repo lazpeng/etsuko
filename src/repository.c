@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "error.h"
 #ifndef DISABLE_REMOTE_FETCH
@@ -55,6 +56,27 @@ static void resource_free(Resource_t *resource) {
 #error "No base URL defined for the CDN to fetch songs from"
 #endif
 
+#define UNCOMPRESSED_LENGTH_HEADER "X-Uncompressed-Length"
+
+static uint64_t get_uncompressed_length(emscripten_fetch_t *fetch) {
+    const size_t headers_length = emscripten_fetch_get_response_headers_length(fetch);
+    if ( headers_length == 0 )
+        return 0;
+
+    char *headers = malloc(headers_length + 1);
+    emscripten_fetch_get_response_headers(fetch, headers, headers_length + 1);
+    char **unpacked = emscripten_fetch_unpack_response_headers(headers);
+    free(headers);
+
+    uint64_t length = 0;
+    for ( size_t i = 0; unpacked != NULL && unpacked[i] != NULL; i += 2 ) {
+        if ( strcasecmp(unpacked[i], UNCOMPRESSED_LENGTH_HEADER) == 0 )
+            length = strtoull(unpacked[i + 1], NULL, 10);
+    }
+    emscripten_fetch_free_unpacked_response_headers(unpacked);
+    return length;
+}
+
 static void on_fetch_success(emscripten_fetch_t *fetch) {
     Resource_t *resource = fetch->userData;
     if ( resource->abandoned ) {
@@ -62,6 +84,7 @@ static void on_fetch_success(emscripten_fetch_t *fetch) {
     } else {
         if ( fetch->numBytes > 0 ) {
             append_data_to_buffer(resource->buffer, fetch->data, fetch->numBytes);
+            resource->buffer->total_bytes = resource->buffer->fetch_progress_bytes = resource->buffer->downloaded_bytes;
             resource->status = LOAD_DONE;
         } else {
             printf("Fetch failed for '%s': empty response\n", resource->original_filename);
@@ -89,12 +112,14 @@ static void on_fetch_failure(emscripten_fetch_t *fetch) {
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 static void on_fetch_ready(emscripten_fetch_t *fetch) {
     const Resource_t *resource = fetch->userData;
-    resource->buffer->total_bytes = fetch->totalBytes;
+    if ( fetch->readyState == 2 && resource->buffer->total_bytes == 0 )
+        resource->buffer->total_bytes = get_uncompressed_length(fetch);
 }
 
 static void on_fetch_progress(emscripten_fetch_t *fetch) {
     const Resource_t *resource = fetch->userData;
-    resource->buffer->total_bytes = fetch->totalBytes;
+    if ( fetch->totalBytes > 0 )
+        resource->buffer->total_bytes = fetch->totalBytes;
     resource->buffer->fetch_progress_bytes = fetch->dataOffset + fetch->numBytes;
 }
 

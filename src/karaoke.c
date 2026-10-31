@@ -73,21 +73,15 @@ Karaoke_t *karaoke_init(void) {
     return karaoke;
 }
 
+static uint64_t get_sized_progress_bytes(const Resource_t *res) {
+    if ( res == NULL || res->buffer->total_bytes == 0 )
+        return 0;
+    return res->buffer->fetch_progress_bytes;
+}
+
 static uint64_t get_total_loading_files_downloaded_bytes(const Karaoke_t *state) {
-    uint64_t total = 0;
-    if ( state->resources.album_art != NULL )
-        total += state->resources.album_art->buffer->fetch_progress_bytes;
-
-    if ( state->resources.lyrics_font != NULL )
-        total += state->resources.lyrics_font->buffer->fetch_progress_bytes;
-
-    if ( state->resources.ui_font != NULL )
-        total += state->resources.ui_font->buffer->fetch_progress_bytes;
-
-    if ( state->resources.audio != NULL )
-        total += state->resources.audio->buffer->fetch_progress_bytes;
-
-    return total;
+    return get_sized_progress_bytes(state->resources.album_art) + get_sized_progress_bytes(state->resources.lyrics_font) +
+           get_sized_progress_bytes(state->resources.ui_font) + get_sized_progress_bytes(state->resources.audio);
 }
 
 static uint64_t get_total_loading_files_size(const Karaoke_t *state) {
@@ -262,7 +256,8 @@ AppStatus_t karaoke_load_loop(Karaoke_t *state) {
         } else {
             const uint64_t total_size = get_total_loading_files_size(state);
             const uint64_t downloaded = get_total_loading_files_downloaded_bytes(state);
-            ui_widget_progress_bar_progress(state->loading.progress_bar, (double)downloaded / (double)total_size);
+            ui_widget_progress_bar_progress(state->loading.progress_bar,
+                                            total_size > 0 ? (double)downloaded / (double)total_size : 0.0);
         }
 
         if ( state->loading.loading_text == NULL ) {
