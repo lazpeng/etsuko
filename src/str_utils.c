@@ -14,7 +14,7 @@ int32_t str_skip_whitespace(const char *src, const int32_t start, const int32_t 
     while ( idx < max_len ) {
         int32_t tmp_idx = idx;
         const int32_t c = str_u8_next(src, (size_t)max_len, &tmp_idx);
-        if ( c == ' ' || c == '\r' || c == '\n' )
+        if ( c == ' ' || c == '\t' || c == '\r' || c == '\n' )
             idx = tmp_idx;
         else
             break;
@@ -24,16 +24,12 @@ int32_t str_skip_whitespace(const char *src, const int32_t start, const int32_t 
 }
 
 int32_t str_find(const char *src, const char c, const int32_t start, int32_t max_len) {
-    const int32_t size = (int32_t)strnlen(src, MAX_STRLEN);
-    if ( max_len < 0 )
-        max_len = size;
-
-    if ( start >= size )
+    if ( src == NULL || start < 0 )
         return -1;
-
-    for ( int32_t i = start; i < MIN(max_len, start + max_len); i++ ) {
+    const size_t length = max_len < 0 ? strlen(src) : strnlen(src, (size_t)max_len);
+    for ( size_t i = (size_t)start; i < length; i++ ) {
         if ( src[i] == c )
-            return i;
+            return (int32_t)i;
     }
 
     return -1;
@@ -52,6 +48,8 @@ int32_t str_u8_find_str(const char *src, const char *sub, const int32_t start, c
 }
 
 int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len) {
+    if ( src == NULL || start < 0 || max_len <= start )
+        return 0;
     int32_t count = 0;
     int32_t i = start;
 
@@ -65,43 +63,52 @@ int32_t str_u8_count(const char *src, const int32_t start, const int32_t max_len
 
 int32_t str_u8_next(const char *const bytes, const size_t size, int32_t *index) {
     const int32_t i = *index;
-    if ( i < 0 || (size_t)i >= size )
+    if ( bytes == NULL || i < 0 || (size_t)i >= size )
         return -1;
 
-    const unsigned char c0 = (unsigned char)bytes[i];
+    const unsigned char c = (unsigned char)bytes[i];
+    *index = i + 1;
+    if ( c < 0x80 )
+        return c;
 
-    // ASCII fast path
-    if ( c0 < 0x80 ) {
-        *index = i + 1;
-        return c0;
+    int32_t count;
+    uint32_t codepoint;
+    unsigned char lower = 0x80;
+    unsigned char upper = 0xBF;
+    if ( c >= 0xC2 && c <= 0xDF ) {
+        count = 2;
+        codepoint = c & 0x1F;
+    } else if ( c >= 0xE0 && c <= 0xEF ) {
+        count = 3;
+        codepoint = c & 0x0F;
+        if ( c == 0xE0 )
+            lower = 0xA0;
+        else if ( c == 0xED )
+            upper = 0x9F;
+    } else if ( c >= 0xF0 && c <= 0xF4 ) {
+        count = 4;
+        codepoint = c & 0x07;
+        if ( c == 0xF0 )
+            lower = 0x90;
+        else if ( c == 0xF4 )
+            upper = 0x8F;
+    } else {
+        return 0xFFFD;
     }
 
-    // 2-byte
-    if ( (c0 & 0xE0) == 0xC0 ) {
-        if ( i + 2 > (int32_t)size )
-            return -1;
-        *index = i + 2;
-        return ((c0 & 0x1F) << 6) | ((unsigned char)bytes[i + 1] & 0x3F);
+    for ( int32_t j = 1; j < count; j++ ) {
+        if ( (size_t)i + j >= size )
+            return 0xFFFD;
+        const unsigned char next = (unsigned char)bytes[i + j];
+        if ( next < lower || next > upper )
+            return 0xFFFD;
+        codepoint = (codepoint << 6) | (next & 0x3F);
+        *index = i + j + 1;
+        lower = 0x80;
+        upper = 0xBF;
     }
 
-    // 3-byte
-    if ( (c0 & 0xF0) == 0xE0 ) {
-        if ( i + 3 > (int32_t)size )
-            return -1;
-        *index = i + 3;
-        return ((c0 & 0x0F) << 12) | (((unsigned char)bytes[i + 1] & 0x3F) << 6) | ((unsigned char)bytes[i + 2] & 0x3F);
-    }
-
-    // 4-byte
-    if ( (c0 & 0xF8) == 0xF0 ) {
-        if ( i + 4 > (int32_t)size )
-            return -1;
-        *index = i + 4;
-        return ((c0 & 0x07) << 18) | (((unsigned char)bytes[i + 1] & 0x3F) << 12) | (((unsigned char)bytes[i + 2] & 0x3F) << 6) |
-               ((unsigned char)bytes[i + 3] & 0x3F);
-    }
-
-    return -1;
+    return (int32_t)codepoint;
 }
 
 char *str_get_filename(const char *path) {

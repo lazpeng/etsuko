@@ -41,6 +41,7 @@ int32_t str_u8_find_str(const char *src, const char *sub, int32_t start, int32_t
 int32_t str_u8_count(const char *src, int32_t start, int32_t max_len);
 /**
  * Finds the next utf8 encoded character in a string, starting from the given index.
+ * Returns U+FFFD when encountering invalid bytes at the given index.
  */
 int32_t str_u8_next(const char *const bytes, size_t size, int32_t *index);
 /**
