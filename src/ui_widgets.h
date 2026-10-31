@@ -82,7 +82,7 @@ struct ProgressBarWidget_t;
 typedef void (*c_progress_bar_widget_on_change)(Ui_t *ui, const struct ProgressBarWidget_t *widget, double progress);
 
 typedef struct ProgressBarWidget_t {
-    OWNING Drawable_t *d_bg, *d_fg, *d_handle;
+    OWNING Drawable_t *d_bg, *d_fg, *d_handle, *d_hitbox;
     WEAK Container_t *parent;
     Color_t bg_color, fg_color;
     bool editable;

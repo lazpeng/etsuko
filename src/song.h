@@ -99,6 +99,7 @@ typedef struct Song_t {
      * This enables some of the dynamic fill options to work (linear will, full-word won't)
      */
     bool assume_full_sub_timing_when_absent;
+    bool disable_per_char_effects;
 } Song_t;
 
 // Loads a song info from the given src buffer. Filename is only useful for assigning an id to the song

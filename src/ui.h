@@ -112,6 +112,7 @@ typedef enum ScrollBarKind_t {
 typedef struct ScrollBar_t {
     ScrollBarKind_t kind;
     OWNING Drawable_t *background, *handle;
+    OWNING Drawable_t *background_hitbox, *handle_hitbox;
     double width_em;
     Color_t background_color, handle_color;
     bool hovered;
@@ -240,7 +241,8 @@ typedef enum AnimationEaseType_t {
     ANIM_EASE_OUT_CUBIC,
     ANIM_EASE_OUT_SINE,
     ANIM_EASE_OUT_QUAD,
-    ANIM_EASE_OUT_CIRC
+    ANIM_EASE_OUT_CIRC,
+    ANIM_EASE_IN_OUT_SINE
 } AnimationEaseType_t;
 
 typedef struct Animation_t {
@@ -257,6 +259,7 @@ typedef struct Animation_t {
     // this reference is indeed a non-owning one.
     WEAK struct Animation_t *next;
     bool sticky;
+    bool reversed;
     int32_t unique_id;
 } Animation_t;
 
@@ -278,6 +281,7 @@ typedef struct AnimatedSetOpts_t {
     // start the from values from the running animation instead of the given parameters.
     // Does not apply to all types of animations
     bool interpolate_if_active;
+    AnimationEaseType_t ease_func;
 } AnimatedSetOpts_t;
 
 // Options and custom data
@@ -458,5 +462,7 @@ void ui_container_animate_scroll_y(Container_t *container, double duration, Anim
 void ui_container_set_background_colors(const Container_t *container, Color_t primary, Color_t secondary);
 void ui_container_set_background_image(const Container_t *container, const BlurredBackgroundImage_t *image);
 void ui_clear_sticky_animations(const Drawable_t *drawable);
+void ui_wind_down_sticky_animations(const Drawable_t *drawable, double duration);
+void ui_drawable_merge_finished_scale_regions(const Drawable_t *drawable);
 
 #endif // ETSUKO_UI_H

@@ -19,6 +19,8 @@
 #include "constants.h"
 #include "container_utils.h"
 
+#define SCALE_REGION_MERGE_EPSILON (1e-4f)
+
 typedef struct ZLayer_t {
     int index;
     Vector_t *nodes; // of Drawable_t*
@@ -736,6 +738,7 @@ static double ease_out_sine(const double t) { return sin((t * M_PI) / 2.0); }
 static double ease_out_cubic(const double t) { return 1 - pow(1 - t, 3); }
 static double ease_out_quad(const double t) { return 1 - (1 - t) * (1 - t); }
 static double ease_out_circ(const double t) { return sqrt(1 - pow(1 - t, 2)); }
+static double ease_in_out_sine(const double t) { return -(cos(M_PI * t) - 1) / 2.0; }
 
 static double apply_ease_func(const double progress, const AnimationEaseType_t ease_func) {
     switch ( ease_func ) {
@@ -749,6 +752,8 @@ static double apply_ease_func(const double progress, const AnimationEaseType_t e
         return ease_out_quad(progress);
     case ANIM_EASE_OUT_CIRC:
         return ease_out_circ(progress);
+    case ANIM_EASE_IN_OUT_SINE:
+        return ease_in_out_sine(progress);
     default:
         break;
     }
@@ -853,6 +858,8 @@ static void apply_scale_region_animation(Animation_t *animation, ScaleRegionOptS
         progress = 1.0;
         animation->active = animation->sticky;
     }
+    if ( animation->reversed )
+        progress = 1.0 - progress;
 
     progress = apply_ease_func(progress, data->ease_func);
     // Consider this will be the num_region'th region of the final set
@@ -1126,6 +1133,8 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
+    Drawable_t *background_hitbox = container->overflow_y.scrollbar.background_hitbox;
+    Drawable_t *handle_hitbox = container->overflow_y.scrollbar.handle_hitbox;
 
     const double total_height = container->scrollable_area.total_height;
     const double min_y = container->scrollable_area.min_content_y;
@@ -1133,10 +1142,10 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
     const double computed_handle_height = container->bounds.h / (total_height + container->bounds.h) * 0.9;
 
     if ( computed_handle_height >= 1.0 ) {
-        background->enabled = handle->enabled = false;
+        background->enabled = handle->enabled = background_hitbox->enabled = handle_hitbox->enabled = false;
         return;
     }
-    background->enabled = handle->enabled = true;
+    background->enabled = handle->enabled = background_hitbox->enabled = handle_hitbox->enabled = true;
 
     background->layout.width = render_measure_pixels_from_em(container->overflow_y.scrollbar.width_em);
     measure_layout(&background->layout, container, &background->bounds);
@@ -1154,6 +1163,11 @@ static void recompute_vertical_scroll_bar_bounds(Container_t *container) {
     measure_layout(&layout, container, &handle->bounds);
     position_layout(&layout, container, &handle->bounds);
     handle->layout = layout;
+
+    measure_layout(&background_hitbox->layout, container, &background_hitbox->bounds);
+    position_layout(&background_hitbox->layout, container, &background_hitbox->bounds);
+    measure_layout(&handle_hitbox->layout, container, &handle_hitbox->bounds);
+    position_layout(&handle_hitbox->layout, container, &handle_hitbox->bounds);
 }
 
 static void vec_add_sorted_drawable(Vector_t *vec, Drawable_t *drawable) {
@@ -1396,14 +1410,15 @@ static void on_drag_scrollbar_handle(const UiEventOpts_t *opts, Drawable_t *, vo
     ui_container_scroll_y_to(container, pos);
 }
 
-static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t *drawable, void *custom) {
+static void on_click_scrollbar_background(const UiEventOpts_t *opts, Drawable_t *, void *custom) {
     Container_t *container = custom;
     const double total_height = container->scrollable_area.total_height;
 
+    const Drawable_t *bg = container->overflow_y.scrollbar.background;
     double bg_top;
-    ui_get_drawable_canon_pos(drawable, NULL, &bg_top);
+    ui_get_drawable_canon_pos(bg, NULL, &bg_top);
 
-    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.y - bg_top) / drawable->bounds.h));
+    const double progress = MAX(0.0, MIN(1.0, (opts->mouse.y - bg_top) / bg->bounds.h));
     const double pos = container->scrollable_area.min_content_y + total_height * progress;
     ui_container_scroll_y_to_dur(container, pos, (AnimatedSetOpts_t){.duration = 0.5});
 }
@@ -1476,15 +1491,32 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
     data.color = handle_color;
     container->overflow_y.scrollbar.handle = ui_make_rectangle(ui, &data, container, &(Layout_t){.z_index = 999 + 1});
 
+    data.color = (Color_t){0};
+    Layout_t hitbox_layout = {.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_X |
+                                       LAYOUT_PROPORTIONAL_X_POS_TO_RELATIVE | LAYOUT_ANCHOR_CENTER_X,
+                              .offset_x = 0.5,
+                              .width = 3.0,
+                              .height = 1.0,
+                              .relative_to = container->overflow_y.scrollbar.background,
+                              .relative_to_size = container->overflow_y.scrollbar.background,
+                              .absolute = true,
+                              .z_index = 999 + 2};
+    container->overflow_y.scrollbar.background_hitbox = ui_make_rectangle(ui, &data, container, &hitbox_layout);
+    hitbox_layout.relative_to = hitbox_layout.relative_to_size = container->overflow_y.scrollbar.handle;
+    hitbox_layout.z_index = 999 + 3;
+    container->overflow_y.scrollbar.handle_hitbox = ui_make_rectangle(ui, &data, container, &hitbox_layout);
+
     container->overflow_y.scrollbar.width_em = 0.5;
     container->overflow_y.scrollbar.background_color = bg_color;
     container->overflow_y.scrollbar.handle_color = handle_color;
 
     Drawable_t *background = container->overflow_y.scrollbar.background;
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, background, on_click_scrollbar_background, container);
+    Drawable_t *background_hitbox = container->overflow_y.scrollbar.background_hitbox;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, background_hitbox, on_click_scrollbar_background, container);
 
     Drawable_t *handle = container->overflow_y.scrollbar.handle;
-    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, handle, on_drag_scrollbar_handle, container);
+    Drawable_t *handle_hitbox = container->overflow_y.scrollbar.handle_hitbox;
+    ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, handle_hitbox, on_drag_scrollbar_handle, container);
 
     if ( kind == SCROLL_BAR_AUTO_HIDE ) {
         const Animation_FadeInOutData_t fade_data = {.duration = 5.0, .ease_func = ANIM_EASE_NONE};
@@ -1494,10 +1526,10 @@ void ui_container_add_vertical_scrollbar(Ui_t *ui, Container_t *container, const
         ui_drawable_set_alpha_immediate(background, 0);
         ui_drawable_set_alpha_immediate(handle, 0);
 
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, background, on_hover_scrollbar, container);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, background, on_hover_scrollbar, container);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, handle, on_hover_scrollbar, container);
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, handle, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, background_hitbox, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, background_hitbox, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, handle_hitbox, on_hover_scrollbar, container);
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, handle_hitbox, on_hover_scrollbar, container);
 
         ui_add_global_event_callback(ui, UI_EVENT_MOUSE_SCROLL, on_container_scroll, container);
     }
@@ -2502,6 +2534,7 @@ static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const
         existing->elapsed = 0.0;
         existing->active = true;
         existing->sticky = apply_type == ANIM_APPLY_STICKY;
+        existing->reversed = false;
         return existing;
     }
     // duplicate the animation
@@ -2512,6 +2545,7 @@ static Animation_t *internal_reapply_animation(const Drawable_t *drawable, const
     animation->delay = 0.0;
     animation->active = true;
     animation->sticky = apply_type == ANIM_APPLY_STICKY;
+    animation->reversed = false;
     animation->unique_id = unique_id;
     // then duplicate the data
     animation->custom_data = NULL;
@@ -2873,6 +2907,8 @@ void ui_drawable_add_scale_region_dur(const Drawable_t *drawable, const ScaleReg
         if ( animation != NULL ) {
             Animation_ScaleRegionData_t *data = animation->custom_data;
             data->scale_region = *region;
+            if ( opts.ease_func != ANIM_EASE_NONE )
+                data->ease_func = opts.ease_func;
             animation->duration = opts.duration;
             animation->delay = opts.delay;
         }
@@ -3066,5 +3102,68 @@ void ui_clear_sticky_animations(const Drawable_t *drawable) {
         Animation_t *animation = drawable->active_animations->data[i];
         if ( animation->sticky )
             animation->active = false;
+    }
+}
+
+void ui_wind_down_sticky_animations(const Drawable_t *drawable, const double duration) {
+    for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+        Animation_t *animation = drawable->active_animations->data[i];
+        if ( !animation->sticky || !animation->active )
+            continue;
+        animation->sticky = false;
+        const double played = animation->elapsed - animation->delay;
+        if ( animation->type != ANIM_SCALE_REGION || played <= 0.0 || duration <= 0.0 ) {
+            animation->active = false;
+            continue;
+        }
+        const double progress = MIN(1.0, played / animation->duration);
+        animation->reversed = true;
+        animation->delay = 0.0;
+        animation->duration = duration;
+        animation->elapsed = (1.0 - progress) * duration;
+    }
+}
+
+static bool is_finished_sticky_scale_region(const Animation_t *animation) {
+    return animation->type == ANIM_SCALE_REGION && animation->active && animation->sticky && animation->next == NULL &&
+           animation->elapsed >= animation->delay + animation->duration;
+}
+
+static bool try_merge_scale_regions(ScaleRegionOpt_t *into, const ScaleRegionOpt_t *other) {
+    if ( into->y0_perc != other->y0_perc || into->y1_perc != other->y1_perc )
+        return false;
+    if ( into->from_scale != other->from_scale || into->to_scale != other->to_scale )
+        return false;
+    if ( into->pos_x_offset != other->pos_x_offset || into->pos_y_offset != other->pos_y_offset )
+        return false;
+    if ( other->x0_perc > into->x1_perc + SCALE_REGION_MERGE_EPSILON ||
+         into->x0_perc > other->x1_perc + SCALE_REGION_MERGE_EPSILON )
+        return false;
+
+    into->x0_perc = MIN(into->x0_perc, other->x0_perc);
+    into->x1_perc = MAX(into->x1_perc, other->x1_perc);
+    return true;
+}
+
+void ui_drawable_merge_finished_scale_regions(const Drawable_t *drawable) {
+    bool merged = true;
+    while ( merged ) {
+        merged = false;
+        for ( size_t i = 0; i < drawable->active_animations->size; i++ ) {
+            const Animation_t *keeper = drawable->active_animations->data[i];
+            if ( !is_finished_sticky_scale_region(keeper) )
+                continue;
+            Animation_ScaleRegionData_t *keeper_data = keeper->custom_data;
+            for ( size_t j = i + 1; j < drawable->active_animations->size; j++ ) {
+                Animation_t *other = drawable->active_animations->data[j];
+                if ( !is_finished_sticky_scale_region(other) )
+                    continue;
+                const Animation_ScaleRegionData_t *other_data = other->custom_data;
+                if ( try_merge_scale_regions(&keeper_data->scale_region, &other_data->scale_region) ) {
+                    other->active = false;
+                    merged = true;
+                }
+            }
+        }
     }
 }

@@ -77,6 +77,9 @@ static void read_header(Song_t *song, const char *buffer, const size_t length) {
     } else if ( str_equals_sized(buffer, "assumeFullSubTiming", equals) ) {
         song->assume_full_sub_timing_when_absent = str_equals_right_sized(value, "yes");
         free(value);
+    } else if ( str_equals_sized(buffer, "perCharEffects", equals) ) {
+        song->disable_per_char_effects = str_equals_right_sized(value, "no");
+        free(value);
     } else {
         char *option_name = strndup(buffer, equals);
         printf("Unrecognized option: %s\n", option_name);

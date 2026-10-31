@@ -263,6 +263,7 @@ ButtonWidget_t *ui_build_button_widget(Ui_t *ui, Container_t *parent, const Layo
     const Layout_t content_layout = {
         .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_CENTER,
         .z_index = 1,
+        .absolute = layout->absolute,
     };
     Drawable_t *d_content;
     if ( opts->content_type == BUTTON_CONTENT_IMAGE ) {
@@ -370,6 +371,8 @@ static void progress_bar_reconfigure(void *widget_data) {
         widget->d_handle->layout.offset_x = widget->d_fg->layout.width;
         ui_reposition_drawable(widget->d_handle);
     }
+    if ( widget->d_hitbox != NULL )
+        ui_reposition_drawable(widget->d_hitbox);
 }
 
 static void progress_bar_destroy(Ui_t *ui, void *widget) { ui_destroy_progress_bar_widget(ui, widget); }
@@ -438,14 +441,25 @@ ProgressBarWidget_t *ui_build_progress_bar_widget(Ui_t *ui, Container_t *parent,
     }
 
     if ( opts->user_editable ) {
-        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, widget->d_bg, progress_bar_widget_event, widget);
+        const Layout_t hitbox_layout = {.flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATIVE_TO_SIZE | LAYOUT_PROPORTIONAL_Y |
+                                                 LAYOUT_PROPORTIONAL_Y_POS_TO_RELATIVE | LAYOUT_ANCHOR_CENTER_Y,
+                                        .offset_y = 0.5,
+                                        .width = 1.0,
+                                        .height = 4.0,
+                                        .relative_to = widget->d_bg,
+                                        .relative_to_size = widget->d_bg,
+                                        .z_index = layout->z_index + 1};
+        const Drawable_RectangleData_t hitbox_data = {.color = {.r = 0, .g = 0, .b = 0, .a = 0}};
+        widget->d_hitbox = ui_make_rectangle(ui, &hitbox_data, parent, &hitbox_layout);
+
+        ui_add_event_callback(ui, UI_EVENT_MOUSE_CLICK, widget->d_hitbox, progress_bar_widget_event, widget);
 
         if ( opts->draggable )
-            ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, widget->d_bg, progress_bar_widget_event, widget);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_DRAG, widget->d_hitbox, progress_bar_widget_event, widget);
 
         if ( opts->handle_type == PROG_BAR_HANDLE_SHOW_ON_HOVER ) {
-            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_bg, progress_bar_widget_event, widget);
-            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_bg, progress_bar_widget_event, widget);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_ENTERED, widget->d_hitbox, progress_bar_widget_event, widget);
+            ui_add_event_callback(ui, UI_EVENT_MOUSE_HOVER_EXITED, widget->d_hitbox, progress_bar_widget_event, widget);
             ui_animate_fade(widget->d_handle, &(Animation_FadeInOutData_t){.duration = 0.3});
             ui_drawable_set_alpha_immediate(widget->d_handle, 0);
         }
@@ -460,6 +474,8 @@ void ui_destroy_progress_bar_widget(Ui_t *ui, ProgressBarWidget_t *widget) {
     ui_destroy_drawable(ui, widget->d_fg);
     if ( widget->d_handle != NULL )
         ui_destroy_drawable(ui, widget->d_handle);
+    if ( widget->d_hitbox != NULL )
+        ui_destroy_drawable(ui, widget->d_hitbox);
 
     ui_unregister_widget(widget->parent, widget->entry_id);
     free(widget);

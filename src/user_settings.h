@@ -51,6 +51,7 @@ typedef struct UserSettings_t {
     double global_audio_offset_ms;
     int volume;
     bool blur_lyrics;
+    bool per_char_effects;
 } UserSettings_t;
 
 UserSettings_t *settings_get(void);

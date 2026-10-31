@@ -20,6 +20,8 @@
 #define MODAL_SETTING_LABEL_X_POS (0.475)
 #define MODAL_SETTING_VALUE_X_POS (0.525)
 #define MODAL_SETTING_LABEL_EM (0.9)
+#define MODAL_BORDER_RADIUS_EM (1.0)
+#define MODAL_SCROLL_END_PADDING (0.05)
 
 struct SettingsModal_t;
 
@@ -34,6 +36,7 @@ static const UserSettings_t g_default_settings = {
     .auto_play = SET_AUTO_PLAY_DISABLED,
     .global_audio_offset_ms = 0.0,
     .volume = 100,
+    .per_char_effects = true,
 };
 
 static UserSettings_t settings_defaults(void) {
@@ -160,6 +163,7 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
     const JsonField_t *volume_field = json_obj_get(root_obj, "volume");
     const JsonField_t *audio_offset_field = json_obj_get(root_obj, "global_audio_offset");
     const JsonField_t *blur_lyrics_field = json_obj_get(root_obj, "blur_lyrics");
+    const JsonField_t *per_char_effects_field = json_obj_get(root_obj, "per_char_effects");
 
     if ( !str_is_empty(read_hints) )
         read_hints_from_string(settings, read_hints);
@@ -179,6 +183,8 @@ static UserSettings_t *read_settings_from_json_string(const char *src) {
         settings->global_audio_offset_ms = json_get_number(audio_offset_field);
     if ( blur_lyrics_field != NULL )
         settings->blur_lyrics = json_get_bool(blur_lyrics_field);
+    if ( per_char_effects_field != NULL )
+        settings->per_char_effects = json_get_bool(per_char_effects_field);
 
     json_obj_destroy(root_obj);
     json_ctx_destroy(ctx);
@@ -201,6 +207,7 @@ static StrBuffer_t *settings_to_json_string(const UserSettings_t *settings) {
     json_buf_add_number(buf, &first, "volume", settings->volume);
     json_buf_add_number(buf, &first, "global_audio_offset", settings->global_audio_offset_ms);
     json_buf_add_bool(buf, &first, "blur_lyrics", settings->blur_lyrics);
+    json_buf_add_bool(buf, &first, "per_char_effects", settings->per_char_effects);
     json_buf_end_object(buf);
     return buf;
 }
@@ -398,7 +405,7 @@ static void on_close_settings(Ui_t *, const ButtonWidget_t *) {
     save_current_settings();
 }
 
-static Container_t *create_container(const Ui_t *ui) {
+static Container_t *create_container(Ui_t *ui) {
     const Layout_t layout = {
         .flags = LAYOUT_CENTER | LAYOUT_PROPORTIONAL_SIZE,
         .width = 0.6,
@@ -412,8 +419,11 @@ static Container_t *create_container(const Ui_t *ui) {
     const Color_t bg_color_secondary = {.r = 50, .g = 50, .b = 50, .a = 50};
     ui_container_set_background_colors(container, bg_color, bg_color_secondary);
     container->background->type = BACKGROUND_GRADIENT;
-    container->background->border_radius_em = 2.0;
+    container->background->border_radius_em = MODAL_BORDER_RADIUS_EM;
     container->background->blur = true;
+
+    container->overflow_y = (ContainerOverflow_t){.kind = OVERFLOW_SCROLL, .relative_end_padding = MODAL_SCROLL_END_PADDING};
+    ui_container_add_vertical_scrollbar(ui, container, SCROLL_BAR_AUTO_HIDE);
 
     return container;
 }
@@ -655,6 +665,49 @@ static Drawable_t *create_effect_setting(Ui_t *ui, Drawable_t *prev) {
     };
     ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
     widget->on_change_callback = on_effect_changed;
+
+    return text;
+}
+
+static void on_per_char_effects_changed(Ui_t *, const ToggleWidget_t *, const int selected) {
+    UserSettings_t *settings = settings_get();
+    settings->per_char_effects = selected == 0;
+}
+
+static Drawable_t *create_per_char_effects_setting(Ui_t *ui, Drawable_t *prev) {
+    const UserSettings_t *settings = settings_get();
+    const Layout_t text_layout = {
+        .flags = LAYOUT_ANCHOR_RIGHT_X | LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_LABEL_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const Drawable_TextData_t text_data = {
+        .text = "Per character effect:",
+        .font_type = FONT_UI,
+        .em = MODAL_SETTING_LABEL_EM,
+        .color = {.r = 255, .g = 255, .b = 255, .a = 255},
+    };
+    Drawable_t *text = ui_make_text(ui, &text_data, g_modal->container, &text_layout);
+
+    const Layout_t toggle_layout = {
+        .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_RELATIVE_TO_Y,
+        .relative_to = prev,
+        .offset_x = MODAL_SETTING_VALUE_X_POS,
+        .offset_y = MODAL_SETTING_VERTICAL_OFFSET,
+    };
+    const char *opts[] = {"Enabled", "Disabled"};
+    const ToggleWidgetOpts_t toggle_opts = {
+        .opts = opts,
+        .num_opts = sizeof(opts) / sizeof(const char *),
+        .text_em = MODAL_SETTING_LABEL_EM,
+        .text_color = {.r = 255, .g = 255, .b = 255, .a = 255},
+        .background_color = {.r = 100, .g = 100, .b = 100, .a = 70},
+        .active_color = {.r = 210, .g = 210, .b = 210, .a = 90},
+        .active_index = settings->per_char_effects ? 0 : 1,
+    };
+    ToggleWidget_t *widget = ui_build_toggle_widget(ui, g_modal->container, &toggle_layout, &toggle_opts);
+    widget->on_change_callback = on_per_char_effects_changed;
 
     return text;
 }
@@ -947,6 +1000,7 @@ static void create_reset_button(Ui_t *ui) {
         .flags = LAYOUT_PROPORTIONAL_POS | LAYOUT_WRAP_AROUND_Y | LAYOUT_ANCHOR_BOTTOM_Y,
         .offset_x = 0.01,
         .offset_y = -0.02,
+        .absolute = true,
     };
     const ButtonWidgetOpts_t opts = {
         .bg_color = {.r = 150, .g = 150, .b = 150, .a = 150},
@@ -973,6 +1027,7 @@ void settings_show(Ui_t *ui) {
     prev = create_past_lyrics_setting(ui, prev);
     prev = create_fill_setting(ui, prev);
     prev = create_effect_setting(ui, prev);
+    prev = create_per_char_effects_setting(ui, prev);
     prev = create_language_setting(ui, prev);
     prev = create_auto_play_setting(ui, prev);
     prev = create_blur_setting(ui, prev);

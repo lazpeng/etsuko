@@ -18,6 +18,7 @@
 // This is very messy, could be refactored into something at least consistent with the naming
 #define LINE_SIZE_WITH_TIMINGS_EM (3.0)
 #define LINE_SIZE_WITHOUT_TIMINGS_EM (1.5)
+#define CREDITS_SIZE_EM (0.8)
 #define LINE_VERTICAL_PADDING (0.03)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.05)
 #define LINE_FIRST_VERTICAL_OFFSET (0.35)
@@ -41,9 +42,10 @@
 #define SCALE_REGION_TARGET_SCALE (0.1)
 #define FILL_ANIM_MIN_DURATION (0.2)
 #define LINE_BLUR_FACTOR (1.f)
-#define EMPHASIZE_EFFECT_Y_OFFSET_EM (0.3)
+#define EMPHASIZE_EFFECT_Y_OFFSET_EM (0.15)
 #define EMPHASIZE_EFFECT_X_OFFSET_EM (0)
 #define EMPHASIZE_EFFECT_MIN_DURATION (0.4)
+#define EMPHASIZE_EFFECT_WIND_DOWN_DURATION (0.4)
 #define TRANSLATION_ANIMATION_DURATION (0.5)
 #define LINE_CASCADE_LEADING_LINES (2)
 #define LINE_CASCADE_TRAILING_LINES (4)
@@ -578,8 +580,7 @@ static void on_line_event(const UiEventOpts_t *opts, Drawable_t *, void *custom_
 static void on_key_pressed(const UiEventOpts_t *opt, Drawable_t *, void *) {
     if ( opt->keyboard.key == KEY_R ) {
         UserSettings_t *settings = settings_get();
-        settings->read_hints_visibility =
-            settings->read_hints_visibility == SET_READ_HINTS_SHOWN ? SET_READ_HINTS_HIDDEN : SET_READ_HINTS_SHOWN;
+        settings->read_hints_visibility = !settings->read_hints_visibility;
     }
 }
 
@@ -740,7 +741,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             ui_make_text(ui,
                          &(Drawable_TextData_t){.text = "Written by: ",
                                                 .draw_shadow = true,
-                                                .em = 0.8,
+                                                .em = CREDITS_SIZE_EM,
                                                 .font_type = FONT_LYRICS,
                                                 .alignment = ALIGN_LEFT,
                                                 .color = {.r = 200, .g = 200, .b = 200, .a = 255}},
@@ -756,7 +757,7 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
             ui_make_text(ui,
                          &(Drawable_TextData_t){.text = view->song->credits,
                                                 .draw_shadow = true,
-                                                .em = 0.8,
+                                                .em = CREDITS_SIZE_EM,
                                                 .font_type = FONT_UI,
                                                 .alignment = ALIGN_LEFT,
                                                 .color = {.r = 200, .g = 200, .b = 200, .a = 255}},
@@ -888,6 +889,31 @@ static void reposition_line(const LyricsView_t *view, const LyricsState_t *state
         ui_reposition_container(widget->intermission_group);
 }
 
+static void add_pulse_region(const Drawable_t *drawable, const ScaleRegionOpt_t *base_region, const double delay,
+                             const double duration, const int32_t unique_id) {
+    const double down_duration = MAX(duration - SCALE_REGION_UP_DURATION, SCALE_REGION_DOWN_MIN_DURATION);
+    if ( -delay >= SCALE_REGION_UP_DURATION + down_duration )
+        return;
+
+    ScaleRegionOpt_t region = *base_region;
+    region.from_scale = 0.f;
+    region.to_scale = SCALE_REGION_TARGET_SCALE;
+    const AnimatedSetOpts_t up_anim_opts = {
+        .duration = SCALE_REGION_UP_DURATION, .delay = delay, .apply_type = ANIM_APPLY_DEFAULT, .unique_id = unique_id};
+    ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
+    // Then do another scale anim for scaling back down for the duration of the segment (minus the up duration)
+    region.from_scale = SCALE_REGION_TARGET_SCALE;
+    region.to_scale = 0.f;
+    // That runs after the current one finishes
+    // This works because it will be applied sequentially to the last animation on the exection queue with the same unique id,
+    // which is guaranteed to be the one above because it's set to run simultaneously (so it is added to the queue no matter
+    // what) and the application is single threaded, so no other code could be pushing animations to the queue between the
+    // call to ui_drawable_add_scale_region_dur and the line below
+    const AnimatedSetOpts_t down_anim_opts = {
+        .duration = down_duration, .apply_type = ANIM_APPLY_SEQUENTIAL, .unique_id = unique_id};
+    ui_drawable_add_scale_region_dur(drawable, &region, down_anim_opts);
+}
+
 static void calculate_sub_region_for_active_line(const LyricsView_t *view, LyricLineWidget_t *widget) {
     // A slight variation that highlights the entire portion of the segment
     // Mainly intended when the timing is done per-syllable
@@ -901,7 +927,8 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
 
     const bool pulse_effect = settings_get()->lyric_effect == SET_LYRIC_EFFECT_PULSE;
     const bool emphasize_effect = settings_get()->lyric_effect == SET_LYRIC_EFFECT_EMPHASIZE;
-    const double emphasize_offset_y = render_measure_pixels_from_em(EMPHASIZE_EFFECT_Y_OFFSET_EM);
+    const double emphasize_offset_y_em = EMPHASIZE_EFFECT_Y_OFFSET_EM;
+    const double emphasize_offset_y = render_measure_pixels_from_em(emphasize_offset_y_em);
     const double emphasize_offset_x = render_measure_pixels_from_em(EMPHASIZE_EFFECT_X_OFFSET_EM);
 
     double last_segment_remaining = 0.0;
@@ -914,13 +941,22 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
     const bool lyric_settings_changed = lyric_effect_changed || lyric_fill_changed;
 
     // Check for any visited segments that are now in the future (e.g. user seeked backwards)
+    bool rewound = false;
     for ( int32_t s = 0; s < line->num_timings; s++ ) {
         if ( widget->segment_visited[s] ) {
             const Song_LineTiming_t *timing = &line->timings[s];
             const double start_time = line->base_start_time + timing->cumulative_duration;
-            if ( audio_elapsed < start_time || lyric_settings_changed ) {
-                widget->segment_visited[s] = 0;
-            }
+            if ( audio_elapsed < start_time )
+                rewound = true;
+        }
+    }
+    // Finished regions may have been merged together, so the elapsed ones are rebuilt from scratch instead
+    if ( rewound ) {
+        ui_clear_sticky_animations(drawable);
+    }
+    if ( rewound || lyric_settings_changed ) {
+        for ( int32_t s = 0; s < line->num_timings; s++ ) {
+            widget->segment_visited[s] = 0;
         }
     }
 
@@ -987,42 +1023,42 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
             const bool pulse_enabled_in_settings = settings_get()->lyric_fill == SET_LYRIC_FILL_WITH_EFFECT;
             const bool should_show_effect = pulse_enabled_in_settings && pulse_enabled_in_config;
             if ( !segment_visited && should_show_effect ) {
-                if ( pulse_effect && !is_only_punctuation ) {
-                    ScaleRegionOpt_t region = {
-                        .x0_perc = x1,
-                        .x1_perc = x1 + (float)segment_fill_contribution,
-                        .y0_perc = y0,
-                        .y1_perc = y1,
-                        .from_scale = 0.f,
-                        .to_scale = SCALE_REGION_TARGET_SCALE,
-                    };
-                    static AnimatedSetOpts_t up_anim_opts = {.duration = SCALE_REGION_UP_DURATION,
-                                                             .apply_type = ANIM_APPLY_DEFAULT};
-                    ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
-                    // Then do another scale anim for scaling back down for the duration of the segment (minus the up duration)
-                    region.from_scale = SCALE_REGION_TARGET_SCALE;
-                    region.to_scale = 0.f;
-                    // That runs after the current one finishes
-                    // This works because it will be applied sequentially to the last animation on the exection queue, which is
-                    // guaranteed to be the one above because it's set to run simultaneously (so it is added to the queue no
-                    // matter what) and the application is single threaded, so no other code could be pushing animations to the
-                    // queue between the call to ui_drawable_add_scale_region_dur and the line below
-                    const double down_duration = MAX(duration - SCALE_REGION_UP_DURATION, SCALE_REGION_DOWN_MIN_DURATION);
-                    const AnimatedSetOpts_t down_anim_opts = {.duration = down_duration, .apply_type = ANIM_APPLY_SEQUENTIAL};
-                    ui_drawable_add_scale_region_dur(drawable, &region, down_anim_opts);
-                } else if ( emphasize_effect ) {
-                    ScaleRegionOpt_t region = {
-                        .x0_perc = x1,
-                        .x1_perc = x1 + (float)segment_fill_contribution,
-                        .y0_perc = y0,
-                        .y1_perc = y1,
-                        .pos_y_offset = -emphasize_offset_y,
-                        .pos_x_offset = -emphasize_offset_x,
-                    };
-                    const double final_duration = MAX(duration, EMPHASIZE_EFFECT_MIN_DURATION);
-                    const AnimatedSetOpts_t up_anim_opts = {
-                        .duration = final_duration, .apply_type = ANIM_APPLY_STICKY, .unique_id = timing->start_char_idx};
-                    ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
+                const bool per_char =
+                    settings_get()->per_char_effects && !song->disable_per_char_effects && segment_length_in_current_line > 1;
+                const int32_t num_units = per_char ? segment_length_in_current_line : 1;
+                const double unit_duration = per_char ? duration_per_character : duration;
+                const float segment_x1 = x1 + (float)segment_fill_contribution;
+
+                float unit_x0 = x1;
+                for ( int32_t u = 0; u < num_units; u++ ) {
+                    float unit_x1 = segment_x1;
+                    if ( u < num_units - 1 ) {
+                        const CharOffsetInfo_t *char_info = offset_info->char_offsets->data[segment_start_in_line + u];
+                        unit_x1 = unit_x0 + (float)(char_info->width / drawable->bounds.w);
+                    }
+                    const double unit_delay = u * unit_duration - elapsed_since_segment;
+                    const int32_t unit_id = timing_start_idx + u;
+
+                    if ( pulse_effect && !is_only_punctuation ) {
+                        const ScaleRegionOpt_t region = {.x0_perc = unit_x0, .x1_perc = unit_x1, .y0_perc = y0, .y1_perc = y1};
+                        add_pulse_region(drawable, &region, unit_delay, unit_duration, unit_id);
+                    } else if ( emphasize_effect ) {
+                        const ScaleRegionOpt_t region = {
+                            .x0_perc = unit_x0,
+                            .x1_perc = unit_x1,
+                            .y0_perc = y0,
+                            .y1_perc = y1,
+                            .pos_y_offset = -emphasize_offset_y,
+                            .pos_x_offset = -emphasize_offset_x,
+                        };
+                        const AnimatedSetOpts_t up_anim_opts = {.duration = MAX(unit_duration, EMPHASIZE_EFFECT_MIN_DURATION),
+                                                                .delay = unit_delay,
+                                                                .apply_type = ANIM_APPLY_STICKY,
+                                                                .unique_id = unit_id,
+                                                                .ease_func = ANIM_EASE_IN_OUT_SINE};
+                        ui_drawable_add_scale_region_dur(drawable, &region, up_anim_opts);
+                    }
+                    unit_x0 = unit_x1;
                 }
 
                 widget->segment_visited[s] |= (1u << i);
@@ -1043,6 +1079,8 @@ static void calculate_sub_region_for_active_line(const LyricsView_t *view, Lyric
         // y1 is the end of this line
         draw_regions.regions[i].y1_perc = y1;
     }
+    ui_drawable_merge_finished_scale_regions(drawable);
+
     const double min_duration = is_only_punctuation ? last_segment_remaining : FILL_ANIM_MIN_DURATION;
     const double fill_duration = MAX(min_duration, last_segment_remaining);
     ui_drawable_set_draw_region_dur(drawable, &draw_regions, (AnimatedSetOpts_t){.duration = fill_duration});
@@ -1170,7 +1208,7 @@ static LyricLineWidget_t *set_line_hidden(const LyricsView_t *view, const int32_
     const LineState_t new_state = LINE_HIDDEN;
     if ( widget->state != new_state ) {
         widget->state = new_state;
-        ui_clear_sticky_animations(drawable);
+        ui_wind_down_sticky_animations(drawable, EMPHASIZE_EFFECT_WIND_DOWN_DURATION);
 
         ui_drawable_disable_draw_region(drawable);
         ui_drawable_set_draw_underlay(drawable, false, 0);
@@ -1221,7 +1259,6 @@ static void set_line_almost_hidden(const LyricsView_t *view, const int32_t index
     if ( widget->state != new_state ) {
         if ( widget->state == LINE_ACTIVE ) {
             const int32_t alpha = calculate_alpha(1);
-            // TODO: Clear sticky animations but with a wind down instead of snapping back into place
             ui_drawable_disable_draw_region(drawable);
             ui_drawable_set_draw_underlay(drawable, false, 0);
             ui_drawable_set_alpha(drawable, alpha);
@@ -1279,8 +1316,10 @@ static void update_credits_blur(const LyricsView_t *view, const LyricsState_t *s
     const bool scrolled_downwards = view->container->overflow_y.set_amount > reference->bounds.y + reference->bounds.h;
 
     float blur_radius = 0.f;
-    if ( config_get()->karaoke.blur_credits && before_last_line && !scrolled_downwards )
-        blur_radius = calculate_blur(calculate_distance(view, state->num_lines, reference_index));
+    if ( config_get()->karaoke.blur_credits && before_last_line && !scrolled_downwards ) {
+        const int32_t distance = calculate_distance(view, state->num_lines, reference_index);
+        blur_radius = calculate_blur(distance) * CREDITS_SIZE_EM / LINE_SIZE_WITH_TIMINGS_EM;
+    }
     ui_drawable_set_blur_radius(language->credits_prefix, blur_radius);
     ui_drawable_set_blur_radius(language->credits_content, blur_radius);
 }
