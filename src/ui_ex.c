@@ -19,6 +19,8 @@
 #define LINE_SIZE_WITH_TIMINGS_EM (3.0)
 #define LINE_SIZE_WITHOUT_TIMINGS_EM (1.5)
 #define CREDITS_SIZE_EM (0.8)
+#define CREDITS_PREFIX_ALPHA (150)
+#define CREDITS_CONTENT_ALPHA (200)
 #define LINE_VERTICAL_PADDING (0.03)
 #define LINE_VERTICAL_PADDING_WITH_READINGS (0.05)
 #define LINE_FIRST_VERTICAL_OFFSET (0.35)
@@ -736,6 +738,8 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                           .relative_to = prev});
         ui_animate_translation(result->credit_separator,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_fade(result->credit_separator,
+                        &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
 
         result->credits_prefix =
             ui_make_text(ui,
@@ -749,9 +753,11 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                          &(Layout_t){.offset_y = 0.01,
                                      .flags = LAYOUT_RELATIVE_TO_Y | LAYOUT_RELATION_Y_INCLUDE_HEIGHT | LAYOUT_PROPORTIONAL_Y,
                                      .relative_to = result->credit_separator});
-        ui_drawable_set_alpha_immediate(result->credits_prefix, 150);
+        ui_drawable_set_alpha_immediate(result->credits_prefix, CREDITS_PREFIX_ALPHA);
         ui_animate_translation(result->credits_prefix,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_fade(result->credits_prefix,
+                        &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
 
         result->credits_content =
             ui_make_text(ui,
@@ -766,9 +772,11 @@ static LyricsLanguage_t *make_lyrics_language(Ui_t *ui, LyricsView_t *view, Song
                                      .offset_x = 0.001,
                                      .flags = LAYOUT_RELATIVE_TO_POS | LAYOUT_RELATION_X_INCLUDE_WIDTH | LAYOUT_PROPORTIONAL_POS,
                                      .relative_to = result->credits_prefix});
-        ui_drawable_set_alpha_immediate(result->credits_content, 200);
+        ui_drawable_set_alpha_immediate(result->credits_content, CREDITS_CONTENT_ALPHA);
         ui_animate_translation(result->credits_content,
                                &(Animation_EaseTranslationData_t){.duration = 0.3, .ease_func = ANIM_EASE_OUT_CUBIC});
+        ui_animate_fade(result->credits_content,
+                        &(Animation_FadeInOutData_t){.duration = FADE_ANIMATION_DURATION, .ease_func = ANIM_EASE_OUT_CUBIC});
     }
 
     return result;
@@ -1337,12 +1345,18 @@ static void update_credits_blur(const LyricsView_t *view, const LyricsState_t *s
     const bool scrolled_downwards = view->container->overflow_y.set_amount > reference->bounds.y + reference->bounds.h;
 
     float blur_radius = 0.f;
+    int32_t alpha = ALPHA_DISTANCE_BASE_CALC;
     if ( config_get()->karaoke.blur_credits && before_last_line && !scrolled_downwards ) {
         const int32_t distance = calculate_distance(view, state->num_lines, reference_index);
         blur_radius = calculate_blur(distance) * CREDITS_SIZE_EM / LINE_SIZE_WITH_TIMINGS_EM;
+        if ( blur_radius > 0.f )
+            alpha = calculate_alpha(distance);
     }
     ui_drawable_set_blur_radius(language->credits_prefix, blur_radius);
     ui_drawable_set_blur_radius(language->credits_content, blur_radius);
+    ui_drawable_set_alpha(language->credit_separator, CREDITS_PREFIX_ALPHA * alpha / ALPHA_DISTANCE_BASE_CALC);
+    ui_drawable_set_alpha(language->credits_prefix, CREDITS_CONTENT_ALPHA * alpha / ALPHA_DISTANCE_BASE_CALC);
+    ui_drawable_set_alpha(language->credits_content, CREDITS_CONTENT_ALPHA * alpha / ALPHA_DISTANCE_BASE_CALC);
 }
 
 void ui_ex_lyrics_view_loop(LyricsView_t *view) {
